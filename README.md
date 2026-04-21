@@ -17,9 +17,11 @@ This repository is an early scaffold.
 Implemented:
 
 - `teamctx bind`
+- `teamctx init-store` for same-repository context stores
 - `teamctx status`
 - `teamctx doctor`
 - local binding storage
+- Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
@@ -52,7 +54,7 @@ During local development:
 ```bash
 npm install
 npm run build
-node dist/cli.js doctor
+node dist/cli/index.js doctor
 ```
 
 ## Usage
@@ -67,6 +69,7 @@ Use the current repository as the store:
 
 ```bash
 teamctx bind . --path .teamctx
+teamctx init-store
 ```
 
 Check the current binding:
@@ -91,4 +94,3 @@ teamctx doctor
 ## License
 
 MIT
-

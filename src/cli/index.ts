@@ -9,7 +9,9 @@ import {
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
+import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
+import { createDefaultProjectConfig } from "../schemas/project.js";
 
 type ParsedArgs = {
   command: string;
@@ -48,6 +50,7 @@ function printHelp(): void {
 
 Usage:
   teamctx bind <store> [--path <path>]
+  teamctx init-store
   teamctx status
   teamctx doctor
   teamctx tools
@@ -75,6 +78,31 @@ function bind(args: ParsedArgs): void {
   console.log(`  repo: ${binding.repo}`);
   console.log(`  root: ${binding.root}`);
   console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+}
+
+function initStore(): void {
+  const root = getRepoRoot();
+  const repo = normalizeGitHubRepo(getOriginRemote(root));
+  const binding = findBinding(repo);
+
+  if (!binding) {
+    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+  }
+
+  if (binding.contextStore.repo !== repo) {
+    throw new Error("init-store currently supports context stores inside the current repository.");
+  }
+
+  const storeRoot = resolveStoreRoot(root, binding.contextStore.path);
+  const result = initStoreLayout({
+    root: storeRoot,
+    projectConfig: createDefaultProjectConfig(repo)
+  });
+
+  console.log("Initialized context store:");
+  console.log(`  root: ${result.root}`);
+  console.log(`  created_files: ${result.createdFiles.length}`);
+  console.log(`  existing_files: ${result.existingFiles.length}`);
 }
 
 function status(): void {
@@ -148,6 +176,9 @@ function main(): void {
   switch (args.command) {
     case "bind":
       bind(args);
+      return;
+    case "init-store":
+      initStore();
       return;
     case "status":
       status();
