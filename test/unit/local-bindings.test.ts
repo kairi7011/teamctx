@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   findBinding,
@@ -28,6 +28,26 @@ test("loadBindings returns an empty config when the file is missing", (context) 
     version: 1,
     bindings: {}
   });
+});
+
+test("loadBindings rejects invalid JSON config", (context) => {
+  const { configPath, cleanup } = createTempConfigPath();
+  context.after(cleanup);
+
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, "{", "utf8");
+
+  assert.throws(() => loadBindings(configPath), /Invalid teamctx bindings config/);
+});
+
+test("loadBindings rejects unexpected config shapes", (context) => {
+  const { configPath, cleanup } = createTempConfigPath();
+  context.after(cleanup);
+
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify({ version: 1, bindings: [] }), "utf8");
+
+  assert.throws(() => loadBindings(configPath), /expected version 1 with a bindings object/);
 });
 
 test("saveBindings writes config files that loadBindings can read", (context) => {

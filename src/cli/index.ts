@@ -101,15 +101,37 @@ function doctor(): void {
   console.log("teamctx doctor");
   console.log(`  config: ${getConfigPath()}`);
 
+  let root: string;
+  let repo: string;
+
   try {
-    const root = getRepoRoot();
-    const repo = normalizeGitHubRepo(getOriginRemote(root));
-    console.log("  git: ok");
-    console.log(`  repo: ${repo}`);
-    console.log(`  root: ${root}`);
-    console.log(`  binding: ${findBinding(repo) ? "found" : "missing"}`);
+    root = getRepoRoot();
+    repo = normalizeGitHubRepo(getOriginRemote(root));
   } catch (error) {
     console.log("  git: failed");
+    console.log(`  reason: ${error instanceof Error ? error.message : String(error)}`);
+    console.log("  next: run doctor from a git repository with an origin remote");
+    return;
+  }
+
+  console.log("  git: ok");
+  console.log(`  repo: ${repo}`);
+  console.log(`  root: ${root}`);
+  console.log(`  branch: ${getCurrentBranch(root)}`);
+  console.log(`  head: ${getHeadCommit(root)}`);
+
+  try {
+    const binding = findBinding(repo);
+
+    if (binding) {
+      console.log("  binding: found");
+      console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+    } else {
+      console.log("  binding: missing");
+      console.log("  next: teamctx bind <store> --path <path>");
+    }
+  } catch (error) {
+    console.log("  config: invalid");
     console.log(`  reason: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
