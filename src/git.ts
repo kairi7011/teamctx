@@ -45,4 +45,3 @@ export function normalizeGitHubRepo(remote: string): string {
 
   return trimmed;
 }
-

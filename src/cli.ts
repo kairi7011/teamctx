@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { findBinding, getConfigPath, upsertBinding } from "./config.js";
-import { getCurrentBranch, getHeadCommit, getOriginRemote, getRepoRoot, normalizeGitHubRepo } from "./git.js";
+import {
+  getCurrentBranch,
+  getHeadCommit,
+  getOriginRemote,
+  getRepoRoot,
+  normalizeGitHubRepo
+} from "./git.js";
 import { toolDefinitions } from "./mcp.js";
 import { parseContextStore } from "./store.js";
 
@@ -146,4 +152,3 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }
-

@@ -13,7 +13,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "ci": "npm run format:check && npm run lint && npm run check && npm run build"
   },
   "keywords": [
     "mcp",
@@ -26,8 +30,8 @@
   "author": "kairi7011",
   "license": "MIT",
   "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0"
   }
 }
-

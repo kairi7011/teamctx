@@ -1,6 +1,10 @@
 import type { ContextStore } from "./types.js";
 
-export function parseContextStore(input: string, path = ".teamctx", currentRepo?: string): ContextStore {
+export function parseContextStore(
+  input: string,
+  path = ".teamctx",
+  currentRepo?: string
+): ContextStore {
   const repo = input === "." ? currentRepo : input;
 
   if (!repo) {
@@ -31,4 +35,3 @@ function normalizeStoreRepo(repo: string): string {
 
   return `github.com/${trimmed}`;
 }
-

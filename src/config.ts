@@ -46,4 +46,3 @@ export function upsertBinding(repo: string, root: string, contextStore: ContextS
 export function findBinding(repo: string): Binding | undefined {
   return loadBindings().bindings[repo];
 }
-

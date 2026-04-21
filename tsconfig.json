@@ -4,6 +4,13 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
     "declaration": true,
     "sourceMap": true,
     "outDir": "dist",
@@ -12,4 +19,3 @@
   },
   "include": ["src/**/*.ts"]
 }
-

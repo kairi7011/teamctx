@@ -30,4 +30,3 @@ export const toolDefinitions: ToolDefinition[] = [
     description: "Archive or invalidate an obsolete context item."
   }
 ];
-
