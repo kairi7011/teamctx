@@ -1,0 +1,103 @@
+import { isRecord, optionalStringArray } from "./validation.js";
+
+export type GetContextInput = {
+  cwd?: string;
+  target_files?: string[];
+  changed_files?: string[];
+  branch?: string;
+  head_commit?: string;
+};
+
+export type DisabledContextPayload = {
+  enabled: false;
+  reason: string;
+};
+
+export type EnabledContextPayload = {
+  enabled: true;
+  identity: {
+    repo: string;
+    branch: string;
+    head_commit: string;
+    context_store: string;
+    store_head: string | null;
+    normalizer_version: string;
+    context_payload_hash: string;
+  };
+  normalized_context: {
+    global: string;
+    scoped: Array<{ scope: Record<string, unknown>; content: string }>;
+    recent_decisions: string[];
+    active_pitfalls: string[];
+    applicable_workflows: string[];
+  };
+  canonical_doc_refs: Array<Record<string, unknown>>;
+  diagnostics: {
+    contested_items: string[];
+    stale_items: string[];
+    dropped_items: string[];
+  };
+  write_policy: {
+    record_observation_candidate: "allowed";
+    record_observation_verified: "allowed_with_evidence";
+    invalidate: "human_only";
+    docs_evidence: "allowed_with_doc_role";
+  };
+};
+
+export type ContextPayload = DisabledContextPayload | EnabledContextPayload;
+
+export function validateGetContextInput(value: unknown): GetContextInput {
+  if (value === undefined) {
+    return {};
+  }
+
+  if (!isRecord(value)) {
+    throw new Error("get_context input must be an object");
+  }
+
+  const input: GetContextInput = {};
+  const cwd = optionalString(value.cwd, "cwd");
+  const targetFiles = optionalStringArrayWithName(value.target_files, "target_files");
+  const changedFiles = optionalStringArrayWithName(value.changed_files, "changed_files");
+  const branch = optionalString(value.branch, "branch");
+  const headCommit = optionalString(value.head_commit, "head_commit");
+
+  if (cwd !== undefined) {
+    input.cwd = cwd;
+  }
+  if (targetFiles !== undefined) {
+    input.target_files = targetFiles;
+  }
+  if (changedFiles !== undefined) {
+    input.changed_files = changedFiles;
+  }
+  if (branch !== undefined) {
+    input.branch = branch;
+  }
+  if (headCommit !== undefined) {
+    input.head_commit = headCommit;
+  }
+
+  return input;
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`get_context ${name} must be a non-empty string`);
+  }
+
+  return value;
+}
+
+function optionalStringArrayWithName(value: unknown, name: string): string[] | undefined {
+  try {
+    return optionalStringArray(value);
+  } catch {
+    throw new Error(`get_context ${name} must be a string array`);
+  }
+}

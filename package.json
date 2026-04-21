@@ -4,7 +4,8 @@
   "description": "Git-backed team context layer for AI coding tools.",
   "type": "module",
   "bin": {
-    "teamctx": "./dist/cli/index.js"
+    "teamctx": "./dist/cli/index.js",
+    "teamctx-mcp": "./dist/mcp/server.js"
   },
   "files": [
     "dist",

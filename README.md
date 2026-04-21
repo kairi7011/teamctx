@@ -21,6 +21,7 @@ Implemented:
 - `teamctx status`
 - `teamctx doctor`
 - local binding storage
+- minimal MCP server with `teamctx.get_context` and `teamctx.status`
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
@@ -82,6 +83,12 @@ Run diagnostics:
 
 ```bash
 teamctx doctor
+```
+
+Run the MCP server during local development:
+
+```bash
+node dist/mcp/server.js
 ```
 
 ## Non Goals
