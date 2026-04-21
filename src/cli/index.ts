@@ -9,6 +9,7 @@ import {
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
+import { normalizeBoundStore } from "../core/normalize/normalize.js";
 import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { createDefaultProjectConfig } from "../schemas/project.js";
@@ -51,6 +52,7 @@ function printHelp(): void {
 Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
+  teamctx normalize
   teamctx status
   teamctx doctor
   teamctx tools
@@ -103,6 +105,16 @@ function initStore(): void {
   console.log(`  root: ${result.root}`);
   console.log(`  created_files: ${result.createdFiles.length}`);
   console.log(`  existing_files: ${result.existingFiles.length}`);
+}
+
+function normalize(): void {
+  const result = normalizeBoundStore();
+
+  console.log("Normalized context store:");
+  console.log(`  raw_events_read: ${result.rawEventsRead}`);
+  console.log(`  records_written: ${result.recordsWritten}`);
+  console.log(`  dropped_events: ${result.droppedEvents}`);
+  console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
 }
 
 function status(): void {
@@ -179,6 +191,9 @@ function main(): void {
       return;
     case "init-store":
       initStore();
+      return;
+    case "normalize":
+      normalize();
       return;
     case "status":
       status();

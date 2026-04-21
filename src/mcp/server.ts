@@ -3,6 +3,7 @@
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import { getContextTool } from "./tools/get-context.js";
+import { normalizeTool } from "./tools/normalize.js";
 import {
   recordObservationCandidateTool,
   recordObservationVerifiedTool
@@ -80,6 +81,13 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
       supersedes: { type: "array", items: { type: "string" } }
     },
     required: ["kind", "text", "source_type", "evidence"],
+    additionalProperties: false
+  },
+  "teamctx.normalize": {
+    type: "object",
+    properties: {
+      cwd: { type: "string" }
+    },
     additionalProperties: false
   }
 };
@@ -172,6 +180,8 @@ function callTool(params: unknown): unknown {
       return toolResult(recordObservationCandidateTool(params.arguments));
     case "teamctx.record_observation_verified":
       return toolResult(recordObservationVerifiedTool(params.arguments));
+    case "teamctx.normalize":
+      return toolResult(normalizeTool(params.arguments));
     case "teamctx.status":
       return toolResult(statusTool(params.arguments));
     default:
