@@ -22,15 +22,14 @@ Implemented:
 - `teamctx doctor`
 - local binding storage
 - minimal MCP server with `teamctx.get_context` and `teamctx.status`
+- raw observation recording for same-repository context stores
+- secret / PII scan before raw observation writes
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
 - GitHub-backed context store adapter
-- `get_context`
-- `record_observation_candidate`
-- `record_observation_verified`
 - deterministic normalization
 - audit and invalidation tools
 
