@@ -1,23 +1,35 @@
 export function normalizeGitHubRepo(remote: string): string {
-  const trimmed = remote.trim().replace(/\.git$/, "");
+  const trimmed = remote.trim();
+  const scpStyleSsh = /^git@github\.com:(.+)$/i.exec(trimmed);
 
-  if (trimmed.startsWith("git@github.com:")) {
-    return `github.com/${trimmed.slice("git@github.com:".length)}`;
+  if (scpStyleSsh?.[1]) {
+    return `github.com/${normalizeRepoPath(scpStyleSsh[1])}`;
   }
 
-  if (trimmed.startsWith("https://github.com/")) {
-    return `github.com/${trimmed.slice("https://github.com/".length)}`;
+  try {
+    const url = new URL(trimmed);
+    const protocol = url.protocol.toLowerCase();
+
+    if (
+      url.hostname.toLowerCase() === "github.com" &&
+      (protocol === "https:" ||
+        protocol === "http:" ||
+        protocol === "ssh:" ||
+        protocol === "git+ssh:")
+    ) {
+      return `github.com/${normalizeRepoPath(url.pathname)}`;
+    }
+  } catch {
+    // Keep parsing permissive; non-URL inputs are handled below.
   }
 
-  if (trimmed.startsWith("http://github.com/")) {
-    return `github.com/${trimmed.slice("http://github.com/".length)}`;
+  const bareGitHub = /^github\.com[/:](.+)$/i.exec(trimmed);
+
+  if (bareGitHub?.[1]) {
+    return `github.com/${normalizeRepoPath(bareGitHub[1])}`;
   }
 
-  if (trimmed.startsWith("github.com/")) {
-    return trimmed;
-  }
-
-  return trimmed;
+  return normalizeRepoPath(trimmed);
 }
 
 export function normalizeStoreRepo(repo: string): string {
@@ -28,4 +40,10 @@ export function normalizeStoreRepo(repo: string): string {
   }
 
   return `github.com/${normalized}`;
+}
+
+function normalizeRepoPath(path: string): string {
+  const withoutSlashes = path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+
+  return withoutSlashes.endsWith(".git") ? withoutSlashes.slice(0, -".git".length) : withoutSlashes;
 }

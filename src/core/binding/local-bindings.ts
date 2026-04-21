@@ -9,9 +9,7 @@ export function getConfigPath(): string {
   return join(homedir(), ".config", "teamctx", "bindings.json");
 }
 
-export function loadBindings(): BindingsFile {
-  const path = getConfigPath();
-
+export function loadBindings(path = getConfigPath()): BindingsFile {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as BindingsFile;
   } catch {
@@ -22,14 +20,18 @@ export function loadBindings(): BindingsFile {
   }
 }
 
-export function saveBindings(file: BindingsFile): void {
-  const path = getConfigPath();
+export function saveBindings(file: BindingsFile, path = getConfigPath()): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, "utf8");
 }
 
-export function upsertBinding(repo: string, root: string, contextStore: ContextStore): Binding {
-  const file = loadBindings();
+export function upsertBinding(
+  repo: string,
+  root: string,
+  contextStore: ContextStore,
+  path = getConfigPath()
+): Binding {
+  const file = loadBindings(path);
   const binding: Binding = {
     repo,
     root,
@@ -38,11 +40,11 @@ export function upsertBinding(repo: string, root: string, contextStore: ContextS
   };
 
   file.bindings[repo] = binding;
-  saveBindings(file);
+  saveBindings(file, path);
 
   return binding;
 }
 
-export function findBinding(repo: string): Binding | undefined {
-  return loadBindings().bindings[repo];
+export function findBinding(repo: string, path = getConfigPath()): Binding | undefined {
+  return loadBindings(path).bindings[repo];
 }
