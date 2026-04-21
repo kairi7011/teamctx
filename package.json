@@ -1,0 +1,33 @@
+{
+  "name": "teamctx",
+  "version": "0.1.0",
+  "description": "Git-backed team context layer for AI coding tools.",
+  "type": "module",
+  "bin": {
+    "teamctx": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "ai",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "context"
+  ],
+  "author": "kairi7011",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
+
