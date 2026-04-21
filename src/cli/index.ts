@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-import { findBinding, getConfigPath, upsertBinding } from "./config.js";
 import {
   getCurrentBranch,
   getHeadCommit,
   getOriginRemote,
-  getRepoRoot,
-  normalizeGitHubRepo
-} from "./git.js";
-import { toolDefinitions } from "./mcp.js";
-import { parseContextStore } from "./store.js";
+  getRepoRoot
+} from "../adapters/git/local-git.js";
+import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
+import { parseContextStore } from "../core/binding/context-store.js";
+import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
+import { toolDefinitions } from "../mcp/tools/definitions.js";
 
 type ParsedArgs = {
   command: string;

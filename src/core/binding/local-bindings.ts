@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import type { Binding, BindingsFile, ContextStore } from "./types.js";
+import { dirname, join } from "node:path";
+import type { Binding, BindingsFile, ContextStore } from "../../schemas/types.js";
 
 const CONFIG_VERSION = 1;
 
