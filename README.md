@@ -25,13 +25,14 @@ Implemented:
 - raw observation recording for same-repository context stores
 - secret / PII scan before raw observation writes
 - deterministic normalization of local raw events into normalized JSONL
+- `teamctx explain` / `teamctx invalidate` for local normalized records
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
 - GitHub-backed context store adapter
-- audit and invalidation tools
+- retention and compaction
 
 ## Design Principles
 

@@ -7,6 +7,7 @@ import {
   getRepoRoot
 } from "../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
+import { explainBoundItem, invalidateBoundItem } from "../core/audit/control.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { normalizeBoundStore } from "../core/normalize/normalize.js";
@@ -53,6 +54,8 @@ Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
   teamctx normalize
+  teamctx explain <item-id>
+  teamctx invalidate <item-id> [--reason <reason>]
   teamctx status
   teamctx doctor
   teamctx tools
@@ -115,6 +118,35 @@ function normalize(): void {
   console.log(`  records_written: ${result.recordsWritten}`);
   console.log(`  dropped_events: ${result.droppedEvents}`);
   console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
+}
+
+function explain(args: ParsedArgs): void {
+  const [itemId] = args.positional;
+
+  if (!itemId) {
+    throw new Error("Missing item id. Usage: teamctx explain <item-id>");
+  }
+
+  console.log(JSON.stringify(explainBoundItem({ itemId }), null, 2));
+}
+
+function invalidate(args: ParsedArgs): void {
+  const [itemId] = args.positional;
+
+  if (!itemId) {
+    throw new Error("Missing item id. Usage: teamctx invalidate <item-id> [--reason <reason>]");
+  }
+
+  const reason = typeof args.flags.reason === "string" ? args.flags.reason : undefined;
+  const result = invalidateBoundItem({
+    itemId,
+    ...(reason !== undefined ? { reason } : {})
+  });
+
+  console.log("Invalidated context item:");
+  console.log(`  item_id: ${result.item_id}`);
+  console.log(`  before_state: ${result.before_state}`);
+  console.log(`  after_state: ${result.after_state}`);
 }
 
 function status(): void {
@@ -194,6 +226,12 @@ function main(): void {
       return;
     case "normalize":
       normalize();
+      return;
+    case "explain":
+      explain(args);
+      return;
+    case "invalidate":
+      invalidate(args);
       return;
     case "status":
       status();

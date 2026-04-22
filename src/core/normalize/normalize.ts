@@ -38,7 +38,7 @@ export type NormalizeOptions = {
 
 const NORMALIZER_VERSION = "0.1.0";
 
-const NORMALIZED_FILE_BY_KIND: Record<KnowledgeKind, string> = {
+export const NORMALIZED_FILE_BY_KIND: Record<KnowledgeKind, string> = {
   fact: "facts.jsonl",
   rule: "rules.jsonl",
   pitfall: "pitfalls.jsonl",

@@ -3,6 +3,8 @@
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import { getContextTool } from "./tools/get-context.js";
+import { explainItemTool } from "./tools/explain-item.js";
+import { invalidateTool } from "./tools/invalidate.js";
 import { normalizeTool } from "./tools/normalize.js";
 import {
   recordObservationCandidateTool,
@@ -88,6 +90,25 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
     properties: {
       cwd: { type: "string" }
     },
+    additionalProperties: false
+  },
+  "teamctx.explain_item": {
+    type: "object",
+    properties: {
+      cwd: { type: "string" },
+      item_id: { type: "string" }
+    },
+    required: ["item_id"],
+    additionalProperties: false
+  },
+  "teamctx.invalidate": {
+    type: "object",
+    properties: {
+      cwd: { type: "string" },
+      item_id: { type: "string" },
+      reason: { type: "string" }
+    },
+    required: ["item_id"],
     additionalProperties: false
   }
 };
@@ -184,6 +205,10 @@ function callTool(params: unknown): unknown {
       return toolResult(normalizeTool(params.arguments));
     case "teamctx.status":
       return toolResult(statusTool(params.arguments));
+    case "teamctx.explain_item":
+      return toolResult(explainItemTool(params.arguments));
+    case "teamctx.invalidate":
+      return toolResult(invalidateTool(params.arguments));
     default:
       throw new Error(`Tool is not implemented yet: ${params.name}`);
   }
