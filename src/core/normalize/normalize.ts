@@ -220,7 +220,7 @@ function normalizeRun(options: {
       const record = existingRecord
         ? preserveExistingState(normalized.record, existingRecord)
         : normalized.record;
-      const key = dedupeKey(record);
+      const key = findDuplicateRecordKey(recordsByKey, record) ?? dedupeKey(record);
       const sourceEventIds = rawEvent.observation ? [rawEvent.observation.event_id] : [];
 
       if (!recordsByKey.has(key)) {
@@ -451,6 +451,10 @@ function areConflictingRecords(left: NormalizedRecord, right: NormalizedRecord):
 
   const leftText = canonicalText(left.text);
   const rightText = canonicalText(right.text);
+
+  if (hasOrderingConflict(leftText, rightText)) {
+    return true;
+  }
 
   return (
     stripNegation(leftText) === stripNegation(rightText) &&
@@ -781,6 +785,47 @@ function dedupeKey(record: NormalizedRecord): string {
   });
 }
 
+function findDuplicateRecordKey(
+  recordsByKey: Map<string, NormalizedRecord>,
+  record: NormalizedRecord
+): string | undefined {
+  const exactKey = dedupeKey(record);
+
+  if (recordsByKey.has(exactKey)) {
+    return exactKey;
+  }
+
+  for (const [key, existing] of recordsByKey) {
+    if (areDuplicateRecords(existing, record)) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function areDuplicateRecords(left: NormalizedRecord, right: NormalizedRecord): boolean {
+  if (left.kind !== right.kind || scopeKey(left.scope) !== scopeKey(right.scope)) {
+    return false;
+  }
+
+  const leftText = canonicalText(left.text);
+  const rightText = canonicalText(right.text);
+
+  if (leftText === rightText) {
+    return true;
+  }
+
+  if (
+    hasNegation(leftText) !== hasNegation(rightText) ||
+    hasOrderingConflict(leftText, rightText)
+  ) {
+    return false;
+  }
+
+  return tokenSimilarity(significantTokens(leftText), significantTokens(rightText)) >= 0.9;
+}
+
 function canonicalText(value: string): string {
   return value
     .toLowerCase()
@@ -798,6 +843,84 @@ function stripNegation(value: string): string {
     .split(" ")
     .filter((token) => !NEGATION_TOKENS.has(token))
     .join(" ");
+}
+
+type OrderingAssertion = {
+  before: string[];
+  after: string[];
+};
+
+function hasOrderingConflict(leftText: string, rightText: string): boolean {
+  const leftAssertions = extractOrderingAssertions(leftText);
+  const rightAssertions = extractOrderingAssertions(rightText);
+
+  return leftAssertions.some((left) =>
+    rightAssertions.some(
+      (right) =>
+        sideSimilarity(left.before, right.after) >= 0.8 &&
+        sideSimilarity(left.after, right.before) >= 0.8
+    )
+  );
+}
+
+function extractOrderingAssertions(value: string): OrderingAssertion[] {
+  const tokens = value.split(" ").filter((token) => token.length > 0);
+  const assertions: OrderingAssertion[] = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+
+    if (token === "before") {
+      addOrderingAssertion(assertions, tokens.slice(0, index), tokens.slice(index + 1));
+    } else if (token === "after") {
+      addOrderingAssertion(assertions, tokens.slice(index + 1), tokens.slice(0, index));
+    }
+  }
+
+  return assertions;
+}
+
+function addOrderingAssertion(
+  assertions: OrderingAssertion[],
+  beforeTokens: string[],
+  afterTokens: string[]
+): void {
+  const before = orderingSideTokens(beforeTokens);
+  const after = orderingSideTokens(afterTokens);
+
+  if (before.length > 0 && after.length > 0) {
+    assertions.push({ before, after });
+  }
+}
+
+function orderingSideTokens(tokens: string[]): string[] {
+  return tokens
+    .filter((token) => !ORDERING_FILLER_TOKENS.has(token))
+    .filter((token) => !NEGATION_TOKENS.has(token));
+}
+
+function significantTokens(value: string): string[] {
+  return value
+    .split(" ")
+    .filter((token) => token.length > 0)
+    .filter((token) => !DEDUPE_FILLER_TOKENS.has(token));
+}
+
+function sideSimilarity(left: string[], right: string[]): number {
+  return tokenSimilarity(left, right);
+}
+
+function tokenSimilarity(left: string[], right: string[]): number {
+  if (left.length === 0 || right.length === 0) {
+    return 0;
+  }
+
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const intersection = [...leftSet].filter((token) => rightSet.has(token)).length;
+  const union = new Set([...leftSet, ...rightSet]).size;
+
+  return union === 0 ? 0 : intersection / union;
 }
 
 function scopeKey(scope: Scope): string {
@@ -819,6 +942,27 @@ function emptyScope(): Scope {
 }
 
 const NEGATION_TOKENS = new Set(["not", "never", "without", "disable", "disabled", "avoid"]);
+const ORDERING_FILLER_TOKENS = new Set([
+  "must",
+  "should",
+  "shall",
+  "need",
+  "needs",
+  "to",
+  "run",
+  "runs",
+  "execute",
+  "executes",
+  "happen",
+  "happens",
+  "be",
+  "is",
+  "are",
+  "the",
+  "a",
+  "an"
+]);
+const DEDUPE_FILLER_TOKENS = new Set([...ORDERING_FILLER_TOKENS, "can", "could", "may", "might"]);
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");

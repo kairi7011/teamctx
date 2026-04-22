@@ -26,6 +26,7 @@ Implemented:
 - raw observation recording for same-repository and GitHub context stores
 - secret / PII scan before raw observation writes
 - deterministic normalization of local and GitHub raw events into normalized JSONL
+- deterministic near-dedupe for wording variants and ordering conflict detection
 - path / symbol index generation during normalization
 - index-backed context selection by paths, domains, symbols, and tags
 - canonical docs references from scoped docs evidence
@@ -39,7 +40,7 @@ Implemented:
 Planned:
 
 - remote audit controls and retention for GitHub context stores
-- deeper normalization quality beyond deterministic lexical heuristics
+- deeper normalization quality beyond deterministic heuristics
 
 ## Design Principles
 
