@@ -18,6 +18,7 @@ import { resolveStoreRoot } from "../store/layout.js";
 import { calculateConfidence } from "./confidence.js";
 
 export type NormalizeStoreResult = {
+  normalizedAt: string;
   rawEventsRead: number;
   recordsWritten: number;
   droppedEvents: number;
@@ -80,13 +81,15 @@ export function normalizeStore(options: {
   now?: () => Date;
 }): NormalizeStoreResult {
   const now = options.now ?? (() => new Date());
+  const runAt = now();
+  const runNow = () => runAt;
   const rawEvents = readRawEvents(options.storeRoot);
   const recordsByKey = new Map<string, NormalizedRecord>();
   const auditEntries: AuditLogEntry[] = [];
   let droppedEvents = 0;
 
   for (const rawEvent of rawEvents) {
-    const normalized = normalizeRawEvent(rawEvent, options.repo, now);
+    const normalized = normalizeRawEvent(rawEvent, options.repo, runNow);
 
     if (normalized.record) {
       const key = dedupeKey(normalized.record);
@@ -101,7 +104,7 @@ export function normalizeStore(options: {
             afterState: "active",
             sourceEventIds,
             reason: "evidence minimum check passed",
-            now
+            now: runNow
           })
         );
       }
@@ -112,7 +115,7 @@ export function normalizeStore(options: {
           action: "dropped",
           sourceEventIds: rawEvent.observation ? [rawEvent.observation.event_id] : [],
           reason: normalized.reason,
-          now
+          now: runNow
         })
       );
     }
@@ -122,12 +125,16 @@ export function normalizeStore(options: {
   writeNormalizedRecords(options.storeRoot, records);
   appendAuditEntries(options.storeRoot, auditEntries);
 
-  return {
+  const result = {
+    normalizedAt: runAt.toISOString(),
     rawEventsRead: rawEvents.length,
     recordsWritten: records.length,
     droppedEvents,
     auditEntriesWritten: auditEntries.length
   };
+  writeLastNormalizeResult(options.storeRoot, result);
+
+  return result;
 }
 
 function normalizeRawEvent(
@@ -245,6 +252,12 @@ function appendAuditEntries(storeRoot: string, entries: AuditLogEntry[]): void {
     path,
     `${entries.map((entry) => JSON.stringify(validateAuditLogEntry(entry))).join("\n")}\n`
   );
+}
+
+function writeLastNormalizeResult(storeRoot: string, result: NormalizeStoreResult): void {
+  const path = join(storeRoot, "indexes", "last-normalize.json");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 }
 
 function writeJsonl(path: string, rows: unknown[]): void {

@@ -11,6 +11,7 @@ import { explainBoundItem, invalidateBoundItem } from "../core/audit/control.js"
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { normalizeBoundStore } from "../core/normalize/normalize.js";
+import { getBoundStatus } from "../core/status/status.js";
 import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { createDefaultProjectConfig } from "../schemas/project.js";
@@ -114,6 +115,7 @@ function normalize(): void {
   const result = normalizeBoundStore();
 
   console.log("Normalized context store:");
+  console.log(`  normalized_at: ${result.normalizedAt}`);
   console.log(`  raw_events_read: ${result.rawEventsRead}`);
   console.log(`  records_written: ${result.recordsWritten}`);
   console.log(`  dropped_events: ${result.droppedEvents}`);
@@ -150,23 +152,72 @@ function invalidate(args: ParsedArgs): void {
 }
 
 function status(): void {
-  const root = getRepoRoot();
-  const repo = normalizeGitHubRepo(getOriginRemote(root));
-  const binding = findBinding(repo);
+  const result = getBoundStatus();
 
-  if (!binding) {
+  if (!result.enabled) {
     console.log("teamctx disabled");
-    console.log(`  repo: ${repo}`);
-    console.log("  reason: no binding found");
+    if (result.repo !== undefined) {
+      console.log(`  repo: ${result.repo}`);
+    }
+    console.log(`  reason: ${result.reason}`);
     return;
   }
 
   console.log("teamctx enabled");
-  console.log(`  repo: ${repo}`);
-  console.log(`  root: ${root}`);
-  console.log(`  branch: ${getCurrentBranch(root)}`);
-  console.log(`  head: ${getHeadCommit(root)}`);
-  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+  console.log(`  repo: ${result.repo}`);
+  console.log(`  root: ${result.root}`);
+  console.log(`  branch: ${result.branch}`);
+  console.log(`  head: ${result.head_commit}`);
+  console.log(`  store: ${result.context_store}`);
+
+  if (!result.summary) {
+    console.log(`  summary: ${result.summary_unavailable_reason ?? "unavailable"}`);
+    return;
+  }
+
+  const { summary } = result;
+  const lastNormalize = summary.last_normalize_result;
+
+  console.log(
+    `  records: active=${summary.counts.active_records} contested=${summary.counts.contested_records} stale=${summary.counts.stale_records} archived=${summary.counts.archived_records}`
+  );
+  console.log(
+    `  last_normalize: ${
+      lastNormalize
+        ? `${lastNormalize.normalizedAt} raw=${lastNormalize.rawEventsRead} promoted=${lastNormalize.recordsWritten} dropped=${lastNormalize.droppedEvents}`
+        : "never"
+    }`
+  );
+  printStatusList(
+    "recent_promoted",
+    summary.recent_promoted_items.map((item) => ({
+      id: item.item_id,
+      detail: item.record?.text ?? item.reason ?? "record not found"
+    }))
+  );
+  printStatusList(
+    "contested",
+    summary.contested_items.map((item) => ({ id: item.item_id, detail: item.text }))
+  );
+  printStatusList(
+    "dropped",
+    summary.dropped_items.map((item) => ({
+      id: item.source_event_ids.join(",") || "(unknown event)",
+      detail: item.reason ?? "dropped"
+    }))
+  );
+  printStatusList(
+    "stale",
+    summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text }))
+  );
+}
+
+function printStatusList(label: string, rows: Array<{ id: string; detail: string }>): void {
+  console.log(`  ${label}: ${rows.length}`);
+
+  for (const row of rows) {
+    console.log(`    - ${row.id}: ${row.detail}`);
+  }
 }
 
 function doctor(): void {

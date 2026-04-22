@@ -79,10 +79,27 @@ test("statusTool returns the enabled binding summary", () => {
   assert.deepEqual(statusTool({}, boundServices), {
     enabled: true,
     repo: "github.com/team/service",
+    root: "C:/work/service",
     branch: "main",
     head_commit: "abc123",
     context_store: "github.com/team/service/.teamctx",
-    store_head: null,
-    normalizer_version: "0.1.0"
+    local_store: true,
+    summary: {
+      last_normalize_result: null,
+      counts: {
+        total_records: 0,
+        active_records: 0,
+        contested_records: 0,
+        stale_records: 0,
+        superseded_records: 0,
+        archived_records: 0,
+        audit_entries: 0,
+        dropped_events: 0
+      },
+      recent_promoted_items: [],
+      contested_items: [],
+      dropped_items: [],
+      stale_items: []
+    }
   });
 });

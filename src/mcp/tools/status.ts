@@ -1,19 +1,29 @@
-import { getContextTool, type GetContextServices } from "./get-context.js";
+import { getBoundStatus, type BoundStatusServices } from "../../core/status/status.js";
+import { isRecord } from "../../schemas/validation.js";
 
-export function statusTool(rawInput: unknown, services?: GetContextServices): unknown {
-  const context = getContextTool(rawInput, services);
+export function statusTool(rawInput: unknown, services?: BoundStatusServices): unknown {
+  const cwd = getOptionalString(rawInput, "cwd");
 
-  if (!context.enabled) {
-    return context;
+  return getBoundStatus({
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(services !== undefined ? { services } : {})
+  });
+}
+
+function getOptionalString(rawInput: unknown, key: string): string | undefined {
+  if (!isRecord(rawInput)) {
+    return undefined;
   }
 
-  return {
-    enabled: true,
-    repo: context.identity.repo,
-    branch: context.identity.branch,
-    head_commit: context.identity.head_commit,
-    context_store: context.identity.context_store,
-    store_head: context.identity.store_head,
-    normalizer_version: context.identity.normalizer_version
-  };
+  const value = rawInput[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`status ${key} must be a non-empty string`);
+  }
+
+  return value;
 }

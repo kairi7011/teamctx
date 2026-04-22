@@ -8,6 +8,8 @@ export * from "./core/normalize/confidence.js";
 export * from "./core/normalize/normalize.js";
 export * from "./core/observation/record.js";
 export * from "./core/policy/redaction-policy.js";
+export * from "./core/status/status.js";
+export * from "./core/status/summary.js";
 export * from "./core/store/layout.js";
 export * from "./core/store/raw-event-path.js";
 export * from "./mcp/tools/get-context.js";

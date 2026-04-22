@@ -80,6 +80,7 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   });
 
   assert.deepEqual(result, {
+    normalizedAt: "2026-04-22T11:00:00.000Z",
     rawEventsRead: 1,
     recordsWritten: 1,
     droppedEvents: 0,
@@ -97,6 +98,17 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   assert.equal(audit[0]?.action, "created");
   assert.equal(audit[0]?.after_state, "active");
   assert.deepEqual(audit[0]?.source_event_ids, ["event-1"]);
+
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(storeRoot, "indexes", "last-normalize.json"), "utf8")),
+    {
+      normalizedAt: "2026-04-22T11:00:00.000Z",
+      rawEventsRead: 1,
+      recordsWritten: 1,
+      droppedEvents: 0,
+      auditEntriesWritten: 1
+    }
+  );
 });
 
 test("normalizeStore drops raw events that fail evidence minimum", (context) => {
