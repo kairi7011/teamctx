@@ -18,8 +18,10 @@ import {
   serializePathIndex,
   serializeSymbolIndex
 } from "../../src/core/indexes/record-index.js";
+import { buildEpisodeIndex, serializeEpisodeIndex } from "../../src/core/indexes/episode-index.js";
 import { getContextTool, type GetContextServices } from "../../src/mcp/tools/get-context.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
+import type { RawObservation } from "../../src/schemas/observation.js";
 import type { Binding } from "../../src/schemas/types.js";
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
@@ -250,6 +252,35 @@ test("composeContextFromStore returns canonical doc refs for scoped docs evidenc
   ]);
 });
 
+test("composeContextFromStore returns relevant episode references from the episode index", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeEpisodeIndex(storeRoot, [observation()], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(
+    composed.relevant_episodes.map((episode) => ({
+      source_event_ids: episode.source_event_ids,
+      summary: episode.summary,
+      trust: episode.trust,
+      source_type: episode.source_type
+    })),
+    [
+      {
+        source_event_ids: ["event-1"],
+        summary: "Auth middleware must run before tenant resolution.",
+        trust: "verified",
+        source_type: "inferred_from_code"
+      }
+    ]
+  );
+});
+
 test("composeContextFromStore ranks categories and reports budget overflow", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -337,6 +368,20 @@ function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedA
   );
 }
 
+function writeEpisodeIndex(
+  storeRoot: string,
+  observations: RawObservation[],
+  generatedAt: string
+): void {
+  const directory = join(storeRoot, "indexes");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, "episode-index.json"),
+    serializeEpisodeIndex(buildEpisodeIndex(observations, generatedAt)),
+    "utf8"
+  );
+}
+
 async function writeRemoteRecord(
   store: MemoryContextStore,
   file: string,
@@ -398,6 +443,35 @@ function record(
     last_verified_at: "2026-04-22T11:00:00.000Z",
     supersedes: [],
     conflicts_with: []
+  };
+}
+
+function observation(): RawObservation {
+  return {
+    schema_version: 1,
+    event_id: "event-1",
+    session_id: "session-1",
+    observed_at: "2026-04-22T10:00:00.000Z",
+    recorded_by: "codex",
+    trust: "verified",
+    kind: "pitfall",
+    text: "Auth middleware must run before tenant resolution.",
+    source_type: "inferred_from_code",
+    evidence: [
+      {
+        kind: "code",
+        repo: "github.com/team/service",
+        commit: "abc123",
+        file: "src/auth/middleware.ts"
+      }
+    ],
+    scope: {
+      paths: ["src/auth/**"],
+      domains: ["auth"],
+      symbols: ["AuthMiddleware"],
+      tags: ["request-lifecycle"]
+    },
+    supersedes: []
   };
 }
 

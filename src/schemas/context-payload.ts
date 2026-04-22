@@ -1,4 +1,5 @@
 import { isRecord, optionalStringArray } from "./validation.js";
+import type { EpisodeReference } from "./episode.js";
 
 export type GetContextInput = {
   cwd?: string;
@@ -45,6 +46,7 @@ export type EnabledContextPayload = {
     applicable_workflows: string[];
     glossary_terms: string[];
   };
+  relevant_episodes: EpisodeReference[];
   canonical_doc_refs: Array<Record<string, unknown>>;
   diagnostics: {
     contested_items: string[];

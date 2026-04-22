@@ -19,16 +19,24 @@ import {
   type RecordIndexSet
 } from "../indexes/record-index.js";
 import {
+  selectIndexedEpisodeIds,
+  validateEpisodeIndex,
+  type EpisodeIndex
+} from "../indexes/episode-index.js";
+import {
   validateNormalizedRecord,
   type KnowledgeKind,
   type NormalizedRecord
 } from "../../schemas/normalized-record.js";
 import type { GetContextInput, EnabledContextPayload } from "../../schemas/context-payload.js";
+import type { EpisodeReference } from "../../schemas/episode.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
-  "normalized_context" | "canonical_doc_refs" | "diagnostics"
+  "normalized_context" | "relevant_episodes" | "canonical_doc_refs" | "diagnostics"
 >;
+
+const EPISODE_LIMIT = 10;
 
 export function composeContextFromStore(
   storeRoot: string,
@@ -36,8 +44,9 @@ export function composeContextFromStore(
 ): ComposedContext {
   const records = readNormalizedRecords(storeRoot);
   const indexes = readRecordIndexes(storeRoot);
+  const episodeIndex = readEpisodeIndex(storeRoot);
 
-  return composeContextFromRecords(records, input, indexes);
+  return composeContextFromRecords(records, input, indexes, undefined, episodeIndex);
 }
 
 export async function composeContextFromContextStore(
@@ -45,16 +54,24 @@ export async function composeContextFromContextStore(
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
   const indexes = await readRecordIndexesFromContextStore(store);
+  const episodeIndex = await readEpisodeIndexFromContextStore(store);
   const readResult = await readNormalizedRecordsFromContextStore(store, input, indexes);
 
-  return composeContextFromRecords(readResult.records, input, indexes, readResult.diagnostics);
+  return composeContextFromRecords(
+    readResult.records,
+    input,
+    indexes,
+    readResult.diagnostics,
+    episodeIndex
+  );
 }
 
 function composeContextFromRecords(
   records: NormalizedRecord[],
   input: GetContextInput,
   indexes: RecordIndexSet = {},
-  diagnostics?: PrecomputedDiagnostics
+  diagnostics?: PrecomputedDiagnostics,
+  episodeIndex?: EpisodeIndex
 ): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
   const scopedBudget = budgetRecords(
@@ -108,6 +125,7 @@ function composeContextFromRecords(
       ),
       glossary_terms: rankedTexts(glossaryBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars)
     },
+    relevant_episodes: selectRelevantEpisodes(episodeIndex, input),
     canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
     diagnostics: {
       contested_items:
@@ -155,6 +173,7 @@ export function emptyComposedContext(): ComposedContext {
       glossary_terms: []
     },
     canonical_doc_refs: [],
+    relevant_episodes: [],
     diagnostics: {
       contested_items: [],
       stale_items: [],
@@ -241,6 +260,16 @@ function readSymbolIndex(storeRoot: string): RecordIndexSet {
   }
 }
 
+function readEpisodeIndex(storeRoot: string): EpisodeIndex | undefined {
+  try {
+    return validateEpisodeIndex(
+      JSON.parse(readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")) as unknown
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 async function readPathIndexFromContextStore(store: ContextStoreAdapter): Promise<RecordIndexSet> {
   try {
     const file = await store.readText("indexes/path-index.json");
@@ -272,6 +301,22 @@ async function readSymbolIndexFromContextStore(
     };
   } catch {
     return {};
+  }
+}
+
+async function readEpisodeIndexFromContextStore(
+  store: ContextStoreAdapter
+): Promise<EpisodeIndex | undefined> {
+  try {
+    const file = await store.readText("indexes/episode-index.json");
+
+    if (!file) {
+      return undefined;
+    }
+
+    return validateEpisodeIndex(JSON.parse(file.content) as unknown);
+  } catch {
+    return undefined;
   }
 }
 
@@ -397,6 +442,34 @@ function diagnosticsFromIndexes(indexes: RecordIndexSet): PrecomputedDiagnostics
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function selectRelevantEpisodes(
+  index: EpisodeIndex | undefined,
+  input: GetContextInput
+): EpisodeReference[] {
+  if (!index || !hasLookupSelectors(input) || typeof index.generated_at !== "string") {
+    return [];
+  }
+
+  const selectedIds = selectIndexedEpisodeIds(index, input);
+  const episodesById = new Map(index.episodes.map((episode) => [episode.episode_id, episode]));
+
+  return [...selectedIds]
+    .flatMap((id) => {
+      const episode = episodesById.get(id);
+
+      return episode ? [episode] : [];
+    })
+    .sort(compareEpisodes)
+    .slice(0, EPISODE_LIMIT);
+}
+
+function compareEpisodes(left: EpisodeReference, right: EpisodeReference): number {
+  return (
+    Date.parse(right.observed_to) - Date.parse(left.observed_to) ||
+    left.episode_id.localeCompare(right.episode_id)
+  );
 }
 
 function exclusionReason(state: NormalizedRecord["state"]): string {

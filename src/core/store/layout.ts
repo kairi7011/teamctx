@@ -7,6 +7,7 @@ import {
   serializePathIndex,
   serializeSymbolIndex
 } from "../indexes/record-index.js";
+import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
 
 export const NORMALIZED_RECORD_FILES = [
   "facts.jsonl",
@@ -96,6 +97,13 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   writeStoreFile({
     path: join(root, "indexes", "symbol-index.json"),
     content: serializeSymbolIndex(createEmptySymbolIndex()),
+    overwrite,
+    createdFiles,
+    existingFiles
+  });
+  writeStoreFile({
+    path: join(root, "indexes", "episode-index.json"),
+    content: serializeEpisodeIndex(createEmptyEpisodeIndex()),
     overwrite,
     createdFiles,
     existingFiles

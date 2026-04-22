@@ -15,6 +15,7 @@ import {
   serializePathIndex,
   serializeSymbolIndex
 } from "../indexes/record-index.js";
+import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
 import { createDefaultProjectConfig, serializeProjectConfig } from "../../schemas/project.js";
 import type { Binding } from "../../schemas/types.js";
 
@@ -141,6 +142,10 @@ function storeLayoutFiles(projectId: string): Array<{ path: string; content: str
     {
       path: "indexes/symbol-index.json",
       content: serializeSymbolIndex(createEmptySymbolIndex())
+    },
+    {
+      path: "indexes/episode-index.json",
+      content: serializeEpisodeIndex(createEmptyEpisodeIndex())
     }
   ];
 }

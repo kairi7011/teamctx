@@ -31,6 +31,8 @@ Implemented:
 - index-backed context selection by paths, domains, symbols, and tags
 - canonical docs references from scoped docs evidence
 - ranked context payloads with selection reasons and category budgets
+- selector-driven remote context retrieval that skips unrelated normalized shards
+- raw-event-derived episode index and `relevant_episodes` payload entries
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx compact` for local and GitHub retention and archive compaction
@@ -39,6 +41,8 @@ Implemented:
 
 Planned:
 
+- real GitHub integration smoke tests
+- richer stale scoring and contested audit views
 - deeper normalization quality beyond deterministic heuristics
 
 ## Design Principles

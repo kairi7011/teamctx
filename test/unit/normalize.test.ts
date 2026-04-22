@@ -127,7 +127,18 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   ) as {
     symbols: Record<string, string[]>;
   };
+  const episodeIndex = JSON.parse(
+    readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")
+  ) as {
+    episodes: Array<{
+      source_event_ids: string[];
+      summary: string;
+      scope: { paths: string[] };
+    }>;
+    paths: Record<string, string[]>;
+  };
   const recordId = records[0]?.id as string;
+  const episodeId = episodeIndex.episodes[0]?.source_event_ids[0];
 
   assert.deepEqual(pathIndex.paths["src/auth/**"], [recordId]);
   assert.deepEqual(pathIndex.domains.auth, [recordId]);
@@ -135,6 +146,12 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   assert.deepEqual(pathIndex.kinds.pitfall, [recordId]);
   assert.deepEqual(pathIndex.states.active, [recordId]);
   assert.deepEqual(symbolIndex.symbols.AuthMiddleware, [recordId]);
+  assert.equal(
+    episodeIndex.episodes[0]?.summary,
+    "Auth middleware must run before tenant resolution."
+  );
+  assert.deepEqual(episodeIndex.episodes[0]?.scope.paths, ["src/auth/**"]);
+  assert.equal(episodeId, "event-1");
 });
 
 test("normalizeStore drops raw events that fail evidence minimum", (context) => {
@@ -468,6 +485,14 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
       ).symbols
     ),
     ["AuthMiddleware"]
+  );
+  assert.equal(
+    (
+      JSON.parse(readFileSync(join(remoteRoot, "indexes", "episode-index.json"), "utf8")) as {
+        episodes: Array<{ source_event_ids: string[] }>;
+      }
+    ).episodes[0]?.source_event_ids[0],
+    "event-1"
   );
 });
 

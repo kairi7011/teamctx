@@ -28,6 +28,11 @@ import {
   type PathIndex,
   type SymbolIndex
 } from "../indexes/record-index.js";
+import {
+  buildEpisodeIndex,
+  serializeEpisodeIndex,
+  type EpisodeIndex
+} from "../indexes/episode-index.js";
 import { scanRawObservation } from "../policy/redaction-policy.js";
 import {
   createContextStoreForBinding,
@@ -145,9 +150,14 @@ export function normalizeStore(options: {
     existingRecords
   });
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
+  const episodeIndex = buildEpisodeIndex(
+    safeEpisodeObservations(rawEvents, options.repo),
+    run.result.normalizedAt
+  );
 
   writeNormalizedRecords(options.storeRoot, run.records);
   writeRecordIndexes(options.storeRoot, indexes);
+  writeEpisodeIndex(options.storeRoot, episodeIndex);
   appendAuditEntries(options.storeRoot, run.auditEntries);
   writeLastNormalizeResult(options.storeRoot, run.result);
 
@@ -173,9 +183,14 @@ export async function normalizeContextStore(options: {
     existingRecords: existing.records
   });
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
+  const episodeIndex = buildEpisodeIndex(
+    safeEpisodeObservations(rawEvents, options.repo),
+    run.result.normalizedAt
+  );
 
   await writeNormalizedRecordsToContextStore(options.store, run.records, existing.filesByName);
   await writeRecordIndexesToContextStore(options.store, indexes, run.result.normalizedAt);
+  await writeEpisodeIndexToContextStore(options.store, episodeIndex, run.result.normalizedAt);
 
   if (run.auditEntries.length > 0) {
     await options.store.appendJsonl("audit/changes.jsonl", run.auditEntries, {
@@ -639,6 +654,12 @@ function writeRecordIndexes(
   writeFileSync(join(root, "symbol-index.json"), serializeSymbolIndex(indexes.symbolIndex), "utf8");
 }
 
+function writeEpisodeIndex(storeRoot: string, index: EpisodeIndex): void {
+  const root = join(storeRoot, "indexes");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "episode-index.json"), serializeEpisodeIndex(index), "utf8");
+}
+
 async function writeNormalizedRecordsToContextStore(
   store: ContextStoreAdapter,
   records: NormalizedRecord[],
@@ -671,6 +692,38 @@ async function writeRecordIndexesToContextStore(
   await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
     message: `Write teamctx symbol index ${normalizedAt}`,
     expectedRevision: symbolIndexFile?.revision ?? null
+  });
+}
+
+async function writeEpisodeIndexToContextStore(
+  store: ContextStoreAdapter,
+  index: EpisodeIndex,
+  normalizedAt: string
+): Promise<void> {
+  const episodeIndexFile = await store.readText("indexes/episode-index.json");
+  await store.writeText("indexes/episode-index.json", serializeEpisodeIndex(index), {
+    message: `Write teamctx episode index ${normalizedAt}`,
+    expectedRevision: episodeIndexFile?.revision ?? null
+  });
+}
+
+function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawObservation[] {
+  return rawEvents.flatMap((rawEvent) => {
+    if (!rawEvent.observation) {
+      return [];
+    }
+
+    if (scanRawObservation(rawEvent.observation).status === "blocked") {
+      return [];
+    }
+
+    if (
+      !rawEvent.observation.evidence.every((evidence) => !evidence.repo || evidence.repo === repo)
+    ) {
+      return [];
+    }
+
+    return [rawEvent.observation];
   });
 }
 
