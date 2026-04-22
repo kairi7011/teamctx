@@ -128,6 +128,11 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   ) as {
     symbols: Record<string, string[]>;
   };
+  const textIndex = JSON.parse(
+    readFileSync(join(storeRoot, "indexes", "text-index.json"), "utf8")
+  ) as {
+    tokens: Record<string, string[]>;
+  };
   const episodeIndex = JSON.parse(
     readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")
   ) as {
@@ -147,6 +152,8 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   assert.deepEqual(pathIndex.kinds.pitfall, [recordId]);
   assert.deepEqual(pathIndex.states.active, [recordId]);
   assert.deepEqual(symbolIndex.symbols.AuthMiddleware, [recordId]);
+  assert.deepEqual(textIndex.tokens.auth, [recordId]);
+  assert.deepEqual(textIndex.tokens.middleware, [recordId]);
   assert.equal(
     episodeIndex.episodes[0]?.summary,
     "Auth middleware must run before tenant resolution."
@@ -503,6 +510,16 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
       ).symbols
     ),
     ["AuthMiddleware"]
+  );
+  assert.deepEqual(
+    Object.keys(
+      (
+        JSON.parse(readFileSync(join(remoteRoot, "indexes", "text-index.json"), "utf8")) as {
+          tokens: Record<string, string[]>;
+        }
+      ).tokens
+    ).includes("auth"),
+    true
   );
   assert.equal(
     (

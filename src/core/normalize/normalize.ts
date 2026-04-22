@@ -25,8 +25,10 @@ import {
   buildRecordIndexes,
   serializePathIndex,
   serializeSymbolIndex,
+  serializeTextIndex,
   type PathIndex,
-  type SymbolIndex
+  type SymbolIndex,
+  type TextIndex
 } from "../indexes/record-index.js";
 import {
   buildEpisodeIndex,
@@ -661,12 +663,13 @@ function writeNormalizedRecords(storeRoot: string, records: NormalizedRecord[]):
 
 function writeRecordIndexes(
   storeRoot: string,
-  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex }
+  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex; textIndex: TextIndex }
 ): void {
   const root = join(storeRoot, "indexes");
   mkdirSync(root, { recursive: true });
   writeFileSync(join(root, "path-index.json"), serializePathIndex(indexes.pathIndex), "utf8");
   writeFileSync(join(root, "symbol-index.json"), serializeSymbolIndex(indexes.symbolIndex), "utf8");
+  writeFileSync(join(root, "text-index.json"), serializeTextIndex(indexes.textIndex), "utf8");
 }
 
 function writeEpisodeIndex(storeRoot: string, index: EpisodeIndex): void {
@@ -694,7 +697,7 @@ async function writeNormalizedRecordsToContextStore(
 
 async function writeRecordIndexesToContextStore(
   store: ContextStoreAdapter,
-  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex },
+  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex; textIndex: TextIndex },
   normalizedAt: string
 ): Promise<void> {
   const pathIndexFile = await store.readText("indexes/path-index.json");
@@ -707,6 +710,12 @@ async function writeRecordIndexesToContextStore(
   await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
     message: `Write teamctx symbol index ${normalizedAt}`,
     expectedRevision: symbolIndexFile?.revision ?? null
+  });
+
+  const textIndexFile = await store.readText("indexes/text-index.json");
+  await store.writeText("indexes/text-index.json", serializeTextIndex(indexes.textIndex), {
+    message: `Write teamctx text index ${normalizedAt}`,
+    expectedRevision: textIndexFile?.revision ?? null
   });
 }
 

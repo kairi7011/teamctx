@@ -5,7 +5,8 @@ import {
   matchesPath,
   selectIndexedRecordIds,
   validatePathIndex,
-  validateSymbolIndex
+  validateSymbolIndex,
+  validateTextIndex
 } from "../../src/core/indexes/record-index.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 
@@ -18,9 +19,11 @@ test("buildRecordIndexes indexes paths domains tags kinds states and symbols", (
   assert.deepEqual(indexes.pathIndex.kinds.pitfall, ["pitfall-auth"]);
   assert.deepEqual(indexes.pathIndex.states.active, ["pitfall-auth"]);
   assert.deepEqual(indexes.symbolIndex.symbols.AuthMiddleware, ["pitfall-auth"]);
+  assert.deepEqual(indexes.textIndex.tokens.pitfall, ["pitfall-auth"]);
+  assert.deepEqual(indexes.textIndex.tokens.auth, ["pitfall-auth"]);
 });
 
-test("selectIndexedRecordIds retrieves records by file domain symbol and tag", () => {
+test("selectIndexedRecordIds retrieves records by file domain symbol tag and text query", () => {
   const indexes = buildRecordIndexes(
     [
       record("pitfall-auth"),
@@ -50,6 +53,10 @@ test("selectIndexedRecordIds retrieves records by file domain symbol and tag", (
     [...selectIndexedRecordIds(indexes, { tags: ["request-lifecycle"] })],
     ["pitfall-auth"]
   );
+  assert.deepEqual(
+    [...selectIndexedRecordIds(indexes, { query: "decision billing" })],
+    ["decision-billing"]
+  );
 });
 
 test("matchesPath supports exact paths and glob scopes", () => {
@@ -62,6 +69,7 @@ test("matchesPath supports exact paths and glob scopes", () => {
 test("validatePathIndex and validateSymbolIndex reject legacy empty objects", () => {
   assert.throws(() => validatePathIndex({}), /schema_version/);
   assert.throws(() => validateSymbolIndex({}), /schema_version/);
+  assert.throws(() => validateTextIndex({}), /schema_version/);
 });
 
 function record(id: string, scope: NormalizedRecord["scope"] = defaultScope()): NormalizedRecord {

@@ -128,6 +128,10 @@ function rankRecord(record: NormalizedRecord, input: GetContextInput): RankedRec
     score += 25;
     reasons.push("tag match");
   }
+  if (matchesQuery(record, input.query)) {
+    score += 50;
+    reasons.push("text query match");
+  }
 
   reasons.push(`${record.kind} context`);
   reasons.push(`${record.confidence_level} confidence`);
@@ -196,3 +200,61 @@ function textKey(value: string): string {
 function exactKey(value: string): string {
   return value.trim();
 }
+
+function matchesQuery(record: NormalizedRecord, query: string | undefined): boolean {
+  const tokens = textTokens(query ?? "");
+
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  const recordTokens = new Set(
+    textTokens(
+      [
+        record.text,
+        record.kind,
+        ...record.scope.domains,
+        ...record.scope.symbols,
+        ...record.scope.tags
+      ].join(" ")
+    )
+  );
+
+  return tokens.every((token) => recordTokens.has(token));
+}
+
+function textTokens(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .toLowerCase()
+        .split(/[^a-z0-9_]+/g)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+        .filter((token) => !TEXT_STOP_WORDS.has(token))
+    )
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+const TEXT_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "to",
+  "with"
+]);

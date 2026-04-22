@@ -40,6 +40,9 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
       domains: { type: "array", items: { type: "string" } },
       symbols: { type: "array", items: { type: "string" } },
       tags: { type: "array", items: { type: "string" } },
+      query: { type: "string" },
+      since: { type: "string" },
+      until: { type: "string" },
       branch: { type: "string" },
       head_commit: { type: "string" }
     },

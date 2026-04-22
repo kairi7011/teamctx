@@ -16,7 +16,8 @@ import {
 import {
   buildRecordIndexes,
   serializePathIndex,
-  serializeSymbolIndex
+  serializeSymbolIndex,
+  serializeTextIndex
 } from "../../src/core/indexes/record-index.js";
 import { buildEpisodeIndex, serializeEpisodeIndex } from "../../src/core/indexes/episode-index.js";
 import { getContextTool, type GetContextServices } from "../../src/mcp/tools/get-context.js";
@@ -175,8 +176,62 @@ test("composeContextFromStore reports stale index diagnostics", (context) => {
   assert.deepEqual(composed.diagnostics.index_warnings, [
     "path index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z",
     "symbol index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z",
+    "text index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z",
     "episode index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z"
   ]);
+});
+
+test("composeContextFromStore retrieves by deterministic full-text query and time filters", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const matchingRecord = {
+    ...record("decision-cache", "decision", "active", {
+      paths: [],
+      domains: [],
+      symbols: [],
+      tags: []
+    }),
+    text: "Cache tokens must expire after tenant migration."
+  } satisfies NormalizedRecord;
+  const olderRecord = {
+    ...record("decision-cache-old", "decision", "active", {
+      paths: [],
+      domains: [],
+      symbols: [],
+      tags: []
+    }),
+    text: "Cache tokens must expire after tenant migration.",
+    last_verified_at: "2026-04-21T11:00:00.000Z"
+  } satisfies NormalizedRecord;
+  const unrelatedRecord = {
+    ...record("decision-tenant", "decision", "active", {
+      paths: [],
+      domains: [],
+      symbols: [],
+      tags: []
+    }),
+    text: "Tenant routing must use region pinning."
+  } satisfies NormalizedRecord;
+
+  writeRecord(storeRoot, "decisions.jsonl", matchingRecord);
+  writeRecord(storeRoot, "decisions.jsonl", olderRecord);
+  writeRecord(storeRoot, "decisions.jsonl", unrelatedRecord);
+  writeIndexes(
+    storeRoot,
+    [matchingRecord, olderRecord, unrelatedRecord],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    query: "cache tokens",
+    since: "2026-04-22T00:00:00.000Z"
+  });
+
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => entry.id),
+    ["decision-cache"]
+  );
 });
 
 test("composeContextFromContextStore uses indexes to avoid unrelated remote shards", async () => {
@@ -388,6 +443,7 @@ function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedA
     serializeSymbolIndex(indexes.symbolIndex),
     "utf8"
   );
+  writeFileSync(join(directory, "text-index.json"), serializeTextIndex(indexes.textIndex), "utf8");
 }
 
 function writeEpisodeIndex(
@@ -445,6 +501,9 @@ async function writeRemoteIndexes(
   });
   await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
     message: "seed symbol index"
+  });
+  await store.writeText("indexes/text-index.json", serializeTextIndex(indexes.textIndex), {
+    message: "seed text index"
   });
 }
 

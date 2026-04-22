@@ -12,8 +12,10 @@ import {
 import {
   createEmptyPathIndex,
   createEmptySymbolIndex,
+  createEmptyTextIndex,
   serializePathIndex,
-  serializeSymbolIndex
+  serializeSymbolIndex,
+  serializeTextIndex
 } from "../indexes/record-index.js";
 import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
 import { createDefaultProjectConfig, serializeProjectConfig } from "../../schemas/project.js";
@@ -142,6 +144,10 @@ function storeLayoutFiles(projectId: string): Array<{ path: string; content: str
     {
       path: "indexes/symbol-index.json",
       content: serializeSymbolIndex(createEmptySymbolIndex())
+    },
+    {
+      path: "indexes/text-index.json",
+      content: serializeTextIndex(createEmptyTextIndex())
     },
     {
       path: "indexes/episode-index.json",

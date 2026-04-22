@@ -19,9 +19,16 @@ export type SymbolIndex = {
   symbols: Record<string, string[]>;
 };
 
+export type TextIndex = {
+  schema_version: 1;
+  generated_at: string | null;
+  tokens: Record<string, string[]>;
+};
+
 export type RecordIndexSet = {
   pathIndex?: PathIndex;
   symbolIndex?: SymbolIndex;
+  textIndex?: TextIndex;
 };
 
 export function createEmptyPathIndex(generatedAt: string | null = null): PathIndex {
@@ -44,12 +51,21 @@ export function createEmptySymbolIndex(generatedAt: string | null = null): Symbo
   };
 }
 
+export function createEmptyTextIndex(generatedAt: string | null = null): TextIndex {
+  return {
+    schema_version: 1,
+    generated_at: generatedAt,
+    tokens: {}
+  };
+}
+
 export function buildRecordIndexes(
   records: NormalizedRecord[],
   generatedAt: string | null
-): { pathIndex: PathIndex; symbolIndex: SymbolIndex } {
+): { pathIndex: PathIndex; symbolIndex: SymbolIndex; textIndex: TextIndex } {
   const pathIndex = createEmptyPathIndex(generatedAt);
   const symbolIndex = createEmptySymbolIndex(generatedAt);
+  const textIndex = createEmptyTextIndex(generatedAt);
 
   for (const record of records) {
     for (const path of record.scope.paths) {
@@ -64,6 +80,9 @@ export function buildRecordIndexes(
     for (const symbol of record.scope.symbols) {
       addIndexedId(symbolIndex.symbols, normalizeSymbolKey(symbol), record.id);
     }
+    for (const token of recordTextTokens(record)) {
+      addIndexedId(textIndex.tokens, token, record.id);
+    }
 
     addIndexedId(pathIndex.kinds, record.kind, record.id);
     addIndexedId(pathIndex.states, record.state, record.id);
@@ -71,7 +90,8 @@ export function buildRecordIndexes(
 
   return {
     pathIndex: sortPathIndex(pathIndex),
-    symbolIndex: sortSymbolIndex(symbolIndex)
+    symbolIndex: sortSymbolIndex(symbolIndex),
+    textIndex: sortTextIndex(textIndex)
   };
 }
 
@@ -80,6 +100,10 @@ export function serializePathIndex(index: PathIndex): string {
 }
 
 export function serializeSymbolIndex(index: SymbolIndex): string {
+  return `${JSON.stringify(index, null, 2)}\n`;
+}
+
+export function serializeTextIndex(index: TextIndex): string {
   return `${JSON.stringify(index, null, 2)}\n`;
 }
 
@@ -119,12 +143,29 @@ export function validateSymbolIndex(value: unknown): SymbolIndex {
   });
 }
 
+export function validateTextIndex(value: unknown): TextIndex {
+  if (!isRecord(value)) {
+    throw new Error("text index must be an object");
+  }
+
+  if (value.schema_version !== 1) {
+    throw new Error("text index schema_version must be 1");
+  }
+
+  return sortTextIndex({
+    schema_version: 1,
+    generated_at: validateGeneratedAt(value.generated_at, "text index"),
+    tokens: validateIdMap(value.tokens, "text index tokens")
+  });
+}
+
 export function hasLookupSelectors(input: GetContextInput): boolean {
   return (
     selectedFiles(input).length > 0 ||
     (input.domains ?? []).length > 0 ||
     (input.symbols ?? []).length > 0 ||
-    (input.tags ?? []).length > 0
+    (input.tags ?? []).length > 0 ||
+    queryTokens(input.query).length > 0
   );
 }
 
@@ -154,6 +195,8 @@ export function selectIndexedRecordIds(
     addAll(selected, indexes.pathIndex?.tags[normalizeTextKey(tag)] ?? []);
   }
 
+  addAll(selected, selectTextRecordIds(indexes.textIndex, input.query));
+
   return selected;
 }
 
@@ -164,7 +207,8 @@ export function matchesScopeInput(record: NormalizedRecord, input: GetContextInp
     record.scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file))) ||
     hasOverlap(record.scope.domains, input.domains ?? [], normalizeTextKey) ||
     hasOverlap(record.scope.symbols, input.symbols ?? [], normalizeSymbolKey) ||
-    hasOverlap(record.scope.tags, input.tags ?? [], normalizeTextKey)
+    hasOverlap(record.scope.tags, input.tags ?? [], normalizeTextKey) ||
+    matchesQuery(record, input.query)
   );
 }
 
@@ -277,6 +321,14 @@ function sortSymbolIndex(index: SymbolIndex): SymbolIndex {
   };
 }
 
+function sortTextIndex(index: TextIndex): TextIndex {
+  return {
+    schema_version: 1,
+    generated_at: index.generated_at,
+    tokens: sortRecordIds(index.tokens)
+  };
+}
+
 function sortRecordIds<T extends string>(record: Record<T, string[]>): Record<T, string[]> {
   const output: Record<string, string[]> = {};
 
@@ -332,3 +384,87 @@ function globToRegex(pattern: string): string {
 
   return output;
 }
+
+function selectTextRecordIds(index: TextIndex | undefined, query: string | undefined): string[] {
+  const tokens = queryTokens(query);
+
+  if (!index || tokens.length === 0) {
+    return [];
+  }
+
+  const [firstToken, ...remainingTokens] = tokens;
+  const firstIds = firstToken ? (index.tokens[firstToken] ?? []) : [];
+  let selected = new Set(firstIds);
+
+  for (const token of remainingTokens) {
+    selected = intersection(selected, new Set(index.tokens[token] ?? []));
+  }
+
+  return uniqueSorted([...selected]);
+}
+
+function matchesQuery(record: NormalizedRecord, query: string | undefined): boolean {
+  const tokens = queryTokens(query);
+
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  const recordTokens = new Set(recordTextTokens(record));
+
+  return tokens.every((token) => recordTokens.has(token));
+}
+
+function recordTextTokens(record: NormalizedRecord): string[] {
+  return fullTextTokens(
+    [
+      record.text,
+      record.kind,
+      ...record.scope.domains,
+      ...record.scope.symbols,
+      ...record.scope.tags
+    ].join(" ")
+  );
+}
+
+function queryTokens(query: string | undefined): string[] {
+  return query === undefined ? [] : fullTextTokens(query);
+}
+
+function fullTextTokens(value: string): string[] {
+  return uniqueSorted(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/g)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+      .filter((token) => !TEXT_STOP_WORDS.has(token))
+  );
+}
+
+function intersection(left: Set<string>, right: Set<string>): Set<string> {
+  return new Set([...left].filter((value) => right.has(value)));
+}
+
+const TEXT_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "to",
+  "with"
+]);

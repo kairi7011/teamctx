@@ -8,6 +8,9 @@ export type GetContextInput = {
   domains?: string[];
   symbols?: string[];
   tags?: string[];
+  query?: string;
+  since?: string;
+  until?: string;
   branch?: string;
   head_commit?: string;
 };
@@ -81,6 +84,9 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   const domains = optionalStringArrayWithName(value.domains, "domains");
   const symbols = optionalStringArrayWithName(value.symbols, "symbols");
   const tags = optionalStringArrayWithName(value.tags, "tags");
+  const query = optionalString(value.query, "query");
+  const since = optionalTimestamp(value.since, "since");
+  const until = optionalTimestamp(value.until, "until");
   const branch = optionalString(value.branch, "branch");
   const headCommit = optionalString(value.head_commit, "head_commit");
 
@@ -101,6 +107,15 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   }
   if (tags !== undefined) {
     input.tags = tags;
+  }
+  if (query !== undefined) {
+    input.query = query;
+  }
+  if (since !== undefined) {
+    input.since = since;
+  }
+  if (until !== undefined) {
+    input.until = until;
   }
   if (branch !== undefined) {
     input.branch = branch;
@@ -130,4 +145,14 @@ function optionalStringArrayWithName(value: unknown, name: string): string[] | u
   } catch {
     throw new Error(`get_context ${name} must be a string array`);
   }
+}
+
+function optionalTimestamp(value: unknown, name: string): string | undefined {
+  const timestamp = optionalString(value, name);
+
+  if (timestamp !== undefined && Number.isNaN(Date.parse(timestamp))) {
+    throw new Error(`get_context ${name} must be a valid timestamp`);
+  }
+
+  return timestamp;
 }

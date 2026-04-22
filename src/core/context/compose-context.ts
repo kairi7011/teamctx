@@ -16,6 +16,7 @@ import {
   selectIndexedRecordIds,
   validatePathIndex,
   validateSymbolIndex,
+  validateTextIndex,
   type RecordIndexSet
 } from "../indexes/record-index.js";
 import {
@@ -84,7 +85,9 @@ function composeContextFromRecords(
   episodeIndex?: EpisodeIndex,
   indexWarnings: string[] = []
 ): ComposedContext {
-  const activeRecords = records.filter((record) => record.state === "active");
+  const activeRecords = records.filter(
+    (record) => record.state === "active" && matchesTimeInput(record, input)
+  );
   const scopedBudget = budgetRecords(
     selectScopedRecords(activeRecords, input, indexes),
     input,
@@ -157,10 +160,18 @@ function selectScopedRecords(
   input: GetContextInput,
   indexes: RecordIndexSet
 ): NormalizedRecord[] {
-  if (hasLookupSelectors(input) && hasGeneratedIndex(indexes)) {
+  if (
+    hasLookupSelectors(input) &&
+    hasGeneratedIndex(indexes) &&
+    selectorsHaveUsableIndexes(input, indexes)
+  ) {
     const selectedIds = selectIndexedRecordIds(indexes, input);
 
     return activeRecords.filter((record) => selectedIds.has(record.id));
+  }
+
+  if (!hasLookupSelectors(input) && hasTimeFilters(input)) {
+    return activeRecords;
   }
 
   return activeRecords.filter((record) => matchesScopeInput(record, input));
@@ -169,7 +180,8 @@ function selectScopedRecords(
 function hasGeneratedIndex(indexes: RecordIndexSet): boolean {
   return (
     typeof indexes.pathIndex?.generated_at === "string" ||
-    typeof indexes.symbolIndex?.generated_at === "string"
+    typeof indexes.symbolIndex?.generated_at === "string" ||
+    typeof indexes.textIndex?.generated_at === "string"
   );
 }
 
@@ -244,13 +256,15 @@ function readRecordIndexes(
 ): RecordIndexReadResult {
   const pathIndex = readPathIndex(storeRoot, lastNormalizeAt);
   const symbolIndex = readSymbolIndex(storeRoot, lastNormalizeAt);
+  const textIndex = readTextIndex(storeRoot, lastNormalizeAt);
 
   return {
     indexes: {
       ...pathIndex.indexes,
-      ...symbolIndex.indexes
+      ...symbolIndex.indexes,
+      ...textIndex.indexes
     },
-    warnings: [...pathIndex.warnings, ...symbolIndex.warnings]
+    warnings: [...pathIndex.warnings, ...symbolIndex.warnings, ...textIndex.warnings]
   };
 }
 
@@ -260,13 +274,15 @@ async function readRecordIndexesFromContextStore(
 ): Promise<RecordIndexReadResult> {
   const pathIndex = await readPathIndexFromContextStore(store, lastNormalizeAt);
   const symbolIndex = await readSymbolIndexFromContextStore(store, lastNormalizeAt);
+  const textIndex = await readTextIndexFromContextStore(store, lastNormalizeAt);
 
   return {
     indexes: {
       ...pathIndex.indexes,
-      ...symbolIndex.indexes
+      ...symbolIndex.indexes,
+      ...textIndex.indexes
     },
-    warnings: [...pathIndex.warnings, ...symbolIndex.warnings]
+    warnings: [...pathIndex.warnings, ...symbolIndex.warnings, ...textIndex.warnings]
   };
 }
 
@@ -311,6 +327,28 @@ function readSymbolIndex(
     };
   } catch (error) {
     return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
+  }
+}
+
+function readTextIndex(
+  storeRoot: string,
+  lastNormalizeAt: string | undefined
+): RecordIndexReadResult {
+  const path = join(storeRoot, "indexes", "text-index.json");
+
+  if (!existsSync(path)) {
+    return { indexes: {}, warnings: ["missing text index"] };
+  }
+
+  try {
+    const textIndex = validateTextIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
+
+    return {
+      indexes: { textIndex },
+      warnings: indexFreshnessWarnings("text", textIndex.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid text index: ${errorMessage(error)}`] };
   }
 }
 
@@ -377,6 +415,28 @@ async function readSymbolIndexFromContextStore(
     };
   } catch (error) {
     return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
+  }
+}
+
+async function readTextIndexFromContextStore(
+  store: ContextStoreAdapter,
+  lastNormalizeAt: string | undefined
+): Promise<RecordIndexReadResult> {
+  try {
+    const file = await store.readText("indexes/text-index.json");
+
+    if (!file) {
+      return { indexes: {}, warnings: ["missing text index"] };
+    }
+
+    const textIndex = validateTextIndex(JSON.parse(file.content) as unknown);
+
+    return {
+      indexes: { textIndex },
+      warnings: indexFreshnessWarnings("text", textIndex.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid text index: ${errorMessage(error)}`] };
   }
 }
 
@@ -508,7 +568,11 @@ function contextStoreReadPlan(
 }
 
 function canUseIndexedContextStoreRead(input: GetContextInput, indexes: RecordIndexSet): boolean {
-  return hasLookupSelectors(input) && typeof indexes.pathIndex?.generated_at === "string";
+  return (
+    hasLookupSelectors(input) &&
+    typeof indexes.pathIndex?.generated_at === "string" &&
+    selectorsHaveUsableIndexes(input, indexes)
+  );
 }
 
 function indexedNormalizedFiles(input: GetContextInput, indexes: RecordIndexSet): string[] {
@@ -559,6 +623,41 @@ function diagnosticsFromIndexes(indexes: RecordIndexSet): PrecomputedDiagnostics
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function selectorsHaveUsableIndexes(input: GetContextInput, indexes: RecordIndexSet): boolean {
+  if ((input.symbols ?? []).length > 0 && typeof indexes.symbolIndex?.generated_at !== "string") {
+    return false;
+  }
+
+  if (input.query !== undefined && typeof indexes.textIndex?.generated_at !== "string") {
+    return false;
+  }
+
+  return true;
+}
+
+function matchesTimeInput(record: NormalizedRecord, input: GetContextInput): boolean {
+  const since = input.since === undefined ? undefined : Date.parse(input.since);
+  const until = input.until === undefined ? undefined : Date.parse(input.until);
+
+  if (since === undefined && until === undefined) {
+    return true;
+  }
+
+  const recordTime = Date.parse(record.last_verified_at ?? record.provenance.observed_at);
+
+  if (Number.isNaN(recordTime)) {
+    return false;
+  }
+
+  return (
+    (since === undefined || recordTime >= since) && (until === undefined || recordTime <= until)
+  );
+}
+
+function hasTimeFilters(input: GetContextInput): boolean {
+  return input.since !== undefined || input.until !== undefined;
 }
 
 function indexFreshnessWarnings(

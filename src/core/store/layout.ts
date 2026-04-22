@@ -4,8 +4,10 @@ import { serializeProjectConfig, type ProjectConfig } from "../../schemas/projec
 import {
   createEmptyPathIndex,
   createEmptySymbolIndex,
+  createEmptyTextIndex,
   serializePathIndex,
-  serializeSymbolIndex
+  serializeSymbolIndex,
+  serializeTextIndex
 } from "../indexes/record-index.js";
 import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
 
@@ -97,6 +99,13 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   writeStoreFile({
     path: join(root, "indexes", "symbol-index.json"),
     content: serializeSymbolIndex(createEmptySymbolIndex()),
+    overwrite,
+    createdFiles,
+    existingFiles
+  });
+  writeStoreFile({
+    path: join(root, "indexes", "text-index.json"),
+    content: serializeTextIndex(createEmptyTextIndex()),
     overwrite,
     createdFiles,
     existingFiles

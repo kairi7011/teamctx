@@ -28,11 +28,13 @@ Implemented:
 - deterministic normalization of local and GitHub raw events into normalized JSONL
 - deterministic near-dedupe for wording variants and ordering conflict detection
 - basic temporal metadata on normalized records (`valid_from`, `valid_until`, `invalidated_by`)
-- path / symbol index generation during normalization
-- index-backed context selection by paths, domains, symbols, and tags
+- path / symbol / text index generation during normalization
+- index-backed context selection by paths, domains, symbols, tags, and deterministic text queries
 - canonical docs references from scoped docs evidence
 - ranked context payloads with selection reasons and category budgets
 - selector-driven remote context retrieval that skips unrelated normalized shards
+- context diagnostics for missing, stale, or invalid generated indexes
+- `teamctx.get_context` time filters with `since` / `until`
 - raw-event-derived episode index and `relevant_episodes` payload entries
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
@@ -43,7 +45,7 @@ Implemented:
 Planned:
 
 - real GitHub integration smoke tests
-- richer stale scoring and contested audit views
+- richer stale scoring
 - deeper normalization quality beyond deterministic heuristics
 
 ## Design Principles
