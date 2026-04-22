@@ -17,7 +17,7 @@ This repository is an early scaffold.
 Implemented:
 
 - `teamctx bind`
-- `teamctx init-store` for same-repository context stores
+- `teamctx init-store` for same-repository and GitHub context stores
 - `teamctx status`
 - `teamctx doctor`
 - local binding storage

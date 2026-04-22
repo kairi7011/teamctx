@@ -13,9 +13,8 @@ import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local
 import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStore } from "../core/retention/compact.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
-import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
+import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
-import { createDefaultProjectConfig } from "../schemas/project.js";
 
 type ParsedArgs = {
   command: string;
@@ -88,27 +87,15 @@ function bind(args: ParsedArgs): void {
   console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
 }
 
-function initStore(): void {
-  const root = getRepoRoot();
-  const repo = normalizeGitHubRepo(getOriginRemote(root));
-  const binding = findBinding(repo);
-
-  if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
-  }
-
-  if (binding.contextStore.repo !== repo) {
-    throw new Error("init-store currently supports context stores inside the current repository.");
-  }
-
-  const storeRoot = resolveStoreRoot(root, binding.contextStore.path);
-  const result = initStoreLayout({
-    root: storeRoot,
-    projectConfig: createDefaultProjectConfig(repo)
-  });
+async function initStore(): Promise<void> {
+  const result = await initBoundStoreAsync();
 
   console.log("Initialized context store:");
-  console.log(`  root: ${result.root}`);
+  console.log(`  store: ${result.store}`);
+  console.log(`  local_store: ${result.localStore}`);
+  if (result.root !== undefined) {
+    console.log(`  root: ${result.root}`);
+  }
   console.log(`  created_files: ${result.createdFiles.length}`);
   console.log(`  existing_files: ${result.existingFiles.length}`);
 }
@@ -289,7 +276,7 @@ async function main(): Promise<void> {
       bind(args);
       return;
     case "init-store":
-      initStore();
+      await initStore();
       return;
     case "normalize":
       await normalize();

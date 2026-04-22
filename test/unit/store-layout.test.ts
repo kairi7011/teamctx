@@ -3,6 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { LocalContextStore } from "../../src/adapters/store/local-store.js";
+import {
+  initBoundStoreAsync,
+  initContextStoreLayout,
+  type InitStoreServices
+} from "../../src/core/store/init-store.js";
 import {
   AUDIT_LOG_FILES,
   initStoreLayout,
@@ -10,6 +16,7 @@ import {
   resolveStoreRoot
 } from "../../src/core/store/layout.js";
 import { createDefaultProjectConfig } from "../../src/schemas/project.js";
+import type { Binding } from "../../src/schemas/types.js";
 
 function createTempDirectory(): { directory: string; cleanup: () => void } {
   const directory = mkdtempSync(join(tmpdir(), "teamctx-store-"));
@@ -105,3 +112,61 @@ test("initStoreLayout does not overwrite existing files by default", (context) =
   assert.ok(result.existingFiles.includes(join(root, "normalized", "facts.jsonl")));
   assert.equal(readFileSync(join(root, "normalized", "facts.jsonl"), "utf8"), "keep\n");
 });
+
+test("initContextStoreLayout initializes an adapter-backed store idempotently", async (context) => {
+  const { directory, cleanup } = createTempDirectory();
+  context.after(cleanup);
+  const root = join(directory, "remote-store");
+  const store = new LocalContextStore(root);
+
+  const first = await initContextStoreLayout({
+    store,
+    projectId: "github.com/team/service"
+  });
+  const second = await initContextStoreLayout({
+    store,
+    projectId: "github.com/team/service"
+  });
+
+  assert.equal(first.createdFiles.length, 12);
+  assert.equal(first.existingFiles.length, 0);
+  assert.equal(second.createdFiles.length, 0);
+  assert.equal(second.existingFiles.length, 12);
+  assert.ok(existsSync(join(root, "project.yaml")));
+  assert.ok(existsSync(join(root, "indexes", "path-index.json")));
+});
+
+test("initBoundStoreAsync initializes remote context store adapters", async (context) => {
+  const { directory, cleanup } = createTempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  const services = servicesFor(directory, remoteRoot);
+
+  const result = await initBoundStoreAsync({ services });
+
+  assert.equal(result.localStore, false);
+  assert.equal(result.store, "github.com/team/context/contexts/service");
+  assert.equal(result.createdFiles.length, 12);
+  assert.equal(result.existingFiles.length, 0);
+  assert.ok(existsSync(join(remoteRoot, "normalized", "facts.jsonl")));
+});
+
+function servicesFor(root: string, remoteStoreRoot: string): InitStoreServices {
+  const binding: Binding = {
+    repo: "github.com/team/service",
+    root,
+    contextStore: {
+      provider: "github",
+      repo: "github.com/team/context",
+      path: "contexts/service"
+    },
+    createdAt: "2026-04-22T10:00:00.000Z"
+  };
+
+  return {
+    getRepoRoot: () => root,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    findBinding: () => binding,
+    createContextStore: () => new LocalContextStore(remoteStoreRoot)
+  };
+}
