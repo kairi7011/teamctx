@@ -9,6 +9,7 @@ import {
   type NormalizeServices
 } from "../../src/core/normalize/normalize.js";
 import { normalizeTool } from "../../src/mcp/tools/normalize.js";
+import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
 import type { Binding } from "../../src/schemas/types.js";
 
@@ -162,6 +163,101 @@ test("normalizeStore exact-dedupes matching records", (context) => {
   assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
 });
 
+test("normalizeStore preserves archived states across subsequent runs", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+
+  normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  const [activeRecord] = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
+
+  if (!activeRecord) {
+    throw new Error("expected normalized record");
+  }
+
+  writeNormalizedRecord(storeRoot, {
+    ...(activeRecord as unknown as NormalizedRecord),
+    state: "archived"
+  });
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  assert.equal(result.auditEntriesWritten, 0);
+  assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0]?.state, "archived");
+  assert.equal(readJsonl(join(storeRoot, "audit", "changes.jsonl")).length, 1);
+});
+
+test("normalizeStore marks active records stale when all file evidence is missing", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    repoRoot: directory,
+    storeRoot,
+    now: fixedNow
+  });
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.auditEntriesWritten, 2);
+  assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0]?.state, "stale");
+
+  const audit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
+  assert.equal(audit[1]?.action, "state_changed");
+  assert.equal(audit[1]?.before_state, "active");
+  assert.equal(audit[1]?.after_state, "stale");
+});
+
+test("normalizeStore marks explicitly superseded records", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+  normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  const oldRecord = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0];
+
+  if (!oldRecord || typeof oldRecord.id !== "string") {
+    throw new Error("expected old record id");
+  }
+
+  writeRaw(
+    storeRoot,
+    observation({
+      event_id: "event-2",
+      text: "Tenant resolution must run before auth middleware.",
+      supersedes: [oldRecord.id]
+    })
+  );
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+  const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
+
+  assert.equal(result.recordsWritten, 2);
+  assert.equal(records.find((record) => record.id === oldRecord.id)?.state, "superseded");
+  assert.equal(records.find((record) => record.id !== oldRecord.id)?.state, "active");
+});
+
 test("normalizeBoundStore resolves the same-repository binding", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -201,6 +297,12 @@ function servicesFor(root: string): NormalizeServices {
     getOriginRemote: () => "git@github.com:team/service.git",
     findBinding: () => binding
   };
+}
+
+function writeNormalizedRecord(storeRoot: string, normalizedRecord: NormalizedRecord): void {
+  const directory = join(storeRoot, "normalized");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "pitfalls.jsonl"), `${JSON.stringify(normalizedRecord)}\n`, "utf8");
 }
 
 function readJsonl(path: string): Array<Record<string, unknown>> {

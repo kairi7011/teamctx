@@ -1,4 +1,11 @@
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
@@ -71,6 +78,7 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
   return normalizeStore({
     repo,
     storeRoot: resolveStoreRoot(root, binding.contextStore.path),
+    repoRoot: root,
     ...(options.now !== undefined ? { now: options.now } : {})
   });
 }
@@ -78,12 +86,15 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
 export function normalizeStore(options: {
   repo: string;
   storeRoot: string;
+  repoRoot?: string;
   now?: () => Date;
 }): NormalizeStoreResult {
   const now = options.now ?? (() => new Date());
   const runAt = now();
   const runNow = () => runAt;
   const rawEvents = readRawEvents(options.storeRoot);
+  const existingRecords = readNormalizedRecords(options.storeRoot);
+  const existingRecordsById = new Map(existingRecords.map((record) => [record.id, record]));
   const recordsByKey = new Map<string, NormalizedRecord>();
   const auditEntries: AuditLogEntry[] = [];
   let droppedEvents = 0;
@@ -92,21 +103,28 @@ export function normalizeStore(options: {
     const normalized = normalizeRawEvent(rawEvent, options.repo, runNow);
 
     if (normalized.record) {
-      const key = dedupeKey(normalized.record);
+      const existingRecord = existingRecordsById.get(normalized.record.id);
+      const record = existingRecord
+        ? preserveExistingState(normalized.record, existingRecord)
+        : normalized.record;
+      const key = dedupeKey(record);
       const sourceEventIds = rawEvent.observation ? [rawEvent.observation.event_id] : [];
 
       if (!recordsByKey.has(key)) {
-        recordsByKey.set(key, normalized.record);
-        auditEntries.push(
-          createAuditEntry({
-            action: "created",
-            itemId: normalized.record.id,
-            afterState: "active",
-            sourceEventIds,
-            reason: "evidence minimum check passed",
-            now: runNow
-          })
-        );
+        recordsByKey.set(key, record);
+
+        if (!existingRecord) {
+          auditEntries.push(
+            createAuditEntry({
+              action: "created",
+              itemId: record.id,
+              afterState: "active",
+              sourceEventIds,
+              reason: "evidence minimum check passed",
+              now: runNow
+            })
+          );
+        }
       }
     } else {
       droppedEvents += 1;
@@ -121,7 +139,13 @@ export function normalizeStore(options: {
     }
   }
 
-  const records = [...recordsByKey.values()].sort((left, right) => left.id.localeCompare(right.id));
+  const records = applyStateTransitions({
+    records: [...recordsByKey.values()],
+    existingRecordsById,
+    ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
+    auditEntries,
+    now: runNow
+  }).sort((left, right) => left.id.localeCompare(right.id));
   writeNormalizedRecords(options.storeRoot, records);
   appendAuditEntries(options.storeRoot, auditEntries);
 
@@ -135,6 +159,122 @@ export function normalizeStore(options: {
   writeLastNormalizeResult(options.storeRoot, result);
 
   return result;
+}
+
+function preserveExistingState(
+  record: NormalizedRecord,
+  existingRecord: NormalizedRecord
+): NormalizedRecord {
+  if (existingRecord.state === "active") {
+    return record;
+  }
+
+  return {
+    ...record,
+    state: existingRecord.state,
+    conflicts_with: existingRecord.conflicts_with
+  };
+}
+
+function applyStateTransitions(options: {
+  records: NormalizedRecord[];
+  existingRecordsById: Map<string, NormalizedRecord>;
+  repoRoot?: string;
+  auditEntries: AuditLogEntry[];
+  now: () => Date;
+}): NormalizedRecord[] {
+  const recordsById = new Map(options.records.map((record) => [record.id, record]));
+  const supersededIds = new Set<string>();
+
+  for (const record of options.records) {
+    for (const supersededId of record.supersedes) {
+      supersededIds.add(supersededId);
+    }
+  }
+
+  for (const supersededId of supersededIds) {
+    const record = recordsById.get(supersededId);
+
+    if (record?.state === "active") {
+      recordsById.set(
+        supersededId,
+        transitionRecord({
+          record,
+          afterState: "superseded",
+          reason: "superseded by a newer normalized record",
+          existingRecordsById: options.existingRecordsById,
+          auditEntries: options.auditEntries,
+          now: options.now
+        })
+      );
+    }
+  }
+
+  if (options.repoRoot !== undefined) {
+    for (const record of recordsById.values()) {
+      if (record.state === "active" && hasOnlyMissingFileEvidence(record, options.repoRoot)) {
+        recordsById.set(
+          record.id,
+          transitionRecord({
+            record,
+            afterState: "stale",
+            reason: "all file-backed evidence paths are missing",
+            existingRecordsById: options.existingRecordsById,
+            auditEntries: options.auditEntries,
+            now: options.now
+          })
+        );
+      }
+    }
+  }
+
+  return [...recordsById.values()];
+}
+
+function transitionRecord(options: {
+  record: NormalizedRecord;
+  afterState: NormalizedRecord["state"];
+  reason: string;
+  existingRecordsById: Map<string, NormalizedRecord>;
+  auditEntries: AuditLogEntry[];
+  now: () => Date;
+}): NormalizedRecord {
+  const existingRecord = options.existingRecordsById.get(options.record.id);
+  const beforeState = existingRecord?.state ?? options.record.state;
+
+  if (beforeState === options.afterState) {
+    return options.record;
+  }
+
+  options.auditEntries.push(
+    createAuditEntry({
+      action: "state_changed",
+      itemId: options.record.id,
+      beforeState,
+      afterState: options.afterState,
+      sourceEventIds: options.record.evidence.flatMap((evidence) =>
+        evidence.file ? [`file:${evidence.file}`] : []
+      ),
+      reason: options.reason,
+      now: options.now
+    })
+  );
+
+  return {
+    ...options.record,
+    state: options.afterState
+  };
+}
+
+function hasOnlyMissingFileEvidence(record: NormalizedRecord, repoRoot: string): boolean {
+  const fileEvidence = record.evidence.filter((evidence) => evidence.file !== undefined);
+
+  return (
+    fileEvidence.length > 0 &&
+    fileEvidence.every(
+      (evidence) => evidence.file !== undefined && !existsSync(join(repoRoot, evidence.file))
+    )
+  );
 }
 
 function normalizeRawEvent(
@@ -214,6 +354,12 @@ function readRawEvents(storeRoot: string): RawEventFile[] {
   });
 }
 
+function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
+  return Object.values(NORMALIZED_FILE_BY_KIND).flatMap((file) =>
+    readJsonl(join(storeRoot, "normalized", file), validateNormalizedRecord)
+  );
+}
+
 function listJsonFiles(root: string): string[] {
   try {
     return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
@@ -269,9 +415,24 @@ function writeJsonl(path: string, rows: unknown[]): void {
   );
 }
 
+function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
+  try {
+    const content = readFileSync(path, "utf8").trim();
+
+    if (content.length === 0) {
+      return [];
+    }
+
+    return content.split("\n").map((line) => validate(JSON.parse(line) as unknown));
+  } catch {
+    return [];
+  }
+}
+
 function createAuditEntry(options: {
   action: AuditLogEntry["action"];
   itemId?: string;
+  beforeState?: AuditLogEntry["before_state"];
   afterState?: AuditLogEntry["after_state"];
   sourceEventIds: string[];
   reason: string;
@@ -295,6 +456,10 @@ function createAuditEntry(options: {
 
   if (options.itemId !== undefined) {
     entry.item_id = options.itemId;
+  }
+
+  if (options.beforeState !== undefined) {
+    entry.before_state = options.beforeState;
   }
 
   if (options.afterState !== undefined) {
