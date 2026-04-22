@@ -34,6 +34,8 @@ test("LocalContextStore reads, writes, appends, lists files, and rejects escapin
     '{"id":"audit-1"}\n'
   );
   assert.deepEqual(await store.listFiles("normalized"), ["normalized/facts.jsonl"]);
+  await store.deleteText("normalized/facts.jsonl", { message: "Delete facts" });
+  assert.equal(await store.readText("normalized/facts.jsonl"), undefined);
   await assert.rejects(
     () => store.writeText("../outside", "", { message: "bad" }),
     /relative path/

@@ -33,13 +33,12 @@ Implemented:
 - ranked context payloads with selection reasons and category budgets
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
-- `teamctx compact` for local retention and archive compaction
+- `teamctx compact` for local and GitHub retention and archive compaction
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
-- remote audit controls and retention for GitHub context stores
 - deeper normalization quality beyond deterministic heuristics
 
 ## Design Principles

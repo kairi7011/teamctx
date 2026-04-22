@@ -257,6 +257,15 @@ class MemoryContextStore implements ContextStoreAdapter {
     return { path, revision: null, storeRevision: this.revision };
   }
 
+  async deleteText(
+    path: string,
+    _options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    this.files.delete(path);
+
+    return { path, revision: null, storeRevision: this.revision };
+  }
+
   async appendJsonl(
     path: string,
     rows: unknown[],

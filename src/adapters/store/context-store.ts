@@ -23,6 +23,7 @@ export type ContextStoreAdapter = {
     content: string,
     options: ContextStoreWriteOptions
   ) => Promise<ContextStoreWriteResult>;
+  deleteText: (path: string, options: ContextStoreWriteOptions) => Promise<ContextStoreWriteResult>;
   appendJsonl: (
     path: string,
     rows: unknown[],

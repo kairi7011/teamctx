@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -64,6 +65,23 @@ export class LocalContextStore implements ContextStoreAdapter {
     const absolutePath = this.resolvePath(path);
     mkdirSync(dirname(absolutePath), { recursive: true });
     appendFileSync(absolutePath, serializeJsonl(rows), "utf8");
+
+    return {
+      path: normalizeStorePath(path),
+      revision: null,
+      storeRevision: null
+    };
+  }
+
+  async deleteText(
+    path: string,
+    _options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    const absolutePath = this.resolvePath(path);
+
+    if (existsSync(absolutePath)) {
+      rmSync(absolutePath);
+    }
 
     return {
       path: normalizeStorePath(path),

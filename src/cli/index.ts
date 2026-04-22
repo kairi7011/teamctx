@@ -11,7 +11,7 @@ import { explainBoundItemAsync, invalidateBoundItemAsync } from "../core/audit/c
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
-import { compactBoundStore } from "../core/retention/compact.js";
+import { compactBoundStoreAsync } from "../core/retention/compact.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
@@ -111,8 +111,8 @@ async function normalize(): Promise<void> {
   console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
 }
 
-function compact(): void {
-  const result = compactBoundStore();
+async function compact(): Promise<void> {
+  const result = await compactBoundStoreAsync();
 
   console.log("Compacted context store:");
   console.log(`  compacted_at: ${result.compactedAt}`);
@@ -282,7 +282,7 @@ async function main(): Promise<void> {
       await normalize();
       return;
     case "compact":
-      compact();
+      await compact();
       return;
     case "explain":
       await explain(args);

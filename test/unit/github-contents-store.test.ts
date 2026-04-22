@@ -36,10 +36,13 @@ test("GitHubContentsStore reads, writes, appends, lists files, and reports revis
   });
   assert.equal(fake.fileContent("contexts/service/audit/changes.jsonl"), '{"id":"audit-1"}\n');
 
-  assert.deepEqual(await store.listFiles("normalized"), [
-    "normalized/facts.jsonl",
-    "normalized/rules.jsonl"
-  ]);
+  await store.deleteText("normalized/rules.jsonl", {
+    message: "Delete rules",
+    expectedRevision: "sha-2"
+  });
+  assert.equal(fake.fileContent("contexts/service/normalized/rules.jsonl"), undefined);
+
+  assert.deepEqual(await store.listFiles("normalized"), ["normalized/facts.jsonl"]);
   assert.equal(
     fake.requests.some((request) => request.authorization === "Bearer token-1"),
     true
@@ -137,6 +140,10 @@ class FakeGitHubApi {
         this.putAttempts += 1;
         return this.putContent(path, init?.body);
       }
+
+      if (method === "DELETE") {
+        return this.deleteContent(path, init?.body);
+      }
     }
 
     return textResponse(404, "not found");
@@ -207,6 +214,24 @@ class FakeGitHubApi {
       jsonResponse(200, {
         content: { sha },
         commit: { sha: `commit-${this.putAttempts}` }
+      })
+    );
+  }
+
+  private deleteContent(path: string, body: string | undefined): ReturnType<GitHubFetch> {
+    const request = parseJsonObject(body ?? "{}");
+    const expectedSha = requiredString(request.sha);
+    const existing = this.files.get(path);
+
+    if (!existing || existing.sha !== expectedSha) {
+      return Promise.resolve(textResponse(409, "conflict"));
+    }
+
+    this.files.delete(path);
+
+    return Promise.resolve(
+      jsonResponse(200, {
+        commit: { sha: "commit-delete-1" }
       })
     );
   }

@@ -3,8 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { LocalContextStore } from "../../src/adapters/store/local-store.js";
 import {
+  compactBoundStoreAsync,
   compactBoundStore,
+  compactContextStore,
   compactStore,
   type CompactServices
 } from "../../src/core/retention/compact.js";
@@ -90,6 +93,68 @@ test("compactBoundStore resolves the same-repository binding", (context) => {
   });
 
   assert.equal(result.storeRoot, storeRoot);
+});
+
+test("compactContextStore archives expired adapter-backed retention targets", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, "remote-store");
+  writeProject(storeRoot);
+  writeRaw(storeRoot, observation("candidate-old", "candidate", "2026-04-19T10:00:00.000Z"));
+  writeRaw(storeRoot, observation("verified-old", "verified", "2026-04-19T10:00:00.000Z"));
+  writeAudit(storeRoot, [
+    auditEntry("audit-old", "2026-04-19T10:00:00.000Z"),
+    auditEntry("audit-new", "2026-04-22T10:00:00.000Z")
+  ]);
+  writeRecords(storeRoot, [
+    record("pitfall-archived", "archived"),
+    record("pitfall-active", "active")
+  ]);
+
+  const result = await compactContextStore({
+    store: new LocalContextStore(storeRoot),
+    storeRoot: "github.com/team/context/contexts/service",
+    now: () => new Date("2026-04-22T12:00:00.000Z")
+  });
+
+  assert.equal(result.rawCandidateEventsArchived, 1);
+  assert.equal(result.rawEventsRetained, 1);
+  assert.equal(result.auditEntriesArchived, 1);
+  assert.equal(result.auditEntriesRetained, 1);
+  assert.equal(result.archivedRecordsArchived, 1);
+  assert.equal(result.normalizedRecordsRetained, 1);
+  assert.equal(
+    existsSync(
+      join(storeRoot, "archive", "raw", "events", "2026-04-19", "session-1-candidate-old.json")
+    ),
+    true
+  );
+  assert.equal(
+    existsSync(join(storeRoot, "raw", "events", "2026-04-19", "session-1-candidate-old.json")),
+    false
+  );
+  assert.equal(
+    readJsonl(join(storeRoot, "archive", "audit", "changes-20260422T120000.000Z.jsonl"))[0]?.id,
+    "audit-old"
+  );
+  assert.equal(
+    readJsonl(join(storeRoot, "archive", "normalized", "pitfalls.jsonl"))[0]?.id,
+    "pitfall-archived"
+  );
+});
+
+test("compactBoundStoreAsync resolves remote context store adapters", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  writeProject(remoteRoot);
+
+  const result = await compactBoundStoreAsync({
+    services: remoteServicesFor(directory, remoteRoot),
+    now: () => new Date("2026-04-22T12:00:00.000Z")
+  });
+
+  assert.equal(result.storeRoot, "github.com/team/context/contexts/service");
 });
 
 function writeProject(storeRoot: string): void {
@@ -234,6 +299,26 @@ function servicesFor(root: string): CompactServices {
     getRepoRoot: () => root,
     getOriginRemote: () => "git@github.com:team/service.git",
     findBinding: () => binding
+  };
+}
+
+function remoteServicesFor(root: string, remoteStoreRoot: string): CompactServices {
+  const binding: Binding = {
+    repo: "github.com/team/service",
+    root,
+    contextStore: {
+      provider: "github",
+      repo: "github.com/team/context",
+      path: "contexts/service"
+    },
+    createdAt: "2026-04-22T10:00:00.000Z"
+  };
+
+  return {
+    getRepoRoot: () => root,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    findBinding: () => binding,
+    createContextStore: () => new LocalContextStore(remoteStoreRoot)
   };
 }
 

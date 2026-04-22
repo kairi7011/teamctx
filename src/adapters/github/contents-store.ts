@@ -158,6 +158,35 @@ export class GitHubContentsStore implements ContextStoreAdapter {
     }
   }
 
+  async deleteText(
+    path: string,
+    options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    const revision = options.expectedRevision ?? (await this.readText(path))?.revision;
+
+    if (!revision) {
+      return {
+        path: normalizeStorePath(path),
+        revision: null,
+        storeRevision: await this.getRevision()
+      };
+    }
+
+    const response = validateDeleteResponse(
+      await this.client.requestJson("DELETE", this.contentPath(path, false), {
+        message: options.message,
+        sha: revision,
+        ...(this.branch !== undefined ? { branch: this.branch } : {})
+      })
+    );
+
+    return {
+      path: normalizeStorePath(path),
+      revision: null,
+      storeRevision: response.commitSha
+    };
+  }
+
   async listFiles(path: string): Promise<string[]> {
     const entries = await this.listEntries(path);
     const files: string[] = [];
@@ -256,6 +285,15 @@ function validateWriteResponse(value: unknown): { contentSha: string; commitSha:
 
   return {
     contentSha: requiredString(content.sha, "content sha"),
+    commitSha: requiredString(commit.sha, "commit sha")
+  };
+}
+
+function validateDeleteResponse(value: unknown): { commitSha: string } {
+  const record = requiredRecord(value, "GitHub delete response");
+  const commit = requiredRecord(record.commit, "GitHub delete commit");
+
+  return {
     commitSha: requiredString(commit.sha, "commit sha")
   };
 }
