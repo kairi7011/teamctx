@@ -8,6 +8,11 @@ import {
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { findBinding } from "../../core/binding/local-bindings.js";
 import {
+  composeContextFromStore,
+  emptyComposedContext
+} from "../../core/context/compose-context.js";
+import { resolveStoreRoot } from "../../core/store/layout.js";
+import {
   type ContextPayload,
   type EnabledContextPayload,
   type GetContextInput,
@@ -56,20 +61,12 @@ export function getContextTool(
     };
   }
 
+  const context =
+    binding.contextStore.repo === repoState.repo
+      ? composeContextFromStore(resolveStoreRoot(repoState.root, binding.contextStore.path), input)
+      : emptyComposedContext();
   const body: Omit<EnabledContextPayload, "enabled" | "identity"> = {
-    normalized_context: {
-      global: "",
-      scoped: [],
-      recent_decisions: [],
-      active_pitfalls: [],
-      applicable_workflows: []
-    },
-    canonical_doc_refs: [],
-    diagnostics: {
-      contested_items: [],
-      stale_items: [],
-      dropped_items: []
-    },
+    ...context,
     write_policy: {
       record_observation_candidate: "allowed",
       record_observation_verified: "allowed_with_evidence",
@@ -102,12 +99,13 @@ export function getContextTool(
 function readRepoState(
   input: GetContextInput,
   services: GetContextServices
-): { repo: string; branch: string; headCommit: string } | undefined {
+): { root: string; repo: string; branch: string; headCommit: string } | undefined {
   try {
     const root = services.getRepoRoot(input.cwd);
     const repo = normalizeGitHubRepo(services.getOriginRemote(root));
 
     return {
+      root,
       repo,
       branch: input.branch ?? services.getCurrentBranch(root),
       headCommit: input.head_commit ?? services.getHeadCommit(root)

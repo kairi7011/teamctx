@@ -2,6 +2,7 @@ export * from "./adapters/git/local-git.js";
 export * from "./adapters/git/repo-url.js";
 export * from "./core/binding/context-store.js";
 export * from "./core/binding/local-bindings.js";
+export * from "./core/context/compose-context.js";
 export * from "./core/normalize/confidence.js";
 export * from "./core/normalize/normalize.js";
 export * from "./core/observation/record.js";
