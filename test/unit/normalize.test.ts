@@ -321,6 +321,31 @@ test("normalizeStore marks active records stale when all file evidence is missin
   assert.equal(audit[1]?.after_state, "stale");
 });
 
+test("normalizeStore marks active records stale when scoped symbols disappear", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  mkdirSync(join(directory, "src", "auth"), { recursive: true });
+  writeFileSync(join(directory, "src", "auth", "middleware.ts"), "export const noop = true;\n");
+  writeRaw(storeRoot, observation());
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    repoRoot: directory,
+    storeRoot,
+    now: fixedNow
+  });
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.auditEntriesWritten, 2);
+  const staleRecord = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0];
+  assert.equal(staleRecord?.state, "stale");
+  assert.equal(
+    staleRecord?.invalidated_by,
+    "scoped symbols are no longer referenced in file-backed evidence"
+  );
+});
+
 test("normalizeStore marks conflicting same-scope assertions contested", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -469,7 +494,11 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
   context.after(cleanup);
   const remoteRoot = join(directory, "remote-store");
   mkdirSync(join(directory, "src", "auth"), { recursive: true });
-  writeFileSync(join(directory, "src", "auth", "middleware.ts"), "export {}\n", "utf8");
+  writeFileSync(
+    join(directory, "src", "auth", "middleware.ts"),
+    "export class AuthMiddleware {}\n",
+    "utf8"
+  );
   writeRaw(remoteRoot, observation());
 
   const services = servicesFor(directory, "github.com/team/context", remoteRoot);
