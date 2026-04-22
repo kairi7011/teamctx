@@ -7,8 +7,8 @@ import { explainItemTool } from "./tools/explain-item.js";
 import { invalidateTool } from "./tools/invalidate.js";
 import { normalizeTool } from "./tools/normalize.js";
 import {
-  recordObservationCandidateTool,
-  recordObservationVerifiedTool
+  recordObservationCandidateToolAsync,
+  recordObservationVerifiedToolAsync
 } from "./tools/record-observation.js";
 import { statusTool } from "./tools/status.js";
 import { toolDefinitions } from "./tools/definitions.js";
@@ -120,13 +120,13 @@ lineReader.on("line", (line) => {
     return;
   }
 
-  handleLine(line);
+  void handleLine(line);
 });
 
-function handleLine(line: string): void {
+async function handleLine(line: string): Promise<void> {
   try {
     const request = JSON.parse(line) as JsonRpcRequest;
-    const response = handleRequest(request);
+    const response = await handleRequest(request);
 
     if (response !== undefined) {
       writeMessage(response);
@@ -143,7 +143,7 @@ function handleLine(line: string): void {
   }
 }
 
-function handleRequest(request: JsonRpcRequest): unknown {
+async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
   if (request.method === "notifications/initialized") {
     return undefined;
   }
@@ -152,7 +152,7 @@ function handleRequest(request: JsonRpcRequest): unknown {
     return {
       jsonrpc: "2.0",
       id: request.id ?? null,
-      result: dispatchRequest(request)
+      result: await dispatchRequest(request)
     };
   } catch (error) {
     return {
@@ -166,7 +166,7 @@ function handleRequest(request: JsonRpcRequest): unknown {
   }
 }
 
-function dispatchRequest(request: JsonRpcRequest): unknown {
+async function dispatchRequest(request: JsonRpcRequest): Promise<unknown> {
   switch (request.method) {
     case "initialize":
       return {
@@ -189,7 +189,7 @@ function dispatchRequest(request: JsonRpcRequest): unknown {
   }
 }
 
-function callTool(params: unknown): unknown {
+async function callTool(params: unknown): Promise<unknown> {
   if (!isToolCallParams(params)) {
     throw new Error("tools/call params must include a tool name");
   }
@@ -198,9 +198,9 @@ function callTool(params: unknown): unknown {
     case "teamctx.get_context":
       return toolResult(getContextTool(params.arguments));
     case "teamctx.record_observation_candidate":
-      return toolResult(recordObservationCandidateTool(params.arguments));
+      return toolResult(await recordObservationCandidateToolAsync(params.arguments));
     case "teamctx.record_observation_verified":
-      return toolResult(recordObservationVerifiedTool(params.arguments));
+      return toolResult(await recordObservationVerifiedToolAsync(params.arguments));
     case "teamctx.normalize":
       return toolResult(normalizeTool(params.arguments));
     case "teamctx.status":

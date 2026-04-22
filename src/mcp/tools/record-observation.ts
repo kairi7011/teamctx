@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   recordRawObservation,
+  recordRawObservationAsync,
   type RecordObservationServices
 } from "../../core/observation/record.js";
 import { validateRawObservation, type RawObservationTrust } from "../../schemas/observation.js";
@@ -27,6 +28,20 @@ export function recordObservationVerifiedTool(
   return recordObservationTool(rawInput, "verified", services);
 }
 
+export async function recordObservationCandidateToolAsync(
+  rawInput: unknown,
+  services?: RecordObservationServices
+): Promise<RecordObservationToolResult> {
+  return recordObservationToolAsync(rawInput, "candidate", services);
+}
+
+export async function recordObservationVerifiedToolAsync(
+  rawInput: unknown,
+  services?: RecordObservationServices
+): Promise<RecordObservationToolResult> {
+  return recordObservationToolAsync(rawInput, "verified", services);
+}
+
 function recordObservationTool(
   rawInput: unknown,
   trust: RawObservationTrust,
@@ -35,6 +50,27 @@ function recordObservationTool(
   const input = normalizeRecordInput(rawInput, trust);
   const cwd = getOptionalString(rawInput, "cwd");
   const result = recordRawObservation({
+    observation: input,
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(services !== undefined ? { services } : {})
+  });
+
+  return {
+    recorded: true,
+    path: result.path,
+    relative_path: result.relativePath,
+    findings: result.findings
+  };
+}
+
+async function recordObservationToolAsync(
+  rawInput: unknown,
+  trust: RawObservationTrust,
+  services?: RecordObservationServices
+): Promise<RecordObservationToolResult> {
+  const input = normalizeRecordInput(rawInput, trust);
+  const cwd = getOptionalString(rawInput, "cwd");
+  const result = await recordRawObservationAsync({
     observation: input,
     ...(cwd !== undefined ? { cwd } : {}),
     ...(services !== undefined ? { services } : {})

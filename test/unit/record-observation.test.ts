@@ -4,12 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  recordRawObservationAsync,
   recordRawObservation,
   SensitiveContentError,
   writeRawObservationToBinding,
   type RecordObservationServices
 } from "../../src/core/observation/record.js";
-import { recordObservationCandidateTool } from "../../src/mcp/tools/record-observation.js";
+import { LocalContextStore } from "../../src/adapters/store/local-store.js";
+import {
+  recordObservationCandidateTool,
+  recordObservationCandidateToolAsync
+} from "../../src/mcp/tools/record-observation.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
 import type { Binding } from "../../src/schemas/types.js";
 
@@ -85,6 +90,34 @@ test("writeRawObservationToBinding rejects external context stores for now", (co
   );
 });
 
+test("recordRawObservationAsync writes remote context store raw events through an adapter", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+
+  const services: RecordObservationServices = {
+    getRepoRoot: () => directory,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    findBinding: () => binding(directory, "github.com/team/context"),
+    createContextStore: () => new LocalContextStore(remoteRoot)
+  };
+
+  const result = await recordRawObservationAsync({
+    observation: observation(),
+    services
+  });
+
+  assert.equal(
+    result.path,
+    "github.com/team/context/.teamctx/raw/events/2026-04-22/session-1-event-1.json"
+  );
+  assert.equal(result.relativePath, "raw/events/2026-04-22/session-1-event-1.json");
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(remoteRoot, result.relativePath), "utf8")),
+    observation()
+  );
+});
+
 test("writeRawObservationToBinding blocks sensitive raw observations", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -127,6 +160,36 @@ test("recordObservationCandidateTool builds and records a candidate event", (con
   assert.equal(result.recorded, true);
   assert.equal(result.relative_path, "raw/events/2026-04-22/session-1-event-1.json");
   assert.ok(existsSync(result.path));
+});
+
+test("recordObservationCandidateToolAsync supports remote context store adapters", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+
+  const services: RecordObservationServices = {
+    getRepoRoot: () => directory,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    findBinding: () => binding(directory, "github.com/team/context"),
+    createContextStore: () => new LocalContextStore(remoteRoot)
+  };
+
+  const result = await recordObservationCandidateToolAsync(
+    {
+      event_id: "event-1",
+      session_id: "session-1",
+      observed_at: "2026-04-22T10:00:00.000Z",
+      recorded_by: "codex",
+      kind: "pitfall",
+      text: "Auth middleware ordering is easy to break.",
+      source_type: "manual_assertion"
+    },
+    services
+  );
+
+  assert.equal(result.recorded, true);
+  assert.equal(result.relative_path, "raw/events/2026-04-22/session-1-event-1.json");
+  assert.ok(existsSync(join(remoteRoot, result.relative_path)));
 });
 
 test("recordRawObservation rejects unbound repos", (context) => {

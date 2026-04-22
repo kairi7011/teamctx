@@ -1,5 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { GitHubContentsStore } from "../../adapters/github/contents-store.js";
+import { LocalContextStore } from "../../adapters/store/local-store.js";
+import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { findBinding } from "../binding/local-bindings.js";
@@ -19,6 +22,11 @@ export type RecordObservationServices = {
   getRepoRoot: (cwd?: string) => string;
   getOriginRemote: (cwd?: string) => string;
   findBinding: (repo: string) => Binding | undefined;
+  createContextStore?: (options: {
+    repo: string;
+    repoRoot: string;
+    binding: Binding;
+  }) => ContextStoreAdapter;
 };
 
 export type RecordObservationOptions = {
@@ -60,6 +68,38 @@ export function recordRawObservation(options: RecordObservationOptions): RawObse
   });
 }
 
+export async function recordRawObservationAsync(
+  options: RecordObservationOptions
+): Promise<RawObservationWriteResult> {
+  const services = options.services ?? defaultServices;
+  const root = services.getRepoRoot(options.cwd);
+  const repo = normalizeGitHubRepo(services.getOriginRemote(root));
+  const binding = services.findBinding(repo);
+
+  if (!binding) {
+    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+  }
+
+  if (binding.contextStore.repo === repo) {
+    return writeRawObservationToBinding({
+      repo,
+      repoRoot: root,
+      binding,
+      observation: options.observation
+    });
+  }
+
+  return writeRawObservationToContextStore({
+    repo,
+    repoRoot: root,
+    binding,
+    observation: options.observation,
+    store:
+      services.createContextStore?.({ repo, repoRoot: root, binding }) ??
+      createDefaultContextStore({ repo, repoRoot: root, binding })
+  });
+}
+
 export function writeRawObservationToBinding(options: {
   repo: string;
   repoRoot: string;
@@ -98,6 +138,59 @@ export function writeRawObservationToBinding(options: {
     relativePath,
     findings: sensitiveReport.findings
   };
+}
+
+export async function writeRawObservationToContextStore(options: {
+  repo: string;
+  repoRoot: string;
+  binding: Binding;
+  observation: RawObservation;
+  store: ContextStoreAdapter;
+}): Promise<RawObservationWriteResult> {
+  const sensitiveReport = scanRawObservation(options.observation);
+
+  if (sensitiveReport.status === "blocked") {
+    throw new SensitiveContentError(sensitiveReport.findings);
+  }
+
+  const relativePath = formatRawEventPath({
+    observedAt: options.observation.observed_at,
+    sessionId: options.observation.session_id,
+    eventId: options.observation.event_id
+  });
+  const existing = await options.store.readText(relativePath);
+
+  if (existing) {
+    throw new Error(`Raw observation event already exists: ${relativePath}`);
+  }
+
+  await options.store.writeText(relativePath, `${JSON.stringify(options.observation, null, 2)}\n`, {
+    message: `Record teamctx raw observation ${options.observation.event_id}`,
+    expectedRevision: null
+  });
+
+  return {
+    path: `${options.binding.contextStore.repo}/${options.binding.contextStore.path}/${relativePath}`,
+    relativePath,
+    findings: sensitiveReport.findings
+  };
+}
+
+function createDefaultContextStore(options: {
+  repo: string;
+  repoRoot: string;
+  binding: Binding;
+}): ContextStoreAdapter {
+  if (options.binding.contextStore.repo === options.repo) {
+    return new LocalContextStore(
+      resolveStoreRoot(options.repoRoot, options.binding.contextStore.path)
+    );
+  }
+
+  return new GitHubContentsStore({
+    repository: options.binding.contextStore.repo,
+    storePath: options.binding.contextStore.path
+  });
 }
 
 function resolveInside(root: string, relativePath: string): string {
