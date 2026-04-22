@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { serializeProjectConfig, type ProjectConfig } from "../../schemas/project.js";
+import {
+  createEmptyPathIndex,
+  createEmptySymbolIndex,
+  serializePathIndex,
+  serializeSymbolIndex
+} from "../indexes/record-index.js";
 
 export const NORMALIZED_RECORD_FILES = [
   "facts.jsonl",
@@ -82,14 +88,14 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
 
   writeStoreFile({
     path: join(root, "indexes", "path-index.json"),
-    content: "{}\n",
+    content: serializePathIndex(createEmptyPathIndex()),
     overwrite,
     createdFiles,
     existingFiles
   });
   writeStoreFile({
     path: join(root, "indexes", "symbol-index.json"),
-    content: "{}\n",
+    content: serializeSymbolIndex(createEmptySymbolIndex()),
     overwrite,
     createdFiles,
     existingFiles

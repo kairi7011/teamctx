@@ -26,6 +26,9 @@ Implemented:
 - raw observation recording for same-repository and GitHub context stores
 - secret / PII scan before raw observation writes
 - deterministic normalization of local and GitHub raw events into normalized JSONL
+- path / symbol index generation during normalization
+- index-backed context selection by paths, domains, symbols, and tags
+- canonical docs references from scoped docs evidence
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local normalized records
 - `teamctx compact` for local retention and archive compaction
@@ -34,7 +37,6 @@ Implemented:
 
 Planned:
 
-- path / symbol indexes
 - stronger task-ready context composition
 
 ## Design Principles

@@ -37,6 +37,9 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
       cwd: { type: "string" },
       target_files: { type: "array", items: { type: "string" } },
       changed_files: { type: "array", items: { type: "string" } },
+      domains: { type: "array", items: { type: "string" } },
+      symbols: { type: "array", items: { type: "string" } },
+      tags: { type: "array", items: { type: "string" } },
       branch: { type: "string" },
       head_commit: { type: "string" }
     },

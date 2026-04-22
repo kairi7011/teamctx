@@ -8,6 +8,7 @@ export * from "./core/binding/context-store.js";
 export * from "./core/binding/local-bindings.js";
 export * from "./core/audit/control.js";
 export * from "./core/context/compose-context.js";
+export * from "./core/indexes/record-index.js";
 export * from "./core/normalize/confidence.js";
 export * from "./core/normalize/normalize.js";
 export * from "./core/observation/record.js";

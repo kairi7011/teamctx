@@ -1,11 +1,18 @@
 import { readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import {
+  hasLookupSelectors,
+  matchesScopeInput,
+  selectIndexedRecordIds,
+  validatePathIndex,
+  validateSymbolIndex,
+  type RecordIndexSet
+} from "../indexes/record-index.js";
+import {
   validateNormalizedRecord,
-  type NormalizedRecord,
-  type Scope
+  type NormalizedRecord
 } from "../../schemas/normalized-record.js";
 import type { GetContextInput, EnabledContextPayload } from "../../schemas/context-payload.js";
 
@@ -19,8 +26,9 @@ export function composeContextFromStore(
   input: GetContextInput = {}
 ): ComposedContext {
   const records = readNormalizedRecords(storeRoot);
+  const indexes = readRecordIndexes(storeRoot);
 
-  return composeContextFromRecords(records, input);
+  return composeContextFromRecords(records, input, indexes);
 }
 
 export async function composeContextFromContextStore(
@@ -28,16 +36,18 @@ export async function composeContextFromContextStore(
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
   const records = await readNormalizedRecordsFromContextStore(store);
+  const indexes = await readRecordIndexesFromContextStore(store);
 
-  return composeContextFromRecords(records, input);
+  return composeContextFromRecords(records, input, indexes);
 }
 
 function composeContextFromRecords(
   records: NormalizedRecord[],
-  input: GetContextInput
+  input: GetContextInput,
+  indexes: RecordIndexSet = {}
 ): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
-  const scopedRecords = activeRecords.filter((record) => matchesInput(record.scope, input));
+  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
 
   return {
     normalized_context: {
@@ -56,7 +66,7 @@ function composeContextFromRecords(
         .filter((record) => record.kind === "workflow")
         .map((record) => record.text)
     },
-    canonical_doc_refs: [],
+    canonical_doc_refs: canonicalDocRefs(scopedRecords),
     diagnostics: {
       contested_items: records
         .filter((record) => record.state === "contested")
@@ -65,6 +75,27 @@ function composeContextFromRecords(
       dropped_items: []
     }
   };
+}
+
+function selectScopedRecords(
+  activeRecords: NormalizedRecord[],
+  input: GetContextInput,
+  indexes: RecordIndexSet
+): NormalizedRecord[] {
+  if (hasLookupSelectors(input) && hasGeneratedIndex(indexes)) {
+    const selectedIds = selectIndexedRecordIds(indexes, input);
+
+    return activeRecords.filter((record) => selectedIds.has(record.id));
+  }
+
+  return activeRecords.filter((record) => matchesScopeInput(record, input));
+}
+
+function hasGeneratedIndex(indexes: RecordIndexSet): boolean {
+  return (
+    typeof indexes.pathIndex?.generated_at === "string" ||
+    typeof indexes.symbolIndex?.generated_at === "string"
+  );
 }
 
 export function emptyComposedContext(): ComposedContext {
@@ -115,6 +146,80 @@ async function readNormalizedRecordsFromContextStore(
   return records.sort((left, right) => left.id.localeCompare(right.id));
 }
 
+function readRecordIndexes(storeRoot: string): RecordIndexSet {
+  return {
+    ...readPathIndex(storeRoot),
+    ...readSymbolIndex(storeRoot)
+  };
+}
+
+async function readRecordIndexesFromContextStore(
+  store: ContextStoreAdapter
+): Promise<RecordIndexSet> {
+  return {
+    ...(await readPathIndexFromContextStore(store)),
+    ...(await readSymbolIndexFromContextStore(store))
+  };
+}
+
+function readPathIndex(storeRoot: string): RecordIndexSet {
+  try {
+    return {
+      pathIndex: validatePathIndex(
+        JSON.parse(readFileSync(join(storeRoot, "indexes", "path-index.json"), "utf8")) as unknown
+      )
+    };
+  } catch {
+    return {};
+  }
+}
+
+function readSymbolIndex(storeRoot: string): RecordIndexSet {
+  try {
+    return {
+      symbolIndex: validateSymbolIndex(
+        JSON.parse(readFileSync(join(storeRoot, "indexes", "symbol-index.json"), "utf8")) as unknown
+      )
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function readPathIndexFromContextStore(store: ContextStoreAdapter): Promise<RecordIndexSet> {
+  try {
+    const file = await store.readText("indexes/path-index.json");
+
+    if (!file) {
+      return {};
+    }
+
+    return {
+      pathIndex: validatePathIndex(JSON.parse(file.content) as unknown)
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function readSymbolIndexFromContextStore(
+  store: ContextStoreAdapter
+): Promise<RecordIndexSet> {
+  try {
+    const file = await store.readText("indexes/symbol-index.json");
+
+    if (!file) {
+      return {};
+    }
+
+    return {
+      symbolIndex: validateSymbolIndex(JSON.parse(file.content) as unknown)
+    };
+  } catch {
+    return {};
+  }
+}
+
 function readJsonlLines(path: string): string[] {
   try {
     return jsonlLines(readFileSync(path, "utf8"));
@@ -139,59 +244,51 @@ function globalContext(records: NormalizedRecord[]): string {
     .join("\n");
 }
 
-function matchesInput(scope: Scope, input: GetContextInput): boolean {
-  const files = [...(input.target_files ?? []), ...(input.changed_files ?? [])];
+function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unknown>> {
+  const seen = new Set<string>();
+  const refs: Array<Record<string, unknown>> = [];
 
-  if (files.length === 0) {
-    return false;
-  }
+  for (const record of records) {
+    for (const evidence of record.evidence) {
+      if (evidence.kind !== "docs" || !evidence.repo || !evidence.file || !evidence.commit) {
+        continue;
+      }
 
-  return scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file)));
-}
+      const key = JSON.stringify({
+        repo: evidence.repo,
+        path: evidence.file,
+        commit: evidence.commit,
+        lines: evidence.lines ?? null,
+        doc_role: evidence.doc_role ?? null
+      });
 
-function matchesPath(pattern: string, file: string): boolean {
-  const normalizedPattern = normalizePath(pattern);
-  const normalizedFile = normalizePath(file);
+      if (seen.has(key)) {
+        continue;
+      }
 
-  if (normalizedPattern.endsWith("/**")) {
-    const prefix = normalizedPattern.slice(0, -"/**".length);
+      seen.add(key);
 
-    return normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`);
-  }
+      const ref: Record<string, unknown> = {
+        repo: evidence.repo,
+        path: evidence.file,
+        commit: evidence.commit,
+        item_id: record.id,
+        reason: "scope_match"
+      };
 
-  if (normalizedPattern.includes("*")) {
-    const regex = new RegExp(`^${globToRegex(normalizedPattern)}$`);
+      if (evidence.doc_role !== undefined) {
+        ref.doc_role = evidence.doc_role;
+      }
+      if (evidence.lines !== undefined) {
+        ref.lines = evidence.lines;
+      }
+      if (evidence.url !== undefined) {
+        ref.url = evidence.url;
+      }
 
-    return regex.test(normalizedFile);
-  }
-
-  return normalizedFile === normalizedPattern || relative(normalizedPattern, normalizedFile) === "";
-}
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function globToRegex(pattern: string): string {
-  let output = "";
-
-  for (let index = 0; index < pattern.length; index += 1) {
-    const char = pattern[index];
-    const next = pattern[index + 1];
-
-    if (char === "*" && next === "*") {
-      output += ".*";
-      index += 1;
-    } else if (char === "*") {
-      output += "[^/]*";
-    } else if (char) {
-      output += escapeRegex(char);
+      refs.push(ref);
     }
   }
 
-  return output;
+  return refs;
 }

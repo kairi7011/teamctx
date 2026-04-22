@@ -112,6 +112,29 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
       auditEntriesWritten: 1
     }
   );
+
+  const pathIndex = JSON.parse(
+    readFileSync(join(storeRoot, "indexes", "path-index.json"), "utf8")
+  ) as {
+    paths: Record<string, string[]>;
+    domains: Record<string, string[]>;
+    tags: Record<string, string[]>;
+    kinds: Record<string, string[]>;
+    states: Record<string, string[]>;
+  };
+  const symbolIndex = JSON.parse(
+    readFileSync(join(storeRoot, "indexes", "symbol-index.json"), "utf8")
+  ) as {
+    symbols: Record<string, string[]>;
+  };
+  const recordId = records[0]?.id as string;
+
+  assert.deepEqual(pathIndex.paths["src/auth/**"], [recordId]);
+  assert.deepEqual(pathIndex.domains.auth, [recordId]);
+  assert.deepEqual(pathIndex.tags["request-lifecycle"], [recordId]);
+  assert.deepEqual(pathIndex.kinds.pitfall, [recordId]);
+  assert.deepEqual(pathIndex.states.active, [recordId]);
+  assert.deepEqual(symbolIndex.symbols.AuthMiddleware, [recordId]);
 });
 
 test("normalizeStore drops raw events that fail evidence minimum", (context) => {
@@ -368,6 +391,26 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
   assert.deepEqual(
     JSON.parse(readFileSync(join(remoteRoot, "indexes", "last-normalize.json"), "utf8")),
     result
+  );
+  assert.deepEqual(
+    Object.keys(
+      (
+        JSON.parse(readFileSync(join(remoteRoot, "indexes", "path-index.json"), "utf8")) as {
+          paths: Record<string, string[]>;
+        }
+      ).paths
+    ),
+    ["src/auth/**"]
+  );
+  assert.deepEqual(
+    Object.keys(
+      (
+        JSON.parse(readFileSync(join(remoteRoot, "indexes", "symbol-index.json"), "utf8")) as {
+          symbols: Record<string, string[]>;
+        }
+      ).symbols
+    ),
+    ["AuthMiddleware"]
   );
 });
 

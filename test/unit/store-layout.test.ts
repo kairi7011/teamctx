@@ -63,8 +63,27 @@ test("initStoreLayout creates the MVP context store files", (context) => {
       ""
     ].join("\n")
   );
-  assert.equal(readFileSync(join(result.root, "indexes", "path-index.json"), "utf8"), "{}\n");
-  assert.equal(readFileSync(join(result.root, "indexes", "symbol-index.json"), "utf8"), "{}\n");
+  assert.equal(
+    readFileSync(join(result.root, "indexes", "path-index.json"), "utf8"),
+    [
+      "{",
+      '  "schema_version": 1,',
+      '  "generated_at": null,',
+      '  "paths": {},',
+      '  "domains": {},',
+      '  "tags": {},',
+      '  "kinds": {},',
+      '  "states": {}',
+      "}",
+      ""
+    ].join("\n")
+  );
+  assert.equal(
+    readFileSync(join(result.root, "indexes", "symbol-index.json"), "utf8"),
+    ["{", '  "schema_version": 1,', '  "generated_at": null,', '  "symbols": {}', "}", ""].join(
+      "\n"
+    )
+  );
 });
 
 test("initStoreLayout does not overwrite existing files by default", (context) => {

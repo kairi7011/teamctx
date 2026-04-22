@@ -21,6 +21,13 @@ import {
 import { validateRawObservation, type RawObservation } from "../../schemas/observation.js";
 import type { Binding } from "../../schemas/types.js";
 import { findBinding } from "../binding/local-bindings.js";
+import {
+  buildRecordIndexes,
+  serializePathIndex,
+  serializeSymbolIndex,
+  type PathIndex,
+  type SymbolIndex
+} from "../indexes/record-index.js";
 import { scanRawObservation } from "../policy/redaction-policy.js";
 import {
   createContextStoreForBinding,
@@ -137,8 +144,10 @@ export function normalizeStore(options: {
     rawEvents,
     existingRecords
   });
+  const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
 
   writeNormalizedRecords(options.storeRoot, run.records);
+  writeRecordIndexes(options.storeRoot, indexes);
   appendAuditEntries(options.storeRoot, run.auditEntries);
   writeLastNormalizeResult(options.storeRoot, run.result);
 
@@ -163,8 +172,10 @@ export async function normalizeContextStore(options: {
     rawEvents,
     existingRecords: existing.records
   });
+  const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
 
   await writeNormalizedRecordsToContextStore(options.store, run.records, existing.filesByName);
+  await writeRecordIndexesToContextStore(options.store, indexes, run.result.normalizedAt);
 
   if (run.auditEntries.length > 0) {
     await options.store.appendJsonl("audit/changes.jsonl", run.auditEntries, {
@@ -614,6 +625,16 @@ function writeNormalizedRecords(storeRoot: string, records: NormalizedRecord[]):
   }
 }
 
+function writeRecordIndexes(
+  storeRoot: string,
+  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex }
+): void {
+  const root = join(storeRoot, "indexes");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "path-index.json"), serializePathIndex(indexes.pathIndex), "utf8");
+  writeFileSync(join(root, "symbol-index.json"), serializeSymbolIndex(indexes.symbolIndex), "utf8");
+}
+
 async function writeNormalizedRecordsToContextStore(
   store: ContextStoreAdapter,
   records: NormalizedRecord[],
@@ -629,6 +650,24 @@ async function writeNormalizedRecordsToContextStore(
       expectedRevision: existingFile?.revision ?? null
     });
   }
+}
+
+async function writeRecordIndexesToContextStore(
+  store: ContextStoreAdapter,
+  indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex },
+  normalizedAt: string
+): Promise<void> {
+  const pathIndexFile = await store.readText("indexes/path-index.json");
+  await store.writeText("indexes/path-index.json", serializePathIndex(indexes.pathIndex), {
+    message: `Write teamctx path index ${normalizedAt}`,
+    expectedRevision: pathIndexFile?.revision ?? null
+  });
+
+  const symbolIndexFile = await store.readText("indexes/symbol-index.json");
+  await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
+    message: `Write teamctx symbol index ${normalizedAt}`,
+    expectedRevision: symbolIndexFile?.revision ?? null
+  });
 }
 
 function appendAuditEntries(storeRoot: string, entries: AuditLogEntry[]): void {

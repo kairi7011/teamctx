@@ -4,6 +4,9 @@ export type GetContextInput = {
   cwd?: string;
   target_files?: string[];
   changed_files?: string[];
+  domains?: string[];
+  symbols?: string[];
+  tags?: string[];
   branch?: string;
   head_commit?: string;
 };
@@ -60,6 +63,9 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   const cwd = optionalString(value.cwd, "cwd");
   const targetFiles = optionalStringArrayWithName(value.target_files, "target_files");
   const changedFiles = optionalStringArrayWithName(value.changed_files, "changed_files");
+  const domains = optionalStringArrayWithName(value.domains, "domains");
+  const symbols = optionalStringArrayWithName(value.symbols, "symbols");
+  const tags = optionalStringArrayWithName(value.tags, "tags");
   const branch = optionalString(value.branch, "branch");
   const headCommit = optionalString(value.head_commit, "head_commit");
 
@@ -71,6 +77,15 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   }
   if (changedFiles !== undefined) {
     input.changed_files = changedFiles;
+  }
+  if (domains !== undefined) {
+    input.domains = domains;
+  }
+  if (symbols !== undefined) {
+    input.symbols = symbols;
+  }
+  if (tags !== undefined) {
+    input.tags = tags;
   }
   if (branch !== undefined) {
     input.branch = branch;
