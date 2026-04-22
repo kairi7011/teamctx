@@ -26,7 +26,14 @@ test("summarizeContextStore returns local status buckets and last normalize resu
 
   writeRecord(storeRoot, record("pitfall-auth-order", "active"));
   writeRecord(storeRoot, record("pitfall-old-cache", "stale"));
-  writeRecord(storeRoot, record("pitfall-token-refresh", "contested"));
+  writeRecord(
+    storeRoot,
+    record("pitfall-token-refresh", "contested", ["pitfall-token-refresh-alt"])
+  );
+  writeRecord(
+    storeRoot,
+    record("pitfall-token-refresh-alt", "contested", ["pitfall-token-refresh"])
+  );
   writeAudit(storeRoot, [
     auditEntry({
       id: "audit-1",
@@ -40,6 +47,14 @@ test("summarizeContextStore returns local status buckets and last normalize resu
       action: "dropped",
       reason: "evidence minimum check failed",
       sourceEventIds: ["event-dropped"]
+    }),
+    auditEntry({
+      id: "audit-3",
+      at: "2026-04-22T11:02:00.000Z",
+      action: "contested",
+      itemId: "pitfall-token-refresh",
+      reason: "conflicting same-scope assertion detected",
+      sourceEventIds: ["file:src/auth/middleware.ts"]
     })
   ]);
   writeLastNormalize(storeRoot);
@@ -47,9 +62,9 @@ test("summarizeContextStore returns local status buckets and last normalize resu
   const summary = summarizeContextStore({ storeRoot });
 
   assert.equal(summary.last_normalize_result?.normalizedAt, "2026-04-22T11:02:00.000Z");
-  assert.equal(summary.counts.total_records, 3);
+  assert.equal(summary.counts.total_records, 4);
   assert.equal(summary.counts.active_records, 1);
-  assert.equal(summary.counts.contested_records, 1);
+  assert.equal(summary.counts.contested_records, 2);
   assert.equal(summary.counts.stale_records, 1);
   assert.equal(summary.counts.dropped_events, 1);
   assert.equal(summary.recent_promoted_items[0]?.item_id, "pitfall-auth-order");
@@ -60,6 +75,15 @@ test("summarizeContextStore returns local status buckets and last normalize resu
   assert.equal(summary.dropped_items[0]?.reason, "evidence minimum check failed");
   assert.equal(summary.stale_items[0]?.item_id, "pitfall-old-cache");
   assert.equal(summary.contested_items[0]?.item_id, "pitfall-token-refresh");
+  assert.equal(
+    summary.contested_items[0]?.competing_items[0]?.item_id,
+    "pitfall-token-refresh-alt"
+  );
+  assert.equal(
+    summary.contested_items[0]?.contest_audit_entries[0]?.reason,
+    "conflicting same-scope assertion detected"
+  );
+  assert.equal(summary.contested_items[0]?.evidence[0]?.kind, "code");
 });
 
 test("getBoundStatus and statusTool include local store summaries", (context) => {
@@ -124,7 +148,7 @@ function writeLastNormalize(storeRoot: string): void {
   );
 }
 
-function record(id: string, state: RecordState): NormalizedRecord {
+function record(id: string, state: RecordState, conflictsWith: string[] = []): NormalizedRecord {
   return {
     id,
     schema_version: 1,
@@ -155,7 +179,7 @@ function record(id: string, state: RecordState): NormalizedRecord {
     confidence_score: 0.65,
     last_verified_at: "2026-04-22T11:00:00.000Z",
     supersedes: [],
-    conflicts_with: []
+    conflicts_with: conflictsWith
   };
 }
 
@@ -166,6 +190,10 @@ function textFor(id: string): string {
 
   if (id === "pitfall-token-refresh") {
     return "Token refresh behavior has conflicting evidence.";
+  }
+
+  if (id === "pitfall-token-refresh-alt") {
+    return "Token refresh must use the legacy cache path.";
   }
 
   return "Auth middleware must run before tenant resolution.";

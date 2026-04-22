@@ -200,7 +200,10 @@ async function status(): Promise<void> {
   );
   printStatusList(
     "contested",
-    summary.contested_items.map((item) => ({ id: item.item_id, detail: item.text }))
+    summary.contested_items.map((item) => ({
+      id: item.item_id,
+      detail: contestedStatusDetail(item)
+    }))
   );
   printStatusList(
     "dropped",
@@ -213,6 +216,25 @@ async function status(): Promise<void> {
     "stale",
     summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text }))
   );
+}
+
+function contestedStatusDetail(item: {
+  text: string;
+  competing_items?: Array<{ item_id: string; text: string }>;
+  contest_audit_entries?: Array<{ reason?: string }>;
+}): string {
+  const competingIds = (item.competing_items ?? []).map((competing) => competing.item_id);
+  const reason = item.contest_audit_entries?.[0]?.reason;
+  const parts = [item.text];
+
+  if (competingIds.length > 0) {
+    parts.push(`conflicts_with=${competingIds.join(",")}`);
+  }
+  if (reason !== undefined) {
+    parts.push(`reason=${reason}`);
+  }
+
+  return parts.join(" | ");
 }
 
 function printStatusList(label: string, rows: Array<{ id: string; detail: string }>): void {

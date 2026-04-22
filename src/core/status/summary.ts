@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { NORMALIZED_FILE_BY_KIND, type NormalizeStoreResult } from "../normalize/normalize.js";
 import { validateAuditLogEntry, type AuditLogEntry } from "../../schemas/audit.js";
+import type { Evidence } from "../../schemas/evidence.js";
 import {
   validateNormalizedRecord,
   type ConfidenceLevel,
@@ -27,7 +28,16 @@ export type StatusItemSummary = {
   confidence_level: ConfidenceLevel;
   confidence_score?: number;
   last_verified_at?: string;
+  valid_from?: string;
+  valid_until?: string;
+  invalidated_by?: string;
+  evidence: Evidence[];
   conflicts_with: string[];
+};
+
+export type ContestedItemSummary = StatusItemSummary & {
+  competing_items: StatusItemSummary[];
+  contest_audit_entries: AuditLogEntry[];
 };
 
 export type PromotedItemSummary = {
@@ -57,7 +67,7 @@ export type StatusSummary = {
     dropped_events: number;
   };
   recent_promoted_items: PromotedItemSummary[];
-  contested_items: StatusItemSummary[];
+  contested_items: ContestedItemSummary[];
   dropped_items: DroppedItemSummary[];
   stale_items: StatusItemSummary[];
 };
@@ -204,7 +214,7 @@ function buildStatusSummary(options: {
       .map((entry) => promotedSummary(entry, recordsById)),
     contested_items: options.records
       .filter((record) => record.state === "contested")
-      .map(itemSummary)
+      .map((record) => contestedItemSummary(record, recordsById, options.auditEntries))
       .slice(0, options.recentLimit),
     dropped_items: sortAuditEntriesNewestFirst(droppedEntries)
       .slice(0, options.recentLimit)
@@ -273,6 +283,7 @@ function itemSummary(record: NormalizedRecord): StatusItemSummary {
     state: record.state,
     text: record.text,
     scope: record.scope,
+    evidence: record.evidence,
     confidence_level: record.confidence_level,
     conflicts_with: record.conflicts_with
   };
@@ -284,8 +295,37 @@ function itemSummary(record: NormalizedRecord): StatusItemSummary {
   if (record.last_verified_at !== undefined) {
     summary.last_verified_at = record.last_verified_at;
   }
+  if (record.valid_from !== undefined) {
+    summary.valid_from = record.valid_from;
+  }
+  if (record.valid_until !== undefined) {
+    summary.valid_until = record.valid_until;
+  }
+  if (record.invalidated_by !== undefined) {
+    summary.invalidated_by = record.invalidated_by;
+  }
 
   return summary;
+}
+
+function contestedItemSummary(
+  record: NormalizedRecord,
+  recordsById: Map<string, NormalizedRecord>,
+  auditEntries: AuditLogEntry[]
+): ContestedItemSummary {
+  return {
+    ...itemSummary(record),
+    competing_items: record.conflicts_with
+      .flatMap((itemId) => {
+        const competingRecord = recordsById.get(itemId);
+
+        return competingRecord ? [itemSummary(competingRecord)] : [];
+      })
+      .sort((left, right) => left.item_id.localeCompare(right.item_id)),
+    contest_audit_entries: sortAuditEntriesNewestFirst(
+      auditEntries.filter((entry) => entry.action === "contested" && entry.item_id === record.id)
+    )
+  };
 }
 
 function sortAuditEntriesNewestFirst(entries: AuditLogEntry[]): AuditLogEntry[] {
