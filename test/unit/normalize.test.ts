@@ -5,9 +5,11 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   normalizeBoundStore,
+  normalizeBoundStoreAsync,
   normalizeStore,
   type NormalizeServices
 } from "../../src/core/normalize/normalize.js";
+import { LocalContextStore } from "../../src/adapters/store/local-store.js";
 import { normalizeTool } from "../../src/mcp/tools/normalize.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
@@ -340,13 +342,46 @@ test("normalizeBoundStore resolves the same-repository binding", (context) => {
   );
 });
 
-function servicesFor(root: string): NormalizeServices {
+test("normalizeBoundStoreAsync resolves and writes a remote context store adapter", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  mkdirSync(join(directory, "src", "auth"), { recursive: true });
+  writeFileSync(join(directory, "src", "auth", "middleware.ts"), "export {}\n", "utf8");
+  writeRaw(remoteRoot, observation());
+
+  const services = servicesFor(directory, "github.com/team/context", remoteRoot);
+  const result = await normalizeBoundStoreAsync({
+    services,
+    now: fixedNow
+  });
+
+  assert.deepEqual(result, {
+    normalizedAt: "2026-04-22T11:00:00.000Z",
+    rawEventsRead: 1,
+    recordsWritten: 1,
+    droppedEvents: 0,
+    auditEntriesWritten: 1
+  });
+  assert.equal(readJsonl(join(remoteRoot, "normalized", "pitfalls.jsonl"))[0]?.state, "active");
+  assert.equal(readJsonl(join(remoteRoot, "audit", "changes.jsonl"))[0]?.action, "created");
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(remoteRoot, "indexes", "last-normalize.json"), "utf8")),
+    result
+  );
+});
+
+function servicesFor(
+  root: string,
+  contextStoreRepo = "github.com/team/service",
+  remoteStoreRoot?: string
+): NormalizeServices {
   const binding: Binding = {
     repo: "github.com/team/service",
     root,
     contextStore: {
       provider: "github",
-      repo: "github.com/team/service",
+      repo: contextStoreRepo,
       path: ".teamctx"
     },
     createdAt: "2026-04-22T10:00:00.000Z"
@@ -355,7 +390,10 @@ function servicesFor(root: string): NormalizeServices {
   return {
     getRepoRoot: () => root,
     getOriginRemote: () => "git@github.com:team/service.git",
-    findBinding: () => binding
+    findBinding: () => binding,
+    ...(remoteStoreRoot !== undefined
+      ? { createContextStore: () => new LocalContextStore(remoteStoreRoot) }
+      : {})
   };
 }
 

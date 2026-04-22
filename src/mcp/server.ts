@@ -5,7 +5,7 @@ import { stdin, stdout } from "node:process";
 import { getContextToolAsync } from "./tools/get-context.js";
 import { explainItemTool } from "./tools/explain-item.js";
 import { invalidateTool } from "./tools/invalidate.js";
-import { normalizeTool } from "./tools/normalize.js";
+import { normalizeToolAsync } from "./tools/normalize.js";
 import {
   recordObservationCandidateToolAsync,
   recordObservationVerifiedToolAsync
@@ -202,7 +202,7 @@ async function callTool(params: unknown): Promise<unknown> {
     case "teamctx.record_observation_verified":
       return toolResult(await recordObservationVerifiedToolAsync(params.arguments));
     case "teamctx.normalize":
-      return toolResult(normalizeTool(params.arguments));
+      return toolResult(await normalizeToolAsync(params.arguments));
     case "teamctx.status":
       return toolResult(await statusToolAsync(params.arguments));
     case "teamctx.explain_item":

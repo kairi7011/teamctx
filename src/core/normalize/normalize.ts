@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
+import type { ContextStoreAdapter, ContextStoreFile } from "../../adapters/store/context-store.js";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { validateAuditLogEntry, type AuditLogEntry } from "../../schemas/audit.js";
@@ -21,6 +22,10 @@ import { validateRawObservation, type RawObservation } from "../../schemas/obser
 import type { Binding } from "../../schemas/types.js";
 import { findBinding } from "../binding/local-bindings.js";
 import { scanRawObservation } from "../policy/redaction-policy.js";
+import {
+  createContextStoreForBinding,
+  type ContextStoreFactoryServices
+} from "../store/bound-store.js";
 import { resolveStoreRoot } from "../store/layout.js";
 import { calculateConfidence } from "./confidence.js";
 
@@ -32,7 +37,7 @@ export type NormalizeStoreResult = {
   auditEntriesWritten: number;
 };
 
-export type NormalizeServices = {
+export type NormalizeServices = ContextStoreFactoryServices & {
   getRepoRoot: (cwd?: string) => string;
   getOriginRemote: (cwd?: string) => string;
   findBinding: (repo: string) => Binding | undefined;
@@ -83,6 +88,37 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
   });
 }
 
+export async function normalizeBoundStoreAsync(
+  options: NormalizeOptions = {}
+): Promise<NormalizeStoreResult> {
+  const services = options.services ?? defaultServices;
+  const root = services.getRepoRoot(options.cwd);
+  const repo = normalizeGitHubRepo(services.getOriginRemote(root));
+  const binding = services.findBinding(repo);
+
+  if (!binding) {
+    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+  }
+
+  if (binding.contextStore.repo === repo) {
+    return normalizeStore({
+      repo,
+      storeRoot: resolveStoreRoot(root, binding.contextStore.path),
+      repoRoot: root,
+      ...(options.now !== undefined ? { now: options.now } : {})
+    });
+  }
+
+  return normalizeContextStore({
+    repo,
+    repoRoot: root,
+    store:
+      services.createContextStore?.({ repo, repoRoot: root, binding }) ??
+      createContextStoreForBinding({ repo, repoRoot: root, binding }),
+    ...(options.now !== undefined ? { now: options.now } : {})
+  });
+}
+
 export function normalizeStore(options: {
   repo: string;
   storeRoot: string;
@@ -94,6 +130,72 @@ export function normalizeStore(options: {
   const runNow = () => runAt;
   const rawEvents = readRawEvents(options.storeRoot);
   const existingRecords = readNormalizedRecords(options.storeRoot);
+  const run = normalizeRun({
+    repo: options.repo,
+    ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
+    now: runNow,
+    rawEvents,
+    existingRecords
+  });
+
+  writeNormalizedRecords(options.storeRoot, run.records);
+  appendAuditEntries(options.storeRoot, run.auditEntries);
+  writeLastNormalizeResult(options.storeRoot, run.result);
+
+  return run.result;
+}
+
+export async function normalizeContextStore(options: {
+  repo: string;
+  store: ContextStoreAdapter;
+  repoRoot?: string;
+  now?: () => Date;
+}): Promise<NormalizeStoreResult> {
+  const now = options.now ?? (() => new Date());
+  const runAt = now();
+  const runNow = () => runAt;
+  const rawEvents = await readRawEventsFromContextStore(options.store);
+  const existing = await readNormalizedRecordFilesFromContextStore(options.store);
+  const run = normalizeRun({
+    repo: options.repo,
+    ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
+    now: runNow,
+    rawEvents,
+    existingRecords: existing.records
+  });
+
+  await writeNormalizedRecordsToContextStore(options.store, run.records, existing.filesByName);
+
+  if (run.auditEntries.length > 0) {
+    await options.store.appendJsonl("audit/changes.jsonl", run.auditEntries, {
+      message: `Append teamctx normalize audit ${run.result.normalizedAt}`
+    });
+  }
+
+  const lastNormalize = await options.store.readText("indexes/last-normalize.json");
+  await options.store.writeText(
+    "indexes/last-normalize.json",
+    `${JSON.stringify(run.result, null, 2)}\n`,
+    {
+      message: `Record teamctx normalize result ${run.result.normalizedAt}`,
+      expectedRevision: lastNormalize?.revision ?? null
+    }
+  );
+
+  return run.result;
+}
+
+function normalizeRun(options: {
+  repo: string;
+  repoRoot?: string;
+  now: () => Date;
+  rawEvents: RawEventFile[];
+  existingRecords: NormalizedRecord[];
+}): { result: NormalizeStoreResult; records: NormalizedRecord[]; auditEntries: AuditLogEntry[] } {
+  const runAt = options.now();
+  const runNow = () => runAt;
+  const rawEvents = options.rawEvents;
+  const existingRecords = options.existingRecords;
   const existingRecordsById = new Map(existingRecords.map((record) => [record.id, record]));
   const recordsByKey = new Map<string, NormalizedRecord>();
   const auditEntries: AuditLogEntry[] = [];
@@ -146,9 +248,6 @@ export function normalizeStore(options: {
     auditEntries,
     now: runNow
   }).sort((left, right) => left.id.localeCompare(right.id));
-  writeNormalizedRecords(options.storeRoot, records);
-  appendAuditEntries(options.storeRoot, auditEntries);
-
   const result = {
     normalizedAt: runAt.toISOString(),
     rawEventsRead: rawEvents.length,
@@ -156,9 +255,8 @@ export function normalizeStore(options: {
     droppedEvents,
     auditEntriesWritten: auditEntries.length
   };
-  writeLastNormalizeResult(options.storeRoot, result);
 
-  return result;
+  return { result, records, auditEntries };
 }
 
 function preserveExistingState(
@@ -437,10 +535,56 @@ function readRawEvents(storeRoot: string): RawEventFile[] {
   });
 }
 
+async function readRawEventsFromContextStore(store: ContextStoreAdapter): Promise<RawEventFile[]> {
+  const files = (await store.listFiles("raw/events")).filter((path) => path.endsWith(".json"));
+
+  return Promise.all(
+    files.map(async (path) => {
+      try {
+        const file = await store.readText(path);
+
+        if (!file) {
+          return { path, error: "raw event file is missing" };
+        }
+
+        return {
+          path,
+          observation: validateRawObservation(JSON.parse(file.content) as unknown)
+        };
+      } catch (error) {
+        return {
+          path,
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+    })
+  );
+}
+
 function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
   return Object.values(NORMALIZED_FILE_BY_KIND).flatMap((file) =>
     readJsonl(join(storeRoot, "normalized", file), validateNormalizedRecord)
   );
+}
+
+async function readNormalizedRecordFilesFromContextStore(store: ContextStoreAdapter): Promise<{
+  records: NormalizedRecord[];
+  filesByName: Map<string, ContextStoreFile | undefined>;
+}> {
+  const records: NormalizedRecord[] = [];
+  const filesByName = new Map<string, ContextStoreFile | undefined>();
+
+  for (const file of Object.values(NORMALIZED_FILE_BY_KIND)) {
+    const storePath = `normalized/${file}`;
+    const storeFile = await store.readText(storePath);
+    filesByName.set(file, storeFile);
+
+    for (const line of jsonlLines(storeFile?.content ?? "")) {
+      records.push(validateNormalizedRecord(JSON.parse(line) as unknown));
+    }
+  }
+
+  return { records, filesByName };
 }
 
 function listJsonFiles(root: string): string[] {
@@ -467,6 +611,23 @@ function writeNormalizedRecords(storeRoot: string, records: NormalizedRecord[]):
   for (const kind of Object.keys(NORMALIZED_FILE_BY_KIND) as KnowledgeKind[]) {
     const kindRecords = records.filter((record) => record.kind === kind);
     writeJsonl(join(storeRoot, "normalized", NORMALIZED_FILE_BY_KIND[kind]), kindRecords);
+  }
+}
+
+async function writeNormalizedRecordsToContextStore(
+  store: ContextStoreAdapter,
+  records: NormalizedRecord[],
+  existingFilesByName: Map<string, ContextStoreFile | undefined>
+): Promise<void> {
+  for (const kind of Object.keys(NORMALIZED_FILE_BY_KIND) as KnowledgeKind[]) {
+    const file = NORMALIZED_FILE_BY_KIND[kind];
+    const existingFile = existingFilesByName.get(file);
+    const kindRecords = records.filter((record) => record.kind === kind);
+
+    await store.writeText(`normalized/${file}`, serializeRows(kindRecords), {
+      message: `Write teamctx normalized ${file}`,
+      expectedRevision: existingFile?.revision ?? null
+    });
   }
 }
 
@@ -510,6 +671,17 @@ function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
   } catch {
     return [];
   }
+}
+
+function jsonlLines(content: string): string[] {
+  return content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+function serializeRows(rows: unknown[]): string {
+  return rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length > 0 ? "\n" : "");
 }
 
 function createAuditEntry(options: {

@@ -1,10 +1,26 @@
-import { normalizeBoundStore, type NormalizeServices } from "../../core/normalize/normalize.js";
+import {
+  normalizeBoundStore,
+  normalizeBoundStoreAsync,
+  type NormalizeServices
+} from "../../core/normalize/normalize.js";
 import { isRecord } from "../../schemas/validation.js";
 
 export function normalizeTool(rawInput: unknown, services?: NormalizeServices): unknown {
   const cwd = getOptionalString(rawInput, "cwd");
 
   return normalizeBoundStore({
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(services !== undefined ? { services } : {})
+  });
+}
+
+export async function normalizeToolAsync(
+  rawInput: unknown,
+  services?: NormalizeServices
+): Promise<unknown> {
+  const cwd = getOptionalString(rawInput, "cwd");
+
+  return normalizeBoundStoreAsync({
     ...(cwd !== undefined ? { cwd } : {}),
     ...(services !== undefined ? { services } : {})
   });
