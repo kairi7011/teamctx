@@ -210,6 +210,13 @@ function applyStateTransitions(options: {
     }
   }
 
+  applyConflictTransitions({
+    recordsById,
+    existingRecordsById: options.existingRecordsById,
+    auditEntries: options.auditEntries,
+    now: options.now
+  });
+
   if (options.repoRoot !== undefined) {
     for (const record of recordsById.values()) {
       if (record.state === "active" && hasOnlyMissingFileEvidence(record, options.repoRoot)) {
@@ -231,8 +238,60 @@ function applyStateTransitions(options: {
   return [...recordsById.values()];
 }
 
+function applyConflictTransitions(options: {
+  recordsById: Map<string, NormalizedRecord>;
+  existingRecordsById: Map<string, NormalizedRecord>;
+  auditEntries: AuditLogEntry[];
+  now: () => Date;
+}): void {
+  const activeRecords = [...options.recordsById.values()].filter(
+    (record) => record.state === "active"
+  );
+  const conflictsById = new Map<string, Set<string>>();
+
+  for (let leftIndex = 0; leftIndex < activeRecords.length; leftIndex += 1) {
+    const left = activeRecords[leftIndex];
+
+    if (!left) {
+      continue;
+    }
+
+    for (let rightIndex = leftIndex + 1; rightIndex < activeRecords.length; rightIndex += 1) {
+      const right = activeRecords[rightIndex];
+
+      if (right && areConflictingRecords(left, right)) {
+        addConflict(conflictsById, left.id, right.id);
+        addConflict(conflictsById, right.id, left.id);
+      }
+    }
+  }
+
+  for (const [itemId, conflicts] of conflictsById) {
+    const record = options.recordsById.get(itemId);
+
+    if (record?.state === "active") {
+      options.recordsById.set(
+        itemId,
+        transitionRecord({
+          record: {
+            ...record,
+            conflicts_with: [...new Set([...record.conflicts_with, ...conflicts])].sort()
+          },
+          action: "contested",
+          afterState: "contested",
+          reason: "conflicting same-scope assertion detected",
+          existingRecordsById: options.existingRecordsById,
+          auditEntries: options.auditEntries,
+          now: options.now
+        })
+      );
+    }
+  }
+}
+
 function transitionRecord(options: {
   record: NormalizedRecord;
+  action?: AuditLogEntry["action"];
   afterState: NormalizedRecord["state"];
   reason: string;
   existingRecordsById: Map<string, NormalizedRecord>;
@@ -248,7 +307,7 @@ function transitionRecord(options: {
 
   options.auditEntries.push(
     createAuditEntry({
-      action: "state_changed",
+      action: options.action ?? "state_changed",
       itemId: options.record.id,
       beforeState,
       afterState: options.afterState,
@@ -264,6 +323,30 @@ function transitionRecord(options: {
     ...options.record,
     state: options.afterState
   };
+}
+
+function addConflict(
+  conflictsById: Map<string, Set<string>>,
+  itemId: string,
+  conflictId: string
+): void {
+  const conflicts = conflictsById.get(itemId) ?? new Set<string>();
+  conflicts.add(conflictId);
+  conflictsById.set(itemId, conflicts);
+}
+
+function areConflictingRecords(left: NormalizedRecord, right: NormalizedRecord): boolean {
+  if (left.kind !== right.kind || scopeKey(left.scope) !== scopeKey(right.scope)) {
+    return false;
+  }
+
+  const leftText = canonicalText(left.text);
+  const rightText = canonicalText(right.text);
+
+  return (
+    stripNegation(leftText) === stripNegation(rightText) &&
+    hasNegation(leftText) !== hasNegation(rightText)
+  );
 }
 
 function hasOnlyMissingFileEvidence(record: NormalizedRecord, repoRoot: string): boolean {
@@ -482,8 +565,36 @@ function recordId(observation: RawObservation): string {
 function dedupeKey(record: NormalizedRecord): string {
   return JSON.stringify({
     kind: record.kind,
-    text: record.text.trim().toLowerCase(),
-    scope: record.scope
+    text: canonicalText(record.text),
+    scope: scopeKey(record.scope)
+  });
+}
+
+function canonicalText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function hasNegation(value: string): boolean {
+  return value.split(" ").some((token) => NEGATION_TOKENS.has(token));
+}
+
+function stripNegation(value: string): string {
+  return value
+    .split(" ")
+    .filter((token) => !NEGATION_TOKENS.has(token))
+    .join(" ");
+}
+
+function scopeKey(scope: Scope): string {
+  return JSON.stringify({
+    paths: [...scope.paths].sort(),
+    domains: [...scope.domains].sort(),
+    symbols: [...scope.symbols].sort(),
+    tags: [...scope.tags].sort()
   });
 }
 
@@ -495,6 +606,8 @@ function emptyScope(): Scope {
     tags: []
   };
 }
+
+const NEGATION_TOKENS = new Set(["not", "never", "without", "disable", "disabled", "avoid"]);
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");

@@ -163,6 +163,30 @@ test("normalizeStore exact-dedupes matching records", (context) => {
   assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
 });
 
+test("normalizeStore near-dedupes punctuation-only text variants", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+  writeRaw(
+    storeRoot,
+    observation({
+      event_id: "event-2",
+      text: "Auth middleware must run before tenant resolution!"
+    })
+  );
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  assert.equal(result.rawEventsRead, 2);
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
+});
+
 test("normalizeStore preserves archived states across subsequent runs", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -218,6 +242,42 @@ test("normalizeStore marks active records stale when all file evidence is missin
   assert.equal(audit[1]?.action, "state_changed");
   assert.equal(audit[1]?.before_state, "active");
   assert.equal(audit[1]?.after_state, "stale");
+});
+
+test("normalizeStore marks conflicting same-scope assertions contested", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+  writeRaw(
+    storeRoot,
+    observation({
+      event_id: "event-2",
+      text: "Auth middleware must not run before tenant resolution."
+    })
+  );
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+  const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
+
+  assert.equal(result.recordsWritten, 2);
+  assert.equal(
+    records.every((record) => record.state === "contested"),
+    true
+  );
+  assert.equal(
+    records.every(
+      (record) => Array.isArray(record.conflicts_with) && record.conflicts_with.length === 1
+    ),
+    true
+  );
+
+  const audit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
+  assert.equal(audit.filter((entry) => entry.action === "contested").length, 2);
 });
 
 test("normalizeStore marks explicitly superseded records", (context) => {
