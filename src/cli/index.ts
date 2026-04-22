@@ -10,9 +10,9 @@ import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { explainBoundItem, invalidateBoundItem } from "../core/audit/control.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
-import { normalizeBoundStore } from "../core/normalize/normalize.js";
+import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStore } from "../core/retention/compact.js";
-import { getBoundStatus } from "../core/status/status.js";
+import { getBoundStatusAsync } from "../core/status/status.js";
 import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { createDefaultProjectConfig } from "../schemas/project.js";
@@ -113,8 +113,8 @@ function initStore(): void {
   console.log(`  existing_files: ${result.existingFiles.length}`);
 }
 
-function normalize(): void {
-  const result = normalizeBoundStore();
+async function normalize(): Promise<void> {
+  const result = await normalizeBoundStoreAsync();
 
   console.log("Normalized context store:");
   console.log(`  normalized_at: ${result.normalizedAt}`);
@@ -167,8 +167,8 @@ function invalidate(args: ParsedArgs): void {
   console.log(`  after_state: ${result.after_state}`);
 }
 
-function status(): void {
-  const result = getBoundStatus();
+async function status(): Promise<void> {
+  const result = await getBoundStatusAsync();
 
   if (!result.enabled) {
     console.log("teamctx disabled");
@@ -281,7 +281,7 @@ function tools(): void {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
   switch (args.command) {
@@ -292,7 +292,7 @@ function main(): void {
       initStore();
       return;
     case "normalize":
-      normalize();
+      await normalize();
       return;
     case "compact":
       compact();
@@ -304,7 +304,7 @@ function main(): void {
       invalidate(args);
       return;
     case "status":
-      status();
+      await status();
       return;
     case "doctor":
       doctor();
@@ -323,7 +323,7 @@ function main(): void {
 }
 
 try {
-  main();
+  await main();
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
