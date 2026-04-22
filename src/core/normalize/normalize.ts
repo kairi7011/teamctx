@@ -296,6 +296,13 @@ function preserveExistingState(
   return {
     ...record,
     state: existingRecord.state,
+    ...(existingRecord.valid_from !== undefined ? { valid_from: existingRecord.valid_from } : {}),
+    ...(existingRecord.valid_until !== undefined
+      ? { valid_until: existingRecord.valid_until }
+      : {}),
+    ...(existingRecord.invalidated_by !== undefined
+      ? { invalidated_by: existingRecord.invalidated_by }
+      : {}),
     conflicts_with: existingRecord.conflicts_with
   };
 }
@@ -445,7 +452,14 @@ function transitionRecord(options: {
 
   return {
     ...options.record,
-    state: options.afterState
+    state: options.afterState,
+    ...(options.record.valid_from !== undefined ? { valid_from: options.record.valid_from } : {}),
+    ...(options.afterState === "active"
+      ? {}
+      : {
+          valid_until: options.now().toISOString(),
+          invalidated_by: options.reason
+        })
   };
 }
 
@@ -529,6 +543,7 @@ function normalizeRawEvent(
     confidence_level: confidence.level,
     confidence_score: confidence.score,
     last_verified_at: now().toISOString(),
+    valid_from: rawEvent.observation.observed_at,
     supersedes: rawEvent.observation.supersedes,
     conflicts_with: []
   });

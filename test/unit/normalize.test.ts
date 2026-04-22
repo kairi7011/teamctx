@@ -96,6 +96,7 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   assert.equal(records[0]?.confidence_level, "medium");
   assert.equal(records[0]?.confidence_score, 0.65);
   assert.equal(records[0]?.last_verified_at, "2026-04-22T11:00:00.000Z");
+  assert.equal(records[0]?.valid_from, "2026-04-22T10:00:00.000Z");
 
   const audit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
   assert.equal(audit[0]?.action, "created");
@@ -302,7 +303,10 @@ test("normalizeStore marks active records stale when all file evidence is missin
 
   assert.equal(result.recordsWritten, 1);
   assert.equal(result.auditEntriesWritten, 2);
-  assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0]?.state, "stale");
+  const staleRecord = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"))[0];
+  assert.equal(staleRecord?.state, "stale");
+  assert.equal(staleRecord?.valid_until, "2026-04-22T11:00:00.000Z");
+  assert.equal(staleRecord?.invalidated_by, "all file-backed evidence paths are missing");
 
   const audit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
   assert.equal(audit[1]?.action, "state_changed");
@@ -333,6 +337,16 @@ test("normalizeStore marks conflicting same-scope assertions contested", (contex
   assert.equal(result.recordsWritten, 2);
   assert.equal(
     records.every((record) => record.state === "contested"),
+    true
+  );
+  assert.equal(
+    records.every((record) => record.valid_until === "2026-04-22T11:00:00.000Z"),
+    true
+  );
+  assert.equal(
+    records.every(
+      (record) => record.invalidated_by === "conflicting same-scope assertion detected"
+    ),
     true
   );
   assert.equal(
@@ -414,6 +428,10 @@ test("normalizeStore marks explicitly superseded records", (context) => {
 
   assert.equal(result.recordsWritten, 2);
   assert.equal(records.find((record) => record.id === oldRecord.id)?.state, "superseded");
+  assert.equal(
+    records.find((record) => record.id === oldRecord.id)?.invalidated_by,
+    "superseded by a newer normalized record"
+  );
   assert.equal(records.find((record) => record.id !== oldRecord.id)?.state, "active");
 });
 

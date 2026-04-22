@@ -52,6 +52,9 @@ export type NormalizedRecord = {
   confidence_level: ConfidenceLevel;
   confidence_score?: number;
   last_verified_at?: string;
+  valid_from?: string;
+  valid_until?: string;
+  invalidated_by?: string;
   supersedes: string[];
   conflicts_with: string[];
 };
@@ -101,6 +104,15 @@ export function validateNormalizedRecord(value: unknown): NormalizedRecord {
 
   if (value.last_verified_at !== undefined) {
     record.last_verified_at = requiredString(value.last_verified_at, "last_verified_at");
+  }
+  if (value.valid_from !== undefined) {
+    record.valid_from = requiredString(value.valid_from, "valid_from");
+  }
+  if (value.valid_until !== undefined) {
+    record.valid_until = requiredString(value.valid_until, "valid_until");
+  }
+  if (value.invalidated_by !== undefined) {
+    record.invalidated_by = requiredString(value.invalidated_by, "invalidated_by");
   }
 
   return record;

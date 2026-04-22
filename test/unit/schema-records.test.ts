@@ -123,6 +123,7 @@ test("validateNormalizedRecord accepts an active record with evidence and proven
     confidence_level: "medium",
     confidence_score: 0.65,
     last_verified_at: "2026-04-21T10:00:00.000Z",
+    valid_from: "2026-04-21T10:00:00.000Z",
     supersedes: [],
     conflicts_with: []
   };

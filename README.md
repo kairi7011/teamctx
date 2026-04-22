@@ -27,6 +27,7 @@ Implemented:
 - secret / PII scan before raw observation writes
 - deterministic normalization of local and GitHub raw events into normalized JSONL
 - deterministic near-dedupe for wording variants and ordering conflict detection
+- basic temporal metadata on normalized records (`valid_from`, `valid_until`, `invalidated_by`)
 - path / symbol index generation during normalization
 - index-backed context selection by paths, domains, symbols, and tags
 - canonical docs references from scoped docs evidence

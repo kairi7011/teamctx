@@ -154,9 +154,12 @@ export function invalidateItem(options: {
 
   const now = options.now ?? (() => new Date());
   const beforeState = match.record.state;
+  const invalidationReason = options.reason ?? "manual invalidation";
   const archivedRecord = validateNormalizedRecord({
     ...match.record,
-    state: "archived"
+    state: "archived",
+    valid_until: now().toISOString(),
+    invalidated_by: invalidationReason
   });
   const records = match.records.map((record) =>
     record.id === options.itemId ? archivedRecord : record
@@ -166,7 +169,7 @@ export function invalidateItem(options: {
   const auditEntry = createAuditEntry({
     itemId: options.itemId,
     beforeState,
-    reason: options.reason ?? "manual invalidation",
+    reason: invalidationReason,
     now
   });
   appendAuditEntry(options.storeRoot, auditEntry);
@@ -216,9 +219,12 @@ export async function invalidateItemInContextStore(options: {
 
   const now = options.now ?? (() => new Date());
   const beforeState = match.record.state;
+  const invalidationReason = options.reason ?? "manual invalidation";
   const archivedRecord = validateNormalizedRecord({
     ...match.record,
-    state: "archived"
+    state: "archived",
+    valid_until: now().toISOString(),
+    invalidated_by: invalidationReason
   });
   const records = match.records.map((record) =>
     record.id === options.itemId ? archivedRecord : record
@@ -232,7 +238,7 @@ export async function invalidateItemInContextStore(options: {
   const auditEntry = createAuditEntry({
     itemId: options.itemId,
     beforeState,
-    reason: options.reason ?? "manual invalidation",
+    reason: invalidationReason,
     now
   });
   await options.store.appendJsonl("audit/changes.jsonl", [auditEntry], {

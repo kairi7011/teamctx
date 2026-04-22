@@ -65,6 +65,8 @@ test("invalidateItem archives a normalized record and writes an audit entry", (c
 
   const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
   assert.equal(records[0]?.state, "archived");
+  assert.equal(records[0]?.valid_until, "2026-04-22T12:00:00.000Z");
+  assert.equal(records[0]?.invalidated_by, "obsolete");
 
   const audit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
   assert.equal(audit[0]?.action, "invalidated");
@@ -182,6 +184,8 @@ test("async audit controls resolve remote context store adapters", async (contex
 
   const records = readJsonl(join(remoteRoot, "normalized", "pitfalls.jsonl"));
   assert.equal(records[0]?.state, "archived");
+  assert.equal(records[0]?.valid_until, "2026-04-22T12:00:00.000Z");
+  assert.equal(records[0]?.invalidated_by, "obsolete remotely");
 
   const audit = readJsonl(join(remoteRoot, "audit", "changes.jsonl"));
   assert.equal(audit[1]?.action, "invalidated");
