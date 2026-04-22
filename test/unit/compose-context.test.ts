@@ -35,29 +35,44 @@ test("composeContextFromStore returns active scoped context and diagnostics", (c
     target_files: ["src/auth/middleware.ts"]
   });
 
-  assert.deepEqual(composed.normalized_context.scoped, [
-    {
-      scope: {
-        paths: ["src/auth/**"],
-        domains: ["auth"],
-        symbols: ["AuthMiddleware"],
-        tags: ["request-lifecycle"]
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      content: entry.content,
+      reason: entry.reason
+    })),
+    [
+      {
+        id: "pitfall-auth-order",
+        kind: "pitfall",
+        content: "pitfall-auth-order text",
+        reason: "target file match; pitfall context; medium confidence"
       },
-      content: "decision-auth-order text"
-    },
-    {
-      scope: {
-        paths: ["src/auth/**"],
-        domains: ["auth"],
-        symbols: ["AuthMiddleware"],
-        tags: ["request-lifecycle"]
-      },
-      content: "pitfall-auth-order text"
-    }
-  ]);
+      {
+        id: "decision-auth-order",
+        kind: "decision",
+        content: "decision-auth-order text",
+        reason: "target file match; decision context; medium confidence"
+      }
+    ]
+  );
+  assert.deepEqual(composed.normalized_context.scoped[0]?.scope, {
+    paths: ["src/auth/**"],
+    domains: ["auth"],
+    symbols: ["AuthMiddleware"],
+    tags: ["request-lifecycle"]
+  });
   assert.deepEqual(composed.normalized_context.active_pitfalls, ["pitfall-auth-order text"]);
   assert.deepEqual(composed.normalized_context.recent_decisions, ["decision-auth-order text"]);
   assert.deepEqual(composed.diagnostics.contested_items, ["rule-auth-order"]);
+  assert.deepEqual(composed.diagnostics.excluded_items, [
+    {
+      id: "rule-auth-order",
+      state: "contested",
+      reason: "excluded because competing same-scope assertions need human review"
+    }
+  ]);
 });
 
 test("composeContextFromStore uses generated indexes for scoped selection", (context) => {
@@ -127,7 +142,7 @@ test("composeContextFromStore retrieves by domain symbol and tag indexes", (cont
 
   assert.deepEqual(
     composed.normalized_context.scoped.map((entry) => entry.content),
-    ["decision-domain text", "pitfall-symbol text", "workflow-tag text"]
+    ["pitfall-symbol text", "decision-domain text", "workflow-tag text"]
   );
 });
 
@@ -166,6 +181,37 @@ test("composeContextFromStore returns canonical doc refs for scoped docs evidenc
       doc_role: "runbook",
       lines: [4, 12]
     }
+  ]);
+});
+
+test("composeContextFromStore ranks categories and reports budget overflow", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeRecord(storeRoot, "rules.jsonl", record("rule-auth", "rule", "active"));
+  writeRecord(storeRoot, "glossary.jsonl", record("glossary-auth", "glossary", "active"));
+
+  for (let index = 0; index < 21; index += 1) {
+    writeRecord(
+      storeRoot,
+      "pitfalls.jsonl",
+      record(`pitfall-${String(index).padStart(2, "0")}`, "pitfall", "active")
+    );
+  }
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(composed.normalized_context.must_follow_rules, ["rule-auth text"]);
+  assert.deepEqual(composed.normalized_context.glossary_terms, ["glossary-auth text"]);
+  assert.equal(composed.normalized_context.scoped.length, 20);
+  assert.equal(composed.normalized_context.scoped[0]?.id, "rule-auth");
+  assert.deepEqual(composed.diagnostics.dropped_items, [
+    "budget:glossary-auth",
+    "budget:pitfall-19",
+    "budget:pitfall-20"
   ]);
 });
 

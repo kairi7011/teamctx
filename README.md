@@ -29,6 +29,7 @@ Implemented:
 - path / symbol index generation during normalization
 - index-backed context selection by paths, domains, symbols, and tags
 - canonical docs references from scoped docs evidence
+- ranked context payloads with selection reasons and category budgets
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local normalized records
 - `teamctx compact` for local retention and archive compaction
@@ -37,7 +38,8 @@ Implemented:
 
 Planned:
 
-- stronger task-ready context composition
+- remote audit controls and retention for GitHub context stores
+- deeper normalization quality beyond deterministic lexical heuristics
 
 ## Design Principles
 

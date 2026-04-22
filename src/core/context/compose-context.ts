@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
+import {
+  budgetRecords,
+  DEFAULT_CONTEXT_BUDGETS,
+  rankedTexts,
+  scopedContextItem,
+  type RankedRecord
+} from "./context-ranking.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import {
   hasLookupSelectors,
@@ -47,32 +54,65 @@ function composeContextFromRecords(
   indexes: RecordIndexSet = {}
 ): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
-  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
+  const scopedBudget = budgetRecords(
+    selectScopedRecords(activeRecords, input, indexes),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.scopedItems
+  );
+  const globalBudget = budgetRecords(
+    activeRecords.filter((record) => isGlobalKind(record.kind)),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.globalItems
+  );
+  const ruleBudget = budgetRecords(
+    activeRecords.filter((record) => record.kind === "rule"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.globalItems
+  );
+  const decisionBudget = budgetRecords(
+    activeRecords.filter((record) => record.kind === "decision"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.decisions
+  );
+  const pitfallBudget = budgetRecords(
+    activeRecords.filter((record) => record.kind === "pitfall"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.pitfalls
+  );
+  const workflowBudget = budgetRecords(
+    activeRecords.filter((record) => record.kind === "workflow"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.workflows
+  );
+  const glossaryBudget = budgetRecords(
+    activeRecords.filter((record) => record.kind === "glossary"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.glossary
+  );
 
   return {
     normalized_context: {
-      global: globalContext(activeRecords),
-      scoped: scopedRecords.map((record) => ({
-        scope: record.scope,
-        content: record.text
-      })),
-      recent_decisions: activeRecords
-        .filter((record) => record.kind === "decision")
-        .map((record) => record.text),
-      active_pitfalls: activeRecords
-        .filter((record) => record.kind === "pitfall")
-        .map((record) => record.text),
-      applicable_workflows: activeRecords
-        .filter((record) => record.kind === "workflow")
-        .map((record) => record.text)
+      global: globalContext(globalBudget.selected),
+      scoped: scopedBudget.selected.map((ranked) =>
+        scopedContextItem(ranked, DEFAULT_CONTEXT_BUDGETS.contentChars)
+      ),
+      must_follow_rules: rankedTexts(ruleBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
+      recent_decisions: rankedTexts(decisionBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
+      active_pitfalls: rankedTexts(pitfallBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
+      applicable_workflows: rankedTexts(
+        workflowBudget.selected,
+        DEFAULT_CONTEXT_BUDGETS.contentChars
+      ),
+      glossary_terms: rankedTexts(glossaryBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars)
     },
-    canonical_doc_refs: canonicalDocRefs(scopedRecords),
+    canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
     diagnostics: {
       contested_items: records
         .filter((record) => record.state === "contested")
         .map((record) => record.id),
       stale_items: records.filter((record) => record.state === "stale").map((record) => record.id),
-      dropped_items: []
+      dropped_items: budgetDroppedIds([scopedBudget]),
+      excluded_items: excludedItems(records)
     }
   };
 }
@@ -103,15 +143,18 @@ export function emptyComposedContext(): ComposedContext {
     normalized_context: {
       global: "",
       scoped: [],
+      must_follow_rules: [],
       recent_decisions: [],
       active_pitfalls: [],
-      applicable_workflows: []
+      applicable_workflows: [],
+      glossary_terms: []
     },
     canonical_doc_refs: [],
     diagnostics: {
       contested_items: [],
       stale_items: [],
-      dropped_items: []
+      dropped_items: [],
+      excluded_items: []
     }
   };
 }
@@ -235,13 +278,50 @@ function jsonlLines(content: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-function globalContext(records: NormalizedRecord[]): string {
-  return records
-    .filter(
-      (record) => record.kind === "fact" || record.kind === "rule" || record.kind === "glossary"
+function globalContext(ranked: RankedRecord[]): string {
+  return rankedTexts(ranked, DEFAULT_CONTEXT_BUDGETS.contentChars).join("\n");
+}
+
+function isGlobalKind(kind: NormalizedRecord["kind"]): boolean {
+  return kind === "fact" || kind === "rule" || kind === "glossary";
+}
+
+function budgetDroppedIds(budgets: Array<{ overflow: RankedRecord[] }>): string[] {
+  return [
+    ...new Set(
+      budgets.flatMap((budget) => budget.overflow.map((ranked) => `budget:${ranked.record.id}`))
     )
-    .map((record) => record.text)
-    .join("\n");
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+function excludedItems(records: NormalizedRecord[]): Array<{
+  id: string;
+  state: string;
+  reason: string;
+}> {
+  return records
+    .filter((record) => record.state !== "active")
+    .map((record) => ({
+      id: record.id,
+      state: record.state,
+      reason: exclusionReason(record.state)
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function exclusionReason(state: NormalizedRecord["state"]): string {
+  switch (state) {
+    case "contested":
+      return "excluded because competing same-scope assertions need human review";
+    case "stale":
+      return "excluded because supporting evidence is stale";
+    case "superseded":
+      return "excluded because a newer record supersedes it";
+    case "archived":
+      return "excluded because it was manually archived";
+    case "active":
+      return "included";
+  }
 }
 
 function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unknown>> {

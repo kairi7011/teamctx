@@ -29,16 +29,28 @@ export type EnabledContextPayload = {
   };
   normalized_context: {
     global: string;
-    scoped: Array<{ scope: Record<string, unknown>; content: string }>;
+    scoped: Array<{
+      id: string;
+      kind: string;
+      scope: Record<string, unknown>;
+      content: string;
+      reason: string;
+      confidence_level: string;
+      confidence_score?: number;
+      last_verified_at?: string;
+    }>;
+    must_follow_rules: string[];
     recent_decisions: string[];
     active_pitfalls: string[];
     applicable_workflows: string[];
+    glossary_terms: string[];
   };
   canonical_doc_refs: Array<Record<string, unknown>>;
   diagnostics: {
     contested_items: string[];
     stale_items: string[];
     dropped_items: string[];
+    excluded_items: Array<{ id: string; state: string; reason: string }>;
   };
   write_policy: {
     record_observation_candidate: "allowed";
