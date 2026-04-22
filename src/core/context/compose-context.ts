@@ -9,6 +9,7 @@ import {
   type RankedRecord
 } from "./context-ranking.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
+import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import {
   hasLookupSelectors,
   matchesScopeInput,
@@ -19,6 +20,7 @@ import {
 } from "../indexes/record-index.js";
 import {
   validateNormalizedRecord,
+  type KnowledgeKind,
   type NormalizedRecord
 } from "../../schemas/normalized-record.js";
 import type { GetContextInput, EnabledContextPayload } from "../../schemas/context-payload.js";
@@ -42,16 +44,17 @@ export async function composeContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
-  const records = await readNormalizedRecordsFromContextStore(store);
   const indexes = await readRecordIndexesFromContextStore(store);
+  const readResult = await readNormalizedRecordsFromContextStore(store, input, indexes);
 
-  return composeContextFromRecords(records, input, indexes);
+  return composeContextFromRecords(readResult.records, input, indexes, readResult.diagnostics);
 }
 
 function composeContextFromRecords(
   records: NormalizedRecord[],
   input: GetContextInput,
-  indexes: RecordIndexSet = {}
+  indexes: RecordIndexSet = {},
+  diagnostics?: PrecomputedDiagnostics
 ): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
   const scopedBudget = budgetRecords(
@@ -107,12 +110,14 @@ function composeContextFromRecords(
     },
     canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
     diagnostics: {
-      contested_items: records
-        .filter((record) => record.state === "contested")
-        .map((record) => record.id),
-      stale_items: records.filter((record) => record.state === "stale").map((record) => record.id),
+      contested_items:
+        diagnostics?.contested_items ??
+        records.filter((record) => record.state === "contested").map((record) => record.id),
+      stale_items:
+        diagnostics?.stale_items ??
+        records.filter((record) => record.state === "stale").map((record) => record.id),
       dropped_items: budgetDroppedIds([scopedBudget]),
-      excluded_items: excludedItems(records)
+      excluded_items: diagnostics?.excluded_items ?? excludedItems(records)
     }
   };
 }
@@ -174,11 +179,14 @@ function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
 }
 
 async function readNormalizedRecordsFromContextStore(
-  store: ContextStoreAdapter
-): Promise<NormalizedRecord[]> {
+  store: ContextStoreAdapter,
+  input: GetContextInput,
+  indexes: RecordIndexSet
+): Promise<ContextStoreReadResult> {
   const records: NormalizedRecord[] = [];
+  const readPlan = contextStoreReadPlan(input, indexes);
 
-  for (const file of NORMALIZED_RECORD_FILES) {
+  for (const file of readPlan.files) {
     const storeFile = await store.readText(`normalized/${file}`);
 
     for (const line of jsonlLines(storeFile?.content ?? "")) {
@@ -186,7 +194,11 @@ async function readNormalizedRecordsFromContextStore(
     }
   }
 
-  return records.sort((left, right) => left.id.localeCompare(right.id));
+  const sortedRecords = records.sort((left, right) => left.id.localeCompare(right.id));
+
+  return readPlan.diagnostics === undefined
+    ? { records: sortedRecords }
+    : { records: sortedRecords, diagnostics: readPlan.diagnostics };
 }
 
 function readRecordIndexes(storeRoot: string): RecordIndexSet {
@@ -307,6 +319,84 @@ function excludedItems(records: NormalizedRecord[]): Array<{
       reason: exclusionReason(record.state)
     }))
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+type ContextStoreReadResult = {
+  records: NormalizedRecord[];
+  diagnostics?: PrecomputedDiagnostics;
+};
+
+type PrecomputedDiagnostics = Pick<
+  ComposedContext["diagnostics"],
+  "contested_items" | "stale_items" | "excluded_items"
+>;
+
+function contextStoreReadPlan(
+  input: GetContextInput,
+  indexes: RecordIndexSet
+): { files: readonly string[]; diagnostics?: PrecomputedDiagnostics } {
+  if (!canUseIndexedContextStoreRead(input, indexes)) {
+    return { files: NORMALIZED_RECORD_FILES };
+  }
+
+  const diagnostics = diagnosticsFromIndexes(indexes);
+  const files = indexedNormalizedFiles(input, indexes);
+
+  return diagnostics === undefined ? { files } : { files, diagnostics };
+}
+
+function canUseIndexedContextStoreRead(input: GetContextInput, indexes: RecordIndexSet): boolean {
+  return hasLookupSelectors(input) && typeof indexes.pathIndex?.generated_at === "string";
+}
+
+function indexedNormalizedFiles(input: GetContextInput, indexes: RecordIndexSet): string[] {
+  const selectedIds = selectIndexedRecordIds(indexes, input);
+  const files = new Set<string>();
+
+  addGlobalNormalizedFiles(files);
+
+  for (const kind of Object.keys(NORMALIZED_FILE_BY_KIND) as KnowledgeKind[]) {
+    const ids = indexes.pathIndex?.kinds[kind] ?? [];
+
+    if (ids.some((id) => selectedIds.has(id))) {
+      files.add(NORMALIZED_FILE_BY_KIND[kind]);
+    }
+  }
+
+  return NORMALIZED_RECORD_FILES.filter((file) => files.has(file));
+}
+
+function addGlobalNormalizedFiles(files: Set<string>): void {
+  files.add(NORMALIZED_FILE_BY_KIND.fact);
+  files.add(NORMALIZED_FILE_BY_KIND.rule);
+  files.add(NORMALIZED_FILE_BY_KIND.glossary);
+}
+
+function diagnosticsFromIndexes(indexes: RecordIndexSet): PrecomputedDiagnostics | undefined {
+  const states = indexes.pathIndex?.states;
+
+  if (states === undefined) {
+    return undefined;
+  }
+
+  const excluded_items = (["contested", "stale", "superseded", "archived"] as const).flatMap(
+    (state) =>
+      (states[state] ?? []).map((id) => ({
+        id,
+        state,
+        reason: exclusionReason(state)
+      }))
+  );
+
+  return {
+    contested_items: uniqueSorted(states.contested ?? []),
+    stale_items: uniqueSorted(states.stale ?? []),
+    excluded_items: excluded_items.sort((left, right) => left.id.localeCompare(right.id))
+  };
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function exclusionReason(state: NormalizedRecord["state"]): string {

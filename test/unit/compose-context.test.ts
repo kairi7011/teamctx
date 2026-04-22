@@ -3,7 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { composeContextFromStore } from "../../src/core/context/compose-context.js";
+import type {
+  ContextStoreAdapter,
+  ContextStoreFile,
+  ContextStoreWriteOptions,
+  ContextStoreWriteResult
+} from "../../src/adapters/store/context-store.js";
+import {
+  composeContextFromContextStore,
+  composeContextFromStore
+} from "../../src/core/context/compose-context.js";
 import {
   buildRecordIndexes,
   serializePathIndex,
@@ -146,6 +155,63 @@ test("composeContextFromStore retrieves by domain symbol and tag indexes", (cont
   );
 });
 
+test("composeContextFromContextStore uses indexes to avoid unrelated remote shards", async () => {
+  const store = new MemoryContextStore();
+  const matchingPitfall = record("pitfall-auth", "pitfall", "active");
+  const globalRule = record("rule-global", "rule", "active", {
+    paths: [],
+    domains: [],
+    symbols: [],
+    tags: []
+  });
+  const unrelatedWorkflow = record("workflow-billing", "workflow", "active", {
+    paths: ["src/billing/**"],
+    domains: ["billing"],
+    symbols: ["BillingWorkflow"],
+    tags: []
+  });
+  const contestedDecision = record("decision-contested", "decision", "contested", {
+    paths: ["src/billing/**"],
+    domains: ["billing"],
+    symbols: ["BillingDecision"],
+    tags: []
+  });
+
+  await writeRemoteRecord(store, "pitfalls.jsonl", matchingPitfall);
+  await writeRemoteRecord(store, "rules.jsonl", globalRule);
+  await writeRemoteRecord(store, "workflows.jsonl", unrelatedWorkflow);
+  await writeRemoteRecord(store, "decisions.jsonl", contestedDecision);
+  await writeRemoteIndexes(
+    store,
+    [matchingPitfall, globalRule, unrelatedWorkflow, contestedDecision],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = await composeContextFromContextStore(store, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => entry.id),
+    ["pitfall-auth"]
+  );
+  assert.deepEqual(composed.normalized_context.active_pitfalls, ["pitfall-auth text"]);
+  assert.deepEqual(composed.normalized_context.must_follow_rules, ["rule-global text"]);
+  assert.deepEqual(composed.normalized_context.applicable_workflows, []);
+  assert.deepEqual(composed.diagnostics.contested_items, ["decision-contested"]);
+  assert.deepEqual(composed.diagnostics.excluded_items, [
+    {
+      id: "decision-contested",
+      state: "contested",
+      reason: "excluded because competing same-scope assertions need human review"
+    }
+  ]);
+  assert.ok(store.readPaths.includes("normalized/pitfalls.jsonl"));
+  assert.ok(store.readPaths.includes("normalized/rules.jsonl"));
+  assert.equal(store.readPaths.includes("normalized/decisions.jsonl"), false);
+  assert.equal(store.readPaths.includes("normalized/workflows.jsonl"), false);
+});
+
 test("composeContextFromStore returns canonical doc refs for scoped docs evidence", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -271,6 +337,30 @@ function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedA
   );
 }
 
+async function writeRemoteRecord(
+  store: MemoryContextStore,
+  file: string,
+  normalizedRecord: NormalizedRecord
+): Promise<void> {
+  await store.writeText(`normalized/${file}`, `${JSON.stringify(normalizedRecord)}\n`, {
+    message: "seed"
+  });
+}
+
+async function writeRemoteIndexes(
+  store: MemoryContextStore,
+  records: NormalizedRecord[],
+  generatedAt: string
+): Promise<void> {
+  const indexes = buildRecordIndexes(records, generatedAt);
+  await store.writeText("indexes/path-index.json", serializePathIndex(indexes.pathIndex), {
+    message: "seed path index"
+  });
+  await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
+    message: "seed symbol index"
+  });
+}
+
 function record(
   id: string,
   kind: NormalizedRecord["kind"],
@@ -309,4 +399,61 @@ function record(
     supersedes: [],
     conflicts_with: []
   };
+}
+
+class MemoryContextStore implements ContextStoreAdapter {
+  readonly readPaths: string[] = [];
+  private readonly files = new Map<string, string>();
+
+  async getRevision(): Promise<string | null> {
+    return "memory-head";
+  }
+
+  async readText(path: string): Promise<ContextStoreFile | undefined> {
+    this.readPaths.push(path);
+    const content = this.files.get(path);
+
+    if (content === undefined) {
+      return undefined;
+    }
+
+    return { path, content, revision: null };
+  }
+
+  async writeText(
+    path: string,
+    content: string,
+    _options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    this.files.set(path, content);
+
+    return { path, revision: null, storeRevision: "memory-head" };
+  }
+
+  async deleteText(
+    path: string,
+    _options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    this.files.delete(path);
+
+    return { path, revision: null, storeRevision: "memory-head" };
+  }
+
+  async appendJsonl(
+    path: string,
+    rows: unknown[],
+    options: ContextStoreWriteOptions
+  ): Promise<ContextStoreWriteResult> {
+    const current = this.files.get(path) ?? "";
+
+    return this.writeText(
+      path,
+      `${current}${rows.map((row) => JSON.stringify(row)).join("\n")}\n`,
+      options
+    );
+  }
+
+  async listFiles(path: string): Promise<string[]> {
+    return [...this.files.keys()].filter((file) => file.startsWith(path)).sort();
+  }
 }
