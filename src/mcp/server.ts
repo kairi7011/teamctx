@@ -3,8 +3,8 @@
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import { getContextToolAsync } from "./tools/get-context.js";
-import { explainItemTool } from "./tools/explain-item.js";
-import { invalidateTool } from "./tools/invalidate.js";
+import { explainItemToolAsync } from "./tools/explain-item.js";
+import { invalidateToolAsync } from "./tools/invalidate.js";
 import { normalizeToolAsync } from "./tools/normalize.js";
 import {
   recordObservationCandidateToolAsync,
@@ -209,9 +209,9 @@ async function callTool(params: unknown): Promise<unknown> {
     case "teamctx.status":
       return toolResult(await statusToolAsync(params.arguments));
     case "teamctx.explain_item":
-      return toolResult(explainItemTool(params.arguments));
+      return toolResult(await explainItemToolAsync(params.arguments));
     case "teamctx.invalidate":
-      return toolResult(invalidateTool(params.arguments));
+      return toolResult(await invalidateToolAsync(params.arguments));
     default:
       throw new Error(`Tool is not implemented yet: ${params.name}`);
   }

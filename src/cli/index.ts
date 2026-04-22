@@ -7,7 +7,7 @@ import {
   getRepoRoot
 } from "../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
-import { explainBoundItem, invalidateBoundItem } from "../core/audit/control.js";
+import { explainBoundItemAsync, invalidateBoundItemAsync } from "../core/audit/control.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
@@ -125,17 +125,17 @@ function compact(): void {
   console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
 }
 
-function explain(args: ParsedArgs): void {
+async function explain(args: ParsedArgs): Promise<void> {
   const [itemId] = args.positional;
 
   if (!itemId) {
     throw new Error("Missing item id. Usage: teamctx explain <item-id>");
   }
 
-  console.log(JSON.stringify(explainBoundItem({ itemId }), null, 2));
+  console.log(JSON.stringify(await explainBoundItemAsync({ itemId }), null, 2));
 }
 
-function invalidate(args: ParsedArgs): void {
+async function invalidate(args: ParsedArgs): Promise<void> {
   const [itemId] = args.positional;
 
   if (!itemId) {
@@ -143,7 +143,7 @@ function invalidate(args: ParsedArgs): void {
   }
 
   const reason = typeof args.flags.reason === "string" ? args.flags.reason : undefined;
-  const result = invalidateBoundItem({
+  const result = await invalidateBoundItemAsync({
     itemId,
     ...(reason !== undefined ? { reason } : {})
   });
@@ -285,10 +285,10 @@ async function main(): Promise<void> {
       compact();
       return;
     case "explain":
-      explain(args);
+      await explain(args);
       return;
     case "invalidate":
-      invalidate(args);
+      await invalidate(args);
       return;
     case "status":
       await status();

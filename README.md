@@ -32,7 +32,7 @@ Implemented:
 - canonical docs references from scoped docs evidence
 - ranked context payloads with selection reasons and category budgets
 - status summaries for recent promoted, dropped, contested, and stale records
-- `teamctx explain` / `teamctx invalidate` for local normalized records
+- `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx compact` for local retention and archive compaction
 - Node built-in test runner setup
 - initial MCP tool shape definitions

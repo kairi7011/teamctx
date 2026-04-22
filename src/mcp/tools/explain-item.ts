@@ -1,10 +1,27 @@
-import { explainBoundItem, type ControlServices } from "../../core/audit/control.js";
+import {
+  explainBoundItem,
+  explainBoundItemAsync,
+  type ControlServices
+} from "../../core/audit/control.js";
 import { isNonEmptyString, isRecord } from "../../schemas/validation.js";
 
 export function explainItemTool(rawInput: unknown, services?: ControlServices): unknown {
   const input = parseItemInput(rawInput, "explain_item");
 
   return explainBoundItem({
+    itemId: input.itemId,
+    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+    ...(services !== undefined ? { services } : {})
+  });
+}
+
+export async function explainItemToolAsync(
+  rawInput: unknown,
+  services?: ControlServices
+): Promise<unknown> {
+  const input = parseItemInput(rawInput, "explain_item");
+
+  return explainBoundItemAsync({
     itemId: input.itemId,
     ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
     ...(services !== undefined ? { services } : {})

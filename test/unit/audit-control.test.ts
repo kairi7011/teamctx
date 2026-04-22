@@ -3,7 +3,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { explainItem, invalidateItem, type ControlServices } from "../../src/core/audit/control.js";
+import { LocalContextStore } from "../../src/adapters/store/local-store.js";
+import {
+  explainBoundItemAsync,
+  explainItem,
+  invalidateBoundItemAsync,
+  invalidateItem,
+  type ControlServices
+} from "../../src/core/audit/control.js";
 import { explainItemTool } from "../../src/mcp/tools/explain-item.js";
 import { invalidateTool } from "../../src/mcp/tools/invalidate.js";
 import type { AuditLogEntry } from "../../src/schemas/audit.js";
@@ -146,6 +153,42 @@ function auditEntry(action: AuditLogEntry["action"]): AuditLogEntry {
 }
 
 function servicesFor(root: string): ControlServices {
+  return localServicesFor(root);
+}
+
+test("async audit controls resolve remote context store adapters", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  writeRecord(remoteRoot, record());
+  writeAudit(remoteRoot, auditEntry("created"));
+  const services = remoteServicesFor(directory, remoteRoot);
+
+  const explainResult = await explainBoundItemAsync({
+    itemId: "pitfall-auth-order",
+    services
+  });
+  assert.equal(explainResult.found, true);
+
+  const invalidateResult = await invalidateBoundItemAsync({
+    itemId: "pitfall-auth-order",
+    reason: "obsolete remotely",
+    now: () => new Date("2026-04-22T12:00:00.000Z"),
+    services
+  });
+
+  assert.equal(invalidateResult.invalidated, true);
+  assert.equal(invalidateResult.before_state, "active");
+
+  const records = readJsonl(join(remoteRoot, "normalized", "pitfalls.jsonl"));
+  assert.equal(records[0]?.state, "archived");
+
+  const audit = readJsonl(join(remoteRoot, "audit", "changes.jsonl"));
+  assert.equal(audit[1]?.action, "invalidated");
+  assert.equal(audit[1]?.reason, "obsolete remotely");
+});
+
+function localServicesFor(root: string): ControlServices {
   const binding: Binding = {
     repo: "github.com/team/service",
     root,
@@ -161,6 +204,26 @@ function servicesFor(root: string): ControlServices {
     getRepoRoot: () => root,
     getOriginRemote: () => "git@github.com:team/service.git",
     findBinding: () => binding
+  };
+}
+
+function remoteServicesFor(root: string, remoteStoreRoot: string): ControlServices {
+  const binding: Binding = {
+    repo: "github.com/team/service",
+    root,
+    contextStore: {
+      provider: "github",
+      repo: "github.com/team/context",
+      path: "contexts/service"
+    },
+    createdAt: "2026-04-22T10:00:00.000Z"
+  };
+
+  return {
+    getRepoRoot: () => root,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    findBinding: () => binding,
+    createContextStore: () => new LocalContextStore(remoteStoreRoot)
   };
 }
 
