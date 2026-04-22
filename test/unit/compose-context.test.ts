@@ -157,6 +157,28 @@ test("composeContextFromStore retrieves by domain symbol and tag indexes", (cont
   );
 });
 
+test("composeContextFromStore reports stale index diagnostics", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const indexedRecord = record("decision-indexed", "decision", "active");
+
+  writeRecord(storeRoot, "decisions.jsonl", indexedRecord);
+  writeIndexes(storeRoot, [indexedRecord], "2026-04-22T10:00:00.000Z");
+  writeEpisodeIndex(storeRoot, [observation()], "2026-04-22T10:00:00.000Z");
+  writeLastNormalize(storeRoot, "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(composed.diagnostics.index_warnings, [
+    "path index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z",
+    "symbol index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z",
+    "episode index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:00:00.000Z"
+  ]);
+});
+
 test("composeContextFromContextStore uses indexes to avoid unrelated remote shards", async () => {
   const store = new MemoryContextStore();
   const matchingPitfall = record("pitfall-auth", "pitfall", "active");
@@ -378,6 +400,26 @@ function writeEpisodeIndex(
   writeFileSync(
     join(directory, "episode-index.json"),
     serializeEpisodeIndex(buildEpisodeIndex(observations, generatedAt)),
+    "utf8"
+  );
+}
+
+function writeLastNormalize(storeRoot: string, normalizedAt: string): void {
+  const directory = join(storeRoot, "indexes");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, "last-normalize.json"),
+    `${JSON.stringify(
+      {
+        normalizedAt,
+        rawEventsRead: 1,
+        recordsWritten: 1,
+        droppedEvents: 0,
+        auditEntriesWritten: 1
+      },
+      null,
+      2
+    )}\n`,
     "utf8"
   );
 }

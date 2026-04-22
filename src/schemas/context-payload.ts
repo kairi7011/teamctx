@@ -53,6 +53,7 @@ export type EnabledContextPayload = {
     stale_items: string[];
     dropped_items: string[];
     excluded_items: Array<{ id: string; state: string; reason: string }>;
+    index_warnings: string[];
   };
   write_policy: {
     record_observation_candidate: "allowed";

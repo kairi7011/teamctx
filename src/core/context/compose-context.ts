@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import {
@@ -43,26 +43,36 @@ export function composeContextFromStore(
   input: GetContextInput = {}
 ): ComposedContext {
   const records = readNormalizedRecords(storeRoot);
-  const indexes = readRecordIndexes(storeRoot);
-  const episodeIndex = readEpisodeIndex(storeRoot);
+  const lastNormalizeAt = readLastNormalizeAt(storeRoot);
+  const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
+  const episodeRead = readEpisodeIndex(storeRoot, lastNormalizeAt);
 
-  return composeContextFromRecords(records, input, indexes, undefined, episodeIndex);
+  return composeContextFromRecords(
+    records,
+    input,
+    indexRead.indexes,
+    undefined,
+    episodeRead.index,
+    [...indexRead.warnings, ...episodeRead.warnings]
+  );
 }
 
 export async function composeContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
-  const indexes = await readRecordIndexesFromContextStore(store);
-  const episodeIndex = await readEpisodeIndexFromContextStore(store);
-  const readResult = await readNormalizedRecordsFromContextStore(store, input, indexes);
+  const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
+  const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
+  const episodeRead = await readEpisodeIndexFromContextStore(store, lastNormalizeAt);
+  const readResult = await readNormalizedRecordsFromContextStore(store, input, indexRead.indexes);
 
   return composeContextFromRecords(
     readResult.records,
     input,
-    indexes,
+    indexRead.indexes,
     readResult.diagnostics,
-    episodeIndex
+    episodeRead.index,
+    [...indexRead.warnings, ...episodeRead.warnings]
   );
 }
 
@@ -71,7 +81,8 @@ function composeContextFromRecords(
   input: GetContextInput,
   indexes: RecordIndexSet = {},
   diagnostics?: PrecomputedDiagnostics,
-  episodeIndex?: EpisodeIndex
+  episodeIndex?: EpisodeIndex,
+  indexWarnings: string[] = []
 ): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
   const scopedBudget = budgetRecords(
@@ -135,7 +146,8 @@ function composeContextFromRecords(
         diagnostics?.stale_items ??
         records.filter((record) => record.state === "stale").map((record) => record.id),
       dropped_items: budgetDroppedIds([scopedBudget]),
-      excluded_items: diagnostics?.excluded_items ?? excludedItems(records)
+      excluded_items: diagnostics?.excluded_items ?? excludedItems(records),
+      index_warnings: indexWarnings
     }
   };
 }
@@ -178,7 +190,8 @@ export function emptyComposedContext(): ComposedContext {
       contested_items: [],
       stale_items: [],
       dropped_items: [],
-      excluded_items: []
+      excluded_items: [],
+      index_warnings: []
     }
   };
 }
@@ -220,101 +233,205 @@ async function readNormalizedRecordsFromContextStore(
     : { records: sortedRecords, diagnostics: readPlan.diagnostics };
 }
 
-function readRecordIndexes(storeRoot: string): RecordIndexSet {
+type RecordIndexReadResult = {
+  indexes: RecordIndexSet;
+  warnings: string[];
+};
+
+function readRecordIndexes(
+  storeRoot: string,
+  lastNormalizeAt: string | undefined
+): RecordIndexReadResult {
+  const pathIndex = readPathIndex(storeRoot, lastNormalizeAt);
+  const symbolIndex = readSymbolIndex(storeRoot, lastNormalizeAt);
+
   return {
-    ...readPathIndex(storeRoot),
-    ...readSymbolIndex(storeRoot)
+    indexes: {
+      ...pathIndex.indexes,
+      ...symbolIndex.indexes
+    },
+    warnings: [...pathIndex.warnings, ...symbolIndex.warnings]
   };
 }
 
 async function readRecordIndexesFromContextStore(
-  store: ContextStoreAdapter
-): Promise<RecordIndexSet> {
+  store: ContextStoreAdapter,
+  lastNormalizeAt: string | undefined
+): Promise<RecordIndexReadResult> {
+  const pathIndex = await readPathIndexFromContextStore(store, lastNormalizeAt);
+  const symbolIndex = await readSymbolIndexFromContextStore(store, lastNormalizeAt);
+
   return {
-    ...(await readPathIndexFromContextStore(store)),
-    ...(await readSymbolIndexFromContextStore(store))
+    indexes: {
+      ...pathIndex.indexes,
+      ...symbolIndex.indexes
+    },
+    warnings: [...pathIndex.warnings, ...symbolIndex.warnings]
   };
 }
 
-function readPathIndex(storeRoot: string): RecordIndexSet {
+function readPathIndex(
+  storeRoot: string,
+  lastNormalizeAt: string | undefined
+): RecordIndexReadResult {
+  const path = join(storeRoot, "indexes", "path-index.json");
+
+  if (!existsSync(path)) {
+    return { indexes: {}, warnings: ["missing path index"] };
+  }
+
   try {
+    const pathIndex = validatePathIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
+
     return {
-      pathIndex: validatePathIndex(
-        JSON.parse(readFileSync(join(storeRoot, "indexes", "path-index.json"), "utf8")) as unknown
-      )
+      indexes: { pathIndex },
+      warnings: indexFreshnessWarnings("path", pathIndex.generated_at, lastNormalizeAt)
     };
-  } catch {
-    return {};
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid path index: ${errorMessage(error)}`] };
   }
 }
 
-function readSymbolIndex(storeRoot: string): RecordIndexSet {
+function readSymbolIndex(
+  storeRoot: string,
+  lastNormalizeAt: string | undefined
+): RecordIndexReadResult {
+  const path = join(storeRoot, "indexes", "symbol-index.json");
+
+  if (!existsSync(path)) {
+    return { indexes: {}, warnings: ["missing symbol index"] };
+  }
+
   try {
+    const symbolIndex = validateSymbolIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
+
     return {
-      symbolIndex: validateSymbolIndex(
-        JSON.parse(readFileSync(join(storeRoot, "indexes", "symbol-index.json"), "utf8")) as unknown
-      )
+      indexes: { symbolIndex },
+      warnings: indexFreshnessWarnings("symbol", symbolIndex.generated_at, lastNormalizeAt)
     };
-  } catch {
-    return {};
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
   }
 }
 
-function readEpisodeIndex(storeRoot: string): EpisodeIndex | undefined {
+function readEpisodeIndex(
+  storeRoot: string,
+  lastNormalizeAt: string | undefined
+): { index?: EpisodeIndex; warnings: string[] } {
+  const path = join(storeRoot, "indexes", "episode-index.json");
+
+  if (!existsSync(path)) {
+    return { warnings: ["missing episode index"] };
+  }
+
   try {
-    return validateEpisodeIndex(
-      JSON.parse(readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")) as unknown
-    );
+    const index = validateEpisodeIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
+
+    return {
+      index,
+      warnings: indexFreshnessWarnings("episode", index.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { warnings: [`invalid episode index: ${errorMessage(error)}`] };
+  }
+}
+
+async function readPathIndexFromContextStore(
+  store: ContextStoreAdapter,
+  lastNormalizeAt: string | undefined
+): Promise<RecordIndexReadResult> {
+  try {
+    const file = await store.readText("indexes/path-index.json");
+
+    if (!file) {
+      return { indexes: {}, warnings: ["missing path index"] };
+    }
+
+    const pathIndex = validatePathIndex(JSON.parse(file.content) as unknown);
+
+    return {
+      indexes: { pathIndex },
+      warnings: indexFreshnessWarnings("path", pathIndex.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid path index: ${errorMessage(error)}`] };
+  }
+}
+
+async function readSymbolIndexFromContextStore(
+  store: ContextStoreAdapter,
+  lastNormalizeAt: string | undefined
+): Promise<RecordIndexReadResult> {
+  try {
+    const file = await store.readText("indexes/symbol-index.json");
+
+    if (!file) {
+      return { indexes: {}, warnings: ["missing symbol index"] };
+    }
+
+    const symbolIndex = validateSymbolIndex(JSON.parse(file.content) as unknown);
+
+    return {
+      indexes: { symbolIndex },
+      warnings: indexFreshnessWarnings("symbol", symbolIndex.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
+  }
+}
+
+async function readEpisodeIndexFromContextStore(
+  store: ContextStoreAdapter,
+  lastNormalizeAt: string | undefined
+): Promise<{ index?: EpisodeIndex; warnings: string[] }> {
+  try {
+    const file = await store.readText("indexes/episode-index.json");
+
+    if (!file) {
+      return { warnings: ["missing episode index"] };
+    }
+
+    const index = validateEpisodeIndex(JSON.parse(file.content) as unknown);
+
+    return {
+      index,
+      warnings: indexFreshnessWarnings("episode", index.generated_at, lastNormalizeAt)
+    };
+  } catch (error) {
+    return { warnings: [`invalid episode index: ${errorMessage(error)}`] };
+  }
+}
+
+function readLastNormalizeAt(storeRoot: string): string | undefined {
+  try {
+    const value = JSON.parse(
+      readFileSync(join(storeRoot, "indexes", "last-normalize.json"), "utf8")
+    ) as unknown;
+
+    return typeof value === "object" &&
+      value !== null &&
+      "normalizedAt" in value &&
+      typeof value.normalizedAt === "string"
+      ? value.normalizedAt
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
-async function readPathIndexFromContextStore(store: ContextStoreAdapter): Promise<RecordIndexSet> {
-  try {
-    const file = await store.readText("indexes/path-index.json");
-
-    if (!file) {
-      return {};
-    }
-
-    return {
-      pathIndex: validatePathIndex(JSON.parse(file.content) as unknown)
-    };
-  } catch {
-    return {};
-  }
-}
-
-async function readSymbolIndexFromContextStore(
+async function readLastNormalizeAtFromContextStore(
   store: ContextStoreAdapter
-): Promise<RecordIndexSet> {
+): Promise<string | undefined> {
   try {
-    const file = await store.readText("indexes/symbol-index.json");
+    const file = await store.readText("indexes/last-normalize.json");
+    const value = file ? (JSON.parse(file.content) as unknown) : undefined;
 
-    if (!file) {
-      return {};
-    }
-
-    return {
-      symbolIndex: validateSymbolIndex(JSON.parse(file.content) as unknown)
-    };
-  } catch {
-    return {};
-  }
-}
-
-async function readEpisodeIndexFromContextStore(
-  store: ContextStoreAdapter
-): Promise<EpisodeIndex | undefined> {
-  try {
-    const file = await store.readText("indexes/episode-index.json");
-
-    if (!file) {
-      return undefined;
-    }
-
-    return validateEpisodeIndex(JSON.parse(file.content) as unknown);
+    return typeof value === "object" &&
+      value !== null &&
+      "normalizedAt" in value &&
+      typeof value.normalizedAt === "string"
+      ? value.normalizedAt
+      : undefined;
   } catch {
     return undefined;
   }
@@ -442,6 +559,28 @@ function diagnosticsFromIndexes(indexes: RecordIndexSet): PrecomputedDiagnostics
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function indexFreshnessWarnings(
+  indexName: string,
+  generatedAt: string | null,
+  lastNormalizeAt: string | undefined
+): string[] {
+  if (generatedAt === null) {
+    return [`${indexName} index is uninitialized`];
+  }
+
+  if (lastNormalizeAt !== undefined && generatedAt !== lastNormalizeAt) {
+    return [
+      `${indexName} index generated_at ${generatedAt} differs from last normalize ${lastNormalizeAt}`
+    ];
+  }
+
+  return [];
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function selectRelevantEpisodes(
