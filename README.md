@@ -22,10 +22,11 @@ Implemented:
 - `teamctx doctor`
 - local binding storage
 - minimal MCP server with `teamctx.get_context` and `teamctx.status`
-- raw observation recording for same-repository context stores
+- GitHub contents-store adapter for shared remote context stores
+- raw observation recording for same-repository and GitHub context stores
 - secret / PII scan before raw observation writes
-- deterministic normalization of local raw events into normalized JSONL
-- status summaries for recent promoted, dropped, contested, and stale local records
+- deterministic normalization of local and GitHub raw events into normalized JSONL
+- status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local normalized records
 - `teamctx compact` for local retention and archive compaction
 - Node built-in test runner setup
@@ -33,7 +34,8 @@ Implemented:
 
 Planned:
 
-- GitHub-backed context store adapter
+- path / symbol indexes
+- stronger task-ready context composition
 
 ## Design Principles
 
