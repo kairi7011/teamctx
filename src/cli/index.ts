@@ -11,6 +11,7 @@ import { explainBoundItem, invalidateBoundItem } from "../core/audit/control.js"
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { normalizeBoundStore } from "../core/normalize/normalize.js";
+import { compactBoundStore } from "../core/retention/compact.js";
 import { getBoundStatus } from "../core/status/status.js";
 import { initStoreLayout, resolveStoreRoot } from "../core/store/layout.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
@@ -55,6 +56,7 @@ Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
   teamctx normalize
+  teamctx compact
   teamctx explain <item-id>
   teamctx invalidate <item-id> [--reason <reason>]
   teamctx status
@@ -120,6 +122,20 @@ function normalize(): void {
   console.log(`  records_written: ${result.recordsWritten}`);
   console.log(`  dropped_events: ${result.droppedEvents}`);
   console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
+}
+
+function compact(): void {
+  const result = compactBoundStore();
+
+  console.log("Compacted context store:");
+  console.log(`  compacted_at: ${result.compactedAt}`);
+  console.log(`  archive_root: ${result.archiveRoot}`);
+  console.log(`  raw_candidate_events_archived: ${result.rawCandidateEventsArchived}`);
+  console.log(`  raw_events_retained: ${result.rawEventsRetained}`);
+  console.log(`  audit_entries_archived: ${result.auditEntriesArchived}`);
+  console.log(`  audit_entries_retained: ${result.auditEntriesRetained}`);
+  console.log(`  archived_records_archived: ${result.archivedRecordsArchived}`);
+  console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
 }
 
 function explain(args: ParsedArgs): void {
@@ -277,6 +293,9 @@ function main(): void {
       return;
     case "normalize":
       normalize();
+      return;
+    case "compact":
+      compact();
       return;
     case "explain":
       explain(args);

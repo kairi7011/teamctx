@@ -25,14 +25,15 @@ Implemented:
 - raw observation recording for same-repository context stores
 - secret / PII scan before raw observation writes
 - deterministic normalization of local raw events into normalized JSONL
+- status summaries for recent promoted, dropped, contested, and stale local records
 - `teamctx explain` / `teamctx invalidate` for local normalized records
+- `teamctx compact` for local retention and archive compaction
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
 - GitHub-backed context store adapter
-- retention and compaction
 
 ## Design Principles
 
@@ -77,6 +78,12 @@ Check the current binding:
 
 ```bash
 teamctx status
+```
+
+Compact expired local context-store data into the configured archive path:
+
+```bash
+teamctx compact
 ```
 
 Run diagnostics:

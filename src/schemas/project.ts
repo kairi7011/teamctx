@@ -71,6 +71,68 @@ export function serializeProjectConfig(value: ProjectConfig): string {
   ].join("\n");
 }
 
+export function parseProjectConfig(content: string): ProjectConfig {
+  const root: Record<string, unknown> = {};
+  const retention: Record<string, unknown> = {};
+  let section: "retention" | undefined;
+
+  for (const line of content.split(/\r?\n/)) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+
+    const indentation = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+    const separatorIndex = trimmed.indexOf(":");
+
+    if (separatorIndex === -1) {
+      throw new Error(`project config line is invalid: ${trimmed}`);
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+
+    if (rawValue.length === 0) {
+      if (key !== "retention" || indentation !== 0) {
+        throw new Error(`project config section is invalid: ${key}`);
+      }
+      section = "retention";
+      root.retention = retention;
+      continue;
+    }
+
+    if (indentation > 0) {
+      if (section !== "retention") {
+        throw new Error(`project config nested key is invalid: ${key}`);
+      }
+      retention[key] = parseScalar(rawValue);
+    } else {
+      section = undefined;
+      root[key] = parseScalar(rawValue);
+    }
+  }
+
+  return validateProjectConfig(root);
+}
+
+function parseScalar(value: string): string | number {
+  if (/^-?\d+$/.test(value)) {
+    return Number(value);
+  }
+
+  if (value.startsWith('"')) {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (typeof parsed !== "string") {
+      throw new Error("project config quoted values must be strings");
+    }
+
+    return parsed;
+  }
+
+  return value;
+}
+
 function isRetentionConfig(value: unknown): value is RetentionConfig {
   if (!isRecord(value)) {
     return false;

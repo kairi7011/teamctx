@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultProjectConfig,
+  parseProjectConfig,
   serializeProjectConfig,
   validateProjectConfig
 } from "../../src/schemas/project.js";
@@ -50,4 +51,10 @@ test("serializeProjectConfig writes project.yaml content", () => {
       ""
     ].join("\n")
   );
+});
+
+test("parseProjectConfig reads generated project.yaml content", () => {
+  const config = createDefaultProjectConfig("github.com/team/service");
+
+  assert.deepEqual(parseProjectConfig(serializeProjectConfig(config)), config);
 });
