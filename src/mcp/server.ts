@@ -2,7 +2,7 @@
 
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
-import { getContextTool } from "./tools/get-context.js";
+import { getContextToolAsync } from "./tools/get-context.js";
 import { explainItemTool } from "./tools/explain-item.js";
 import { invalidateTool } from "./tools/invalidate.js";
 import { normalizeTool } from "./tools/normalize.js";
@@ -10,7 +10,7 @@ import {
   recordObservationCandidateToolAsync,
   recordObservationVerifiedToolAsync
 } from "./tools/record-observation.js";
-import { statusTool } from "./tools/status.js";
+import { statusToolAsync } from "./tools/status.js";
 import { toolDefinitions } from "./tools/definitions.js";
 
 type JsonRpcRequest = {
@@ -196,7 +196,7 @@ async function callTool(params: unknown): Promise<unknown> {
 
   switch (params.name) {
     case "teamctx.get_context":
-      return toolResult(getContextTool(params.arguments));
+      return toolResult(await getContextToolAsync(params.arguments));
     case "teamctx.record_observation_candidate":
       return toolResult(await recordObservationCandidateToolAsync(params.arguments));
     case "teamctx.record_observation_verified":
@@ -204,7 +204,7 @@ async function callTool(params: unknown): Promise<unknown> {
     case "teamctx.normalize":
       return toolResult(normalizeTool(params.arguments));
     case "teamctx.status":
-      return toolResult(statusTool(params.arguments));
+      return toolResult(await statusToolAsync(params.arguments));
     case "teamctx.explain_item":
       return toolResult(explainItemTool(params.arguments));
     case "teamctx.invalidate":

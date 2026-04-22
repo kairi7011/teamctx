@@ -1,10 +1,26 @@
-import { getBoundStatus, type BoundStatusServices } from "../../core/status/status.js";
+import {
+  getBoundStatus,
+  getBoundStatusAsync,
+  type BoundStatusServices
+} from "../../core/status/status.js";
 import { isRecord } from "../../schemas/validation.js";
 
 export function statusTool(rawInput: unknown, services?: BoundStatusServices): unknown {
   const cwd = getOptionalString(rawInput, "cwd");
 
   return getBoundStatus({
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(services !== undefined ? { services } : {})
+  });
+}
+
+export async function statusToolAsync(
+  rawInput: unknown,
+  services?: BoundStatusServices
+): Promise<unknown> {
+  const cwd = getOptionalString(rawInput, "cwd");
+
+  return getBoundStatusAsync({
     ...(cwd !== undefined ? { cwd } : {}),
     ...(services !== undefined ? { services } : {})
   });

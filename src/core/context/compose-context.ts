@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import {
   validateNormalizedRecord,
@@ -18,6 +19,23 @@ export function composeContextFromStore(
   input: GetContextInput = {}
 ): ComposedContext {
   const records = readNormalizedRecords(storeRoot);
+
+  return composeContextFromRecords(records, input);
+}
+
+export async function composeContextFromContextStore(
+  store: ContextStoreAdapter,
+  input: GetContextInput = {}
+): Promise<ComposedContext> {
+  const records = await readNormalizedRecordsFromContextStore(store);
+
+  return composeContextFromRecords(records, input);
+}
+
+function composeContextFromRecords(
+  records: NormalizedRecord[],
+  input: GetContextInput
+): ComposedContext {
   const activeRecords = records.filter((record) => record.state === "active");
   const scopedRecords = activeRecords.filter((record) => matchesInput(record.scope, input));
 
@@ -81,15 +99,35 @@ function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
   return records.sort((left, right) => left.id.localeCompare(right.id));
 }
 
+async function readNormalizedRecordsFromContextStore(
+  store: ContextStoreAdapter
+): Promise<NormalizedRecord[]> {
+  const records: NormalizedRecord[] = [];
+
+  for (const file of NORMALIZED_RECORD_FILES) {
+    const storeFile = await store.readText(`normalized/${file}`);
+
+    for (const line of jsonlLines(storeFile?.content ?? "")) {
+      records.push(validateNormalizedRecord(JSON.parse(line) as unknown));
+    }
+  }
+
+  return records.sort((left, right) => left.id.localeCompare(right.id));
+}
+
 function readJsonlLines(path: string): string[] {
   try {
-    return readFileSync(path, "utf8")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    return jsonlLines(readFileSync(path, "utf8"));
   } catch {
     return [];
   }
+}
+
+function jsonlLines(content: string): string[] {
+  return content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 function globalContext(records: NormalizedRecord[]): string {

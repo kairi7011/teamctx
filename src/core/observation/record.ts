@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { GitHubContentsStore } from "../../adapters/github/contents-store.js";
-import { LocalContextStore } from "../../adapters/store/local-store.js";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { findBinding } from "../binding/local-bindings.js";
 import { resolveStoreRoot } from "../store/layout.js";
+import {
+  createContextStoreForBinding,
+  type ContextStoreFactoryServices
+} from "../store/bound-store.js";
 import { formatRawEventPath } from "../store/raw-event-path.js";
 import { scanRawObservation, type SensitiveFinding } from "../policy/redaction-policy.js";
 import type { RawObservation } from "../../schemas/observation.js";
@@ -18,15 +20,10 @@ export type RawObservationWriteResult = {
   findings: SensitiveFinding[];
 };
 
-export type RecordObservationServices = {
+export type RecordObservationServices = ContextStoreFactoryServices & {
   getRepoRoot: (cwd?: string) => string;
   getOriginRemote: (cwd?: string) => string;
   findBinding: (repo: string) => Binding | undefined;
-  createContextStore?: (options: {
-    repo: string;
-    repoRoot: string;
-    binding: Binding;
-  }) => ContextStoreAdapter;
 };
 
 export type RecordObservationOptions = {
@@ -96,7 +93,7 @@ export async function recordRawObservationAsync(
     observation: options.observation,
     store:
       services.createContextStore?.({ repo, repoRoot: root, binding }) ??
-      createDefaultContextStore({ repo, repoRoot: root, binding })
+      createContextStoreForBinding({ repo, repoRoot: root, binding })
   });
 }
 
@@ -174,23 +171,6 @@ export async function writeRawObservationToContextStore(options: {
     relativePath,
     findings: sensitiveReport.findings
   };
-}
-
-function createDefaultContextStore(options: {
-  repo: string;
-  repoRoot: string;
-  binding: Binding;
-}): ContextStoreAdapter {
-  if (options.binding.contextStore.repo === options.repo) {
-    return new LocalContextStore(
-      resolveStoreRoot(options.repoRoot, options.binding.contextStore.path)
-    );
-  }
-
-  return new GitHubContentsStore({
-    repository: options.binding.contextStore.repo,
-    storePath: options.binding.contextStore.path
-  });
 }
 
 function resolveInside(root: string, relativePath: string): string {

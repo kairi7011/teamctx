@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { NORMALIZED_FILE_BY_KIND, type NormalizeStoreResult } from "../normalize/normalize.js";
 import { validateAuditLogEntry, type AuditLogEntry } from "../../schemas/audit.js";
 import {
@@ -66,40 +67,30 @@ const DEFAULT_RECENT_LIMIT = 5;
 export function summarizeContextStore(options: StatusSummaryOptions): StatusSummary {
   const recentLimit = options.recentLimit ?? DEFAULT_RECENT_LIMIT;
   const records = readNormalizedRecords(options.storeRoot);
-  const recordsById = new Map(records.map((record) => [record.id, record]));
   const auditEntries = readAuditEntries(options.storeRoot);
-  const droppedEntries = auditEntries.filter((entry) => entry.action === "dropped");
-  const createdEntries = auditEntries.filter(
-    (entry) => entry.action === "created" && entry.item_id !== undefined
-  );
 
-  return {
-    last_normalize_result: readLastNormalizeResult(options.storeRoot),
-    counts: {
-      total_records: records.length,
-      active_records: records.filter((record) => record.state === "active").length,
-      contested_records: records.filter((record) => record.state === "contested").length,
-      stale_records: records.filter((record) => record.state === "stale").length,
-      superseded_records: records.filter((record) => record.state === "superseded").length,
-      archived_records: records.filter((record) => record.state === "archived").length,
-      audit_entries: auditEntries.length,
-      dropped_events: droppedEntries.length
-    },
-    recent_promoted_items: sortAuditEntriesNewestFirst(createdEntries)
-      .slice(0, recentLimit)
-      .map((entry) => promotedSummary(entry, recordsById)),
-    contested_items: records
-      .filter((record) => record.state === "contested")
-      .map(itemSummary)
-      .slice(0, recentLimit),
-    dropped_items: sortAuditEntriesNewestFirst(droppedEntries)
-      .slice(0, recentLimit)
-      .map(droppedSummary),
-    stale_items: records
-      .filter((record) => record.state === "stale")
-      .map(itemSummary)
-      .slice(0, recentLimit)
-  };
+  return buildStatusSummary({
+    records,
+    auditEntries,
+    lastNormalizeResult: readLastNormalizeResult(options.storeRoot),
+    recentLimit
+  });
+}
+
+export async function summarizeContextStoreAdapter(options: {
+  store: ContextStoreAdapter;
+  recentLimit?: number;
+}): Promise<StatusSummary> {
+  const recentLimit = options.recentLimit ?? DEFAULT_RECENT_LIMIT;
+  const records = await readNormalizedRecordsFromAdapter(options.store);
+  const auditEntries = await readAuditEntriesFromAdapter(options.store);
+
+  return buildStatusSummary({
+    records,
+    auditEntries,
+    lastNormalizeResult: await readLastNormalizeResultFromAdapter(options.store),
+    recentLimit
+  });
 }
 
 function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
@@ -112,6 +103,22 @@ function readAuditEntries(storeRoot: string): AuditLogEntry[] {
   return readJsonl(join(storeRoot, "audit", "changes.jsonl"), validateAuditLogEntry);
 }
 
+async function readNormalizedRecordsFromAdapter(
+  store: ContextStoreAdapter
+): Promise<NormalizedRecord[]> {
+  const groups = await Promise.all(
+    Object.values(NORMALIZED_FILE_BY_KIND).map((file) =>
+      readJsonlFromAdapter(store, `normalized/${file}`, validateNormalizedRecord)
+    )
+  );
+
+  return groups.flat();
+}
+
+async function readAuditEntriesFromAdapter(store: ContextStoreAdapter): Promise<AuditLogEntry[]> {
+  return readJsonlFromAdapter(store, "audit/changes.jsonl", validateAuditLogEntry);
+}
+
 function readLastNormalizeResult(storeRoot: string): NormalizeStoreResult | null {
   const path = join(storeRoot, "indexes", "last-normalize.json");
 
@@ -120,6 +127,18 @@ function readLastNormalizeResult(storeRoot: string): NormalizeStoreResult | null
   }
 
   return validateLastNormalizeResult(JSON.parse(readFileSync(path, "utf8")) as unknown);
+}
+
+async function readLastNormalizeResultFromAdapter(
+  store: ContextStoreAdapter
+): Promise<NormalizeStoreResult | null> {
+  const file = await store.readText("indexes/last-normalize.json");
+
+  if (!file) {
+    return null;
+  }
+
+  return validateLastNormalizeResult(JSON.parse(file.content) as unknown);
 }
 
 function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
@@ -134,6 +153,67 @@ function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
   }
 
   return content.split("\n").map((line) => validate(JSON.parse(line) as unknown));
+}
+
+async function readJsonlFromAdapter<T>(
+  store: ContextStoreAdapter,
+  path: string,
+  validate: (value: unknown) => T
+): Promise<T[]> {
+  const file = await store.readText(path);
+
+  if (!file) {
+    return [];
+  }
+
+  const content = file.content.trim();
+
+  if (content.length === 0) {
+    return [];
+  }
+
+  return content.split("\n").map((line) => validate(JSON.parse(line) as unknown));
+}
+
+function buildStatusSummary(options: {
+  records: NormalizedRecord[];
+  auditEntries: AuditLogEntry[];
+  lastNormalizeResult: NormalizeStoreResult | null;
+  recentLimit: number;
+}): StatusSummary {
+  const recordsById = new Map(options.records.map((record) => [record.id, record]));
+  const droppedEntries = options.auditEntries.filter((entry) => entry.action === "dropped");
+  const createdEntries = options.auditEntries.filter(
+    (entry) => entry.action === "created" && entry.item_id !== undefined
+  );
+
+  return {
+    last_normalize_result: options.lastNormalizeResult,
+    counts: {
+      total_records: options.records.length,
+      active_records: options.records.filter((record) => record.state === "active").length,
+      contested_records: options.records.filter((record) => record.state === "contested").length,
+      stale_records: options.records.filter((record) => record.state === "stale").length,
+      superseded_records: options.records.filter((record) => record.state === "superseded").length,
+      archived_records: options.records.filter((record) => record.state === "archived").length,
+      audit_entries: options.auditEntries.length,
+      dropped_events: droppedEntries.length
+    },
+    recent_promoted_items: sortAuditEntriesNewestFirst(createdEntries)
+      .slice(0, options.recentLimit)
+      .map((entry) => promotedSummary(entry, recordsById)),
+    contested_items: options.records
+      .filter((record) => record.state === "contested")
+      .map(itemSummary)
+      .slice(0, options.recentLimit),
+    dropped_items: sortAuditEntriesNewestFirst(droppedEntries)
+      .slice(0, options.recentLimit)
+      .map(droppedSummary),
+    stale_items: options.records
+      .filter((record) => record.state === "stale")
+      .map(itemSummary)
+      .slice(0, options.recentLimit)
+  };
 }
 
 function validateLastNormalizeResult(value: unknown): NormalizeStoreResult {

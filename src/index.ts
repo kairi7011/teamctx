@@ -15,6 +15,7 @@ export * from "./core/policy/redaction-policy.js";
 export * from "./core/retention/compact.js";
 export * from "./core/status/status.js";
 export * from "./core/status/summary.js";
+export * from "./core/store/bound-store.js";
 export * from "./core/store/layout.js";
 export * from "./core/store/raw-event-path.js";
 export * from "./mcp/tools/get-context.js";
