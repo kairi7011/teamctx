@@ -54,6 +54,37 @@ test("scanTextForSensitiveContent warns on internal URLs and emails", () => {
   );
 });
 
+test("scanRawObservation ignores warning-only PII patterns in metadata ids", () => {
+  const report = scanRawObservation(
+    observation({
+      event_id: "observe-context-1776936705768",
+      session_id: "session-1776936705768",
+      recorded_by: "codex"
+    })
+  );
+
+  assert.equal(report.status, "allowed");
+  assert.deepEqual(report.findings, []);
+});
+
+test("scanRawObservation still blocks secret-shaped metadata ids", () => {
+  const report = scanRawObservation(
+    observation({
+      event_id: "token = abcdefghijklmnop"
+    })
+  );
+
+  assert.equal(report.status, "blocked");
+  assert.deepEqual(report.findings, [
+    {
+      severity: "block",
+      kind: "api_key",
+      field: "event_id",
+      excerpt: "[redacted:api_key]"
+    }
+  ]);
+});
+
 test("scanRawObservation blocks .env evidence files", () => {
   const report = scanRawObservation(
     observation({

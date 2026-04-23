@@ -25,6 +25,10 @@ export type SensitiveContentReport = {
   findings: SensitiveFinding[];
 };
 
+type ScanOptions = {
+  includeWarnings?: boolean;
+};
+
 const SECRET_PATTERNS: Array<{
   kind: SensitiveFindingKind;
   severity: SensitiveFindingSeverity;
@@ -72,7 +76,11 @@ export function scanRawObservation(observation: RawObservation): SensitiveConten
   const findings: SensitiveFinding[] = [];
 
   for (const field of rawObservationFields(observation)) {
-    findings.push(...scanTextForSensitiveContent(field.value, field.name));
+    findings.push(
+      ...scanTextForSensitiveContent(field.value, field.name, {
+        includeWarnings: field.includeWarnings
+      })
+    );
   }
 
   return {
@@ -81,10 +89,19 @@ export function scanRawObservation(observation: RawObservation): SensitiveConten
   };
 }
 
-export function scanTextForSensitiveContent(text: string, field = "text"): SensitiveFinding[] {
+export function scanTextForSensitiveContent(
+  text: string,
+  field = "text",
+  options: ScanOptions = {}
+): SensitiveFinding[] {
   const findings: SensitiveFinding[] = [];
+  const includeWarnings = options.includeWarnings ?? true;
 
   for (const rule of SECRET_PATTERNS) {
+    if (rule.severity === "warn" && !includeWarnings) {
+      continue;
+    }
+
     if (rule.pattern.test(text)) {
       findings.push({
         severity: rule.severity,
@@ -107,12 +124,14 @@ export function scanTextForSensitiveContent(text: string, field = "text"): Sensi
   return dedupeFindings(findings);
 }
 
-function rawObservationFields(observation: RawObservation): Array<{ name: string; value: string }> {
-  const fields: Array<{ name: string; value: string }> = [
-    { name: "text", value: observation.text },
-    { name: "event_id", value: observation.event_id },
-    { name: "session_id", value: observation.session_id },
-    { name: "recorded_by", value: observation.recorded_by }
+function rawObservationFields(
+  observation: RawObservation
+): Array<{ name: string; value: string; includeWarnings: boolean }> {
+  const fields: Array<{ name: string; value: string; includeWarnings: boolean }> = [
+    { name: "text", value: observation.text, includeWarnings: true },
+    { name: "event_id", value: observation.event_id, includeWarnings: false },
+    { name: "session_id", value: observation.session_id, includeWarnings: false },
+    { name: "recorded_by", value: observation.recorded_by, includeWarnings: false }
   ];
 
   observation.evidence.forEach((evidence, index) => {
@@ -125,14 +144,14 @@ function rawObservationFields(observation: RawObservation): Array<{ name: string
 function evidenceFields(
   evidence: Evidence,
   prefix: string
-): Array<{ name: string; value: string }> {
-  const fields: Array<{ name: string; value: string }> = [];
+): Array<{ name: string; value: string; includeWarnings: boolean }> {
+  const fields: Array<{ name: string; value: string; includeWarnings: boolean }> = [];
 
   for (const key of ["repo", "commit", "file", "url"] as const) {
     const value = evidence[key];
 
     if (typeof value === "string") {
-      fields.push({ name: `${prefix}.${key}`, value });
+      fields.push({ name: `${prefix}.${key}`, value, includeWarnings: true });
     }
   }
 
