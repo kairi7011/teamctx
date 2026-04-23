@@ -392,6 +392,45 @@ test("normalizeStore marks conflicting same-scope assertions contested", (contex
   assert.equal(audit.filter((entry) => entry.action === "contested").length, 2);
 });
 
+test("normalizeStore marks overlapping-scope assertions contested", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+  writeRaw(
+    storeRoot,
+    observation({
+      event_id: "event-2",
+      text: "Auth middleware must not run before tenant resolution.",
+      scope: {
+        paths: ["src/auth/middleware.ts"],
+        domains: [],
+        symbols: ["AuthMiddleware"],
+        tags: []
+      }
+    })
+  );
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+  const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
+
+  assert.equal(result.recordsWritten, 2);
+  assert.equal(
+    records.every((record) => record.state === "contested"),
+    true
+  );
+  assert.equal(
+    records.every(
+      (record) => Array.isArray(record.conflicts_with) && record.conflicts_with.length === 1
+    ),
+    true
+  );
+});
+
 test("normalizeStore marks reversed ordering assertions contested", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

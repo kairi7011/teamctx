@@ -26,6 +26,7 @@ import {
   serializePathIndex,
   serializeSymbolIndex,
   serializeTextIndex,
+  matchesPath,
   type PathIndex,
   type SymbolIndex,
   type TextIndex
@@ -478,7 +479,7 @@ function addConflict(
 }
 
 function areConflictingRecords(left: NormalizedRecord, right: NormalizedRecord): boolean {
-  if (left.kind !== right.kind || scopeKey(left.scope) !== scopeKey(right.scope)) {
+  if (left.kind !== right.kind || !scopesOverlap(left.scope, right.scope)) {
     return false;
   }
 
@@ -493,6 +494,56 @@ function areConflictingRecords(left: NormalizedRecord, right: NormalizedRecord):
     stripNegation(leftText) === stripNegation(rightText) &&
     hasNegation(leftText) !== hasNegation(rightText)
   );
+}
+
+function scopesOverlap(left: Scope, right: Scope): boolean {
+  if (isGlobalScope(left) || isGlobalScope(right)) {
+    return true;
+  }
+
+  return (
+    pathScopesOverlap(left.paths, right.paths) ||
+    normalizedOverlap(left.domains, right.domains, normalizeTextKey) ||
+    normalizedOverlap(left.symbols, right.symbols, normalizeSymbolKey) ||
+    normalizedOverlap(left.tags, right.tags, normalizeTextKey)
+  );
+}
+
+function isGlobalScope(scope: Scope): boolean {
+  return (
+    scope.paths.length === 0 &&
+    scope.domains.length === 0 &&
+    scope.symbols.length === 0 &&
+    scope.tags.length === 0
+  );
+}
+
+function pathScopesOverlap(left: string[], right: string[]): boolean {
+  return left.some((leftPath) =>
+    right.some((rightPath) => matchesPath(leftPath, rightPath) || matchesPath(rightPath, leftPath))
+  );
+}
+
+function normalizedOverlap(
+  left: string[],
+  right: string[],
+  normalize: (value: string) => string
+): boolean {
+  if (left.length === 0 || right.length === 0) {
+    return false;
+  }
+
+  const rightKeys = new Set(right.map(normalize));
+
+  return left.some((value) => rightKeys.has(normalize(value)));
+}
+
+function normalizeTextKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeSymbolKey(value: string): string {
+  return value.trim();
 }
 
 function staleReason(record: NormalizedRecord, repoRoot: string): string | undefined {
