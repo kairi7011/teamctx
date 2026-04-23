@@ -40,12 +40,12 @@ Implemented:
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx compact` for local and GitHub retention and archive compaction
+- opt-in real GitHub smoke test for the MVP remote context flow
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
-- real GitHub integration smoke tests
 - richer stale scoring
 - deeper normalization quality beyond deterministic heuristics
 
@@ -116,6 +116,17 @@ Run diagnostics:
 ```bash
 teamctx doctor
 ```
+
+Run the opt-in GitHub smoke test against a real context-store repository:
+
+```bash
+$env:TEAMCTX_GITHUB_SMOKE = "1"
+$env:TEAMCTX_GITHUB_SMOKE_STORE = "github.com/my-org/ai-context"
+$env:TEAMCTX_GITHUB_TOKEN = "<token with repo contents access>"
+npm test -- --test-name-pattern "GitHub contents store supports"
+```
+
+The smoke test writes to a generated `contexts/teamctx-smoke/...` path and deletes it afterward unless `TEAMCTX_GITHUB_SMOKE_KEEP=1` is set.
 
 Run the MCP server during local development:
 
