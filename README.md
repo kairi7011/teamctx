@@ -58,6 +58,17 @@ Planned:
 - Do not require PR, merge, pull, or manual review on every context update.
 - Prefer explicit project binding over implicit discovery.
 
+## Memory Model Boundary
+
+`teamctx` keeps the MVP memory model deliberately narrow:
+
+- Working context is the bounded `teamctx.get_context` payload for the current task. It is composed from active normalized records and can be scoped by paths, domains, symbols, tags, deterministic text query, and time filters.
+- Episodic memory is represented by raw observations and generated episode references. `get_context` returns episode references only; raw event bodies are not injected by default.
+- Semantic memory is the normalized JSONL layer: facts, rules, decisions, workflows, pitfalls, and glossary terms with evidence and state. MVP retrieval is deterministic and index-backed, not embedding-based.
+- Procedural memory is represented as rule, workflow, and pitfall records. MVP procedures are guidance text, not executable checklists or enforced automation.
+
+Post-MVP work may add embeddings, richer temporal models, executable procedures, background consolidation, and UI surfaces. Automatic truth resolution and automatic conflict resolution are intentionally out of scope for the MVP.
+
 ## Install
 
 ```bash
