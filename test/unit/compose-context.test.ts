@@ -40,6 +40,16 @@ test("composeContextFromStore returns active scoped context and diagnostics", (c
   const storeRoot = join(directory, ".teamctx");
 
   writeRecord(storeRoot, "pitfalls.jsonl", record("pitfall-auth-order", "pitfall", "active"));
+  writeRecord(
+    storeRoot,
+    "pitfalls.jsonl",
+    record("pitfall-billing-order", "pitfall", "active", {
+      paths: ["src/billing/**"],
+      domains: ["billing"],
+      symbols: ["BillingMiddleware"],
+      tags: ["request-lifecycle"]
+    })
+  );
   writeRecord(storeRoot, "decisions.jsonl", record("decision-auth-order", "decision", "active"));
   writeRecord(storeRoot, "rules.jsonl", record("rule-auth-order", "rule", "contested"));
 
@@ -243,6 +253,12 @@ test("composeContextFromContextStore uses indexes to avoid unrelated remote shar
     symbols: [],
     tags: []
   });
+  const unrelatedRule = record("rule-billing", "rule", "active", {
+    paths: ["src/billing/**"],
+    domains: ["billing"],
+    symbols: ["BillingRule"],
+    tags: []
+  });
   const unrelatedWorkflow = record("workflow-billing", "workflow", "active", {
     paths: ["src/billing/**"],
     domains: ["billing"],
@@ -258,11 +274,12 @@ test("composeContextFromContextStore uses indexes to avoid unrelated remote shar
 
   await writeRemoteRecord(store, "pitfalls.jsonl", matchingPitfall);
   await writeRemoteRecord(store, "rules.jsonl", globalRule);
+  await writeRemoteRecord(store, "rules.jsonl", unrelatedRule);
   await writeRemoteRecord(store, "workflows.jsonl", unrelatedWorkflow);
   await writeRemoteRecord(store, "decisions.jsonl", contestedDecision);
   await writeRemoteIndexes(
     store,
-    [matchingPitfall, globalRule, unrelatedWorkflow, contestedDecision],
+    [matchingPitfall, globalRule, unrelatedRule, unrelatedWorkflow, contestedDecision],
     "2026-04-22T11:00:00.000Z"
   );
 
@@ -523,7 +540,7 @@ async function writeRemoteRecord(
   file: string,
   normalizedRecord: NormalizedRecord
 ): Promise<void> {
-  await store.writeText(`normalized/${file}`, `${JSON.stringify(normalizedRecord)}\n`, {
+  await store.appendJsonl(`normalized/${file}`, [normalizedRecord], {
     message: "seed"
   });
 }

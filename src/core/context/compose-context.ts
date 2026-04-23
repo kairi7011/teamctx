@@ -89,38 +89,37 @@ function composeContextFromRecords(
   const activeRecords = records.filter(
     (record) => record.state === "active" && matchesTimeInput(record, input)
   );
-  const scopedBudget = budgetRecords(
-    selectScopedRecords(activeRecords, input, indexes),
-    input,
-    DEFAULT_CONTEXT_BUDGETS.scopedItems
-  );
+  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
+  const globallyApplicableRecords = activeRecords.filter(isGloballyApplicableRecord);
+  const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
+  const scopedBudget = budgetRecords(scopedRecords, input, DEFAULT_CONTEXT_BUDGETS.scopedItems);
   const globalBudget = budgetRecords(
-    activeRecords.filter((record) => isGlobalKind(record.kind)),
+    globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
     input,
     DEFAULT_CONTEXT_BUDGETS.globalItems
   );
   const ruleBudget = budgetRecords(
-    activeRecords.filter((record) => record.kind === "rule"),
+    applicableRecords.filter((record) => record.kind === "rule"),
     input,
     DEFAULT_CONTEXT_BUDGETS.globalItems
   );
   const decisionBudget = budgetRecords(
-    activeRecords.filter((record) => record.kind === "decision"),
+    applicableRecords.filter((record) => record.kind === "decision"),
     input,
     DEFAULT_CONTEXT_BUDGETS.decisions
   );
   const pitfallBudget = budgetRecords(
-    activeRecords.filter((record) => record.kind === "pitfall"),
+    applicableRecords.filter((record) => record.kind === "pitfall"),
     input,
     DEFAULT_CONTEXT_BUDGETS.pitfalls
   );
   const workflowBudget = budgetRecords(
-    activeRecords.filter((record) => record.kind === "workflow"),
+    applicableRecords.filter((record) => record.kind === "workflow"),
     input,
     DEFAULT_CONTEXT_BUDGETS.workflows
   );
   const glossaryBudget = budgetRecords(
-    activeRecords.filter((record) => record.kind === "glossary"),
+    applicableRecords.filter((record) => record.kind === "glossary"),
     input,
     DEFAULT_CONTEXT_BUDGETS.glossary
   );
@@ -519,6 +518,32 @@ function globalContext(ranked: RankedRecord[]): string {
 
 function isGlobalKind(kind: NormalizedRecord["kind"]): boolean {
   return kind === "fact" || kind === "rule" || kind === "glossary";
+}
+
+function isGloballyApplicableRecord(record: NormalizedRecord): boolean {
+  return (
+    isGlobalKind(record.kind) &&
+    record.scope.paths.length === 0 &&
+    record.scope.domains.length === 0 &&
+    record.scope.symbols.length === 0 &&
+    record.scope.tags.length === 0
+  );
+}
+
+function uniqueRecordsById(records: NormalizedRecord[]): NormalizedRecord[] {
+  const seen = new Set<string>();
+  const unique: NormalizedRecord[] = [];
+
+  for (const record of records) {
+    if (seen.has(record.id)) {
+      continue;
+    }
+
+    seen.add(record.id);
+    unique.push(record);
+  }
+
+  return unique;
 }
 
 function budgetDroppedIds(budgets: Array<{ overflow: RankedRecord[] }>): string[] {
