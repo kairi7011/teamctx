@@ -19,6 +19,7 @@ export type EpisodeIndex = {
   domains: Record<string, string[]>;
   symbols: Record<string, string[]>;
   tags: Record<string, string[]>;
+  evidence_files: Record<string, string[]>;
   source_types: Record<string, string[]>;
   trusts: Record<string, string[]>;
 };
@@ -32,6 +33,7 @@ export function createEmptyEpisodeIndex(generatedAt: string | null = null): Epis
     domains: {},
     symbols: {},
     tags: {},
+    evidence_files: {},
     source_types: {},
     trusts: {}
   };
@@ -58,6 +60,11 @@ export function buildEpisodeIndex(
     }
     for (const tag of episode.scope.tags) {
       addIndexedId(index.tags, normalizeTextKey(tag), episode.episode_id);
+    }
+    for (const evidence of episode.evidence) {
+      if (evidence.file !== undefined) {
+        addIndexedId(index.evidence_files, normalizePath(evidence.file), episode.episode_id);
+      }
     }
 
     addIndexedId(index.source_types, episode.source_type, episode.episode_id);
@@ -92,6 +99,7 @@ export function validateEpisodeIndex(value: unknown): EpisodeIndex {
     domains: validateIdMap(value.domains, "episode index domains"),
     symbols: validateIdMap(value.symbols, "episode index symbols"),
     tags: validateIdMap(value.tags, "episode index tags"),
+    evidence_files: validateIdMap(value.evidence_files, "episode index evidence_files"),
     source_types: validateIdMap(value.source_types, "episode index source_types"),
     trusts: validateIdMap(value.trusts, "episode index trusts")
   });
@@ -125,6 +133,20 @@ export function selectIndexedEpisodeIds(
 
   for (const tag of input.tags ?? []) {
     addAll(selected, index.tags[normalizeTextKey(tag)] ?? []);
+  }
+
+  for (const [indexedFile, ids] of Object.entries(index.evidence_files)) {
+    if (
+      (input.evidence_files ?? []).some(
+        (file) => matchesPath(indexedFile, file) || matchesPath(file, indexedFile)
+      )
+    ) {
+      addAll(selected, ids);
+    }
+  }
+
+  for (const sourceType of input.source_types ?? []) {
+    addAll(selected, index.source_types[sourceType] ?? []);
   }
 
   return selected;
@@ -294,6 +316,7 @@ function sortEpisodeIndex(index: EpisodeIndex): EpisodeIndex {
     domains: sortRecordIds(index.domains),
     symbols: sortRecordIds(index.symbols),
     tags: sortRecordIds(index.tags),
+    evidence_files: sortRecordIds(index.evidence_files),
     source_types: sortRecordIds(index.source_types),
     trusts: sortRecordIds(index.trusts)
   };

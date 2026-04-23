@@ -3,6 +3,7 @@
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import { getContextToolAsync } from "./tools/get-context.js";
+import { explainEpisodeToolAsync } from "./tools/explain-episode.js";
 import { explainItemToolAsync } from "./tools/explain-item.js";
 import { invalidateToolAsync } from "./tools/invalidate.js";
 import { normalizeToolAsync } from "./tools/normalize.js";
@@ -43,6 +44,8 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
       query: { type: "string" },
       since: { type: "string" },
       until: { type: "string" },
+      source_types: { type: "array", items: { type: "string" } },
+      evidence_files: { type: "array", items: { type: "string" } },
       branch: { type: "string" },
       head_commit: { type: "string" }
     },
@@ -105,6 +108,15 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
       item_id: { type: "string" }
     },
     required: ["item_id"],
+    additionalProperties: false
+  },
+  "teamctx.explain_episode": {
+    type: "object",
+    properties: {
+      cwd: { type: "string" },
+      episode_id: { type: "string" }
+    },
+    required: ["episode_id"],
     additionalProperties: false
   },
   "teamctx.invalidate": {
@@ -213,6 +225,8 @@ async function callTool(params: unknown): Promise<unknown> {
       return toolResult(await statusToolAsync(params.arguments));
     case "teamctx.explain_item":
       return toolResult(await explainItemToolAsync(params.arguments));
+    case "teamctx.explain_episode":
+      return toolResult(await explainEpisodeToolAsync(params.arguments));
     case "teamctx.invalidate":
       return toolResult(await invalidateToolAsync(params.arguments));
     default:

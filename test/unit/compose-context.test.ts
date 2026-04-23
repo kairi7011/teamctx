@@ -358,6 +358,44 @@ test("composeContextFromStore returns relevant episode references from the episo
   );
 });
 
+test("composeContextFromStore filters relevant episodes by source evidence and time", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeEpisodeIndex(
+    storeRoot,
+    [
+      observation(),
+      observation({
+        event_id: "event-2",
+        observed_at: "2026-04-20T10:00:00.000Z",
+        source_type: "inferred_from_diff",
+        evidence: [
+          {
+            kind: "code",
+            repo: "github.com/team/service",
+            commit: "abc123",
+            file: "src/auth/legacy.ts"
+          }
+        ]
+      })
+    ],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    source_types: ["inferred_from_code"],
+    evidence_files: ["src/auth/middleware.ts"],
+    since: "2026-04-22T00:00:00.000Z"
+  });
+
+  assert.deepEqual(
+    composed.relevant_episodes.map((episode) => episode.source_event_ids[0]),
+    ["event-1"]
+  );
+});
+
 test("composeContextFromStore ranks categories and reports budget overflow", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -547,7 +585,7 @@ function record(
   };
 }
 
-function observation(): RawObservation {
+function observation(overrides: Partial<RawObservation> = {}): RawObservation {
   return {
     schema_version: 1,
     event_id: "event-1",
@@ -572,7 +610,8 @@ function observation(): RawObservation {
       symbols: ["AuthMiddleware"],
       tags: ["request-lifecycle"]
     },
-    supersedes: []
+    supersedes: [],
+    ...overrides
   };
 }
 

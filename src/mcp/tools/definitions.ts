@@ -26,6 +26,10 @@ export const toolDefinitions: ToolDefinition[] = [
     description: "Explain the evidence, provenance, and state of a normalized context item."
   },
   {
+    name: "teamctx.explain_episode",
+    description: "Explain an episode reference from the generated episode index."
+  },
+  {
     name: "teamctx.invalidate",
     description: "Archive or invalidate an obsolete context item."
   }

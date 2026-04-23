@@ -11,6 +11,8 @@ export type GetContextInput = {
   query?: string;
   since?: string;
   until?: string;
+  source_types?: string[];
+  evidence_files?: string[];
   branch?: string;
   head_commit?: string;
 };
@@ -87,6 +89,8 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   const query = optionalString(value.query, "query");
   const since = optionalTimestamp(value.since, "since");
   const until = optionalTimestamp(value.until, "until");
+  const sourceTypes = optionalStringArrayWithName(value.source_types, "source_types");
+  const evidenceFiles = optionalStringArrayWithName(value.evidence_files, "evidence_files");
   const branch = optionalString(value.branch, "branch");
   const headCommit = optionalString(value.head_commit, "head_commit");
 
@@ -116,6 +120,12 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   }
   if (until !== undefined) {
     input.until = until;
+  }
+  if (sourceTypes !== undefined) {
+    input.source_types = sourceTypes;
+  }
+  if (evidenceFiles !== undefined) {
+    input.evidence_files = evidenceFiles;
   }
   if (branch !== undefined) {
     input.branch = branch;

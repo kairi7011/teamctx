@@ -106,6 +106,7 @@ test("initStoreLayout creates the MVP context store files", (context) => {
       '  "domains": {},',
       '  "symbols": {},',
       '  "tags": {},',
+      '  "evidence_files": {},',
       '  "source_types": {},',
       '  "trusts": {}',
       "}",

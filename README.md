@@ -35,7 +35,8 @@ Implemented:
 - selector-driven remote context retrieval that skips unrelated normalized shards
 - context diagnostics for missing, stale, or invalid generated indexes
 - `teamctx.get_context` time filters with `since` / `until`
-- raw-event-derived episode index and `relevant_episodes` payload entries
+- raw-event-derived episode index and `relevant_episodes` payload entries with source, evidence file, and time filters
+- `teamctx explain-episode` / `teamctx.explain_episode` for episode reference inspection
 - status summaries for recent promoted, dropped, contested, and stale records
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx compact` for local and GitHub retention and archive compaction

@@ -22,11 +22,12 @@ test("buildEpisodeIndex creates raw-event-derived episode references", () => {
   assert.deepEqual(index.domains.auth, [episode.episode_id]);
   assert.deepEqual(index.symbols.AuthMiddleware, [episode.episode_id]);
   assert.deepEqual(index.tags["request-lifecycle"], [episode.episode_id]);
+  assert.deepEqual(index.evidence_files["src/auth/middleware.ts"], [episode.episode_id]);
   assert.deepEqual(index.source_types.inferred_from_code, [episode.episode_id]);
   assert.deepEqual(index.trusts.verified, [episode.episode_id]);
 });
 
-test("selectIndexedEpisodeIds retrieves episodes by path domain symbol and tag", () => {
+test("selectIndexedEpisodeIds retrieves episodes by path domain symbol tag source and evidence", () => {
   const index = buildEpisodeIndex([observation()], "2026-04-22T11:00:00.000Z");
   const episodeId = index.episodes[0]?.episode_id;
 
@@ -42,6 +43,14 @@ test("selectIndexedEpisodeIds retrieves episodes by path domain symbol and tag",
   );
   assert.deepEqual(
     [...selectIndexedEpisodeIds(index, { tags: ["request-lifecycle"] })],
+    [episodeId]
+  );
+  assert.deepEqual(
+    [...selectIndexedEpisodeIds(index, { source_types: ["inferred_from_code"] })],
+    [episodeId]
+  );
+  assert.deepEqual(
+    [...selectIndexedEpisodeIds(index, { evidence_files: ["src/auth/middleware.ts"] })],
     [episodeId]
   );
 });

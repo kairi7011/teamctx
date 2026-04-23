@@ -10,6 +10,7 @@ import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { explainBoundItemAsync, invalidateBoundItemAsync } from "../core/audit/control.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
+import { explainBoundEpisodeAsync } from "../core/episodes/explain.js";
 import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStoreAsync } from "../core/retention/compact.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
@@ -57,6 +58,7 @@ Usage:
   teamctx normalize
   teamctx compact
   teamctx explain <item-id>
+  teamctx explain-episode <episode-id>
   teamctx invalidate <item-id> [--reason <reason>]
   teamctx status
   teamctx doctor
@@ -133,6 +135,16 @@ async function explain(args: ParsedArgs): Promise<void> {
   }
 
   console.log(JSON.stringify(await explainBoundItemAsync({ itemId }), null, 2));
+}
+
+async function explainEpisode(args: ParsedArgs): Promise<void> {
+  const [episodeId] = args.positional;
+
+  if (!episodeId) {
+    throw new Error("Missing episode id. Usage: teamctx explain-episode <episode-id>");
+  }
+
+  console.log(JSON.stringify(await explainBoundEpisodeAsync({ episodeId }), null, 2));
 }
 
 async function invalidate(args: ParsedArgs): Promise<void> {
@@ -308,6 +320,9 @@ async function main(): Promise<void> {
       return;
     case "explain":
       await explain(args);
+      return;
+    case "explain-episode":
+      await explainEpisode(args);
       return;
     case "invalidate":
       await invalidate(args);
