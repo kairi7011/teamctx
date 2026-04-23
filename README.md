@@ -38,6 +38,7 @@ Implemented:
 - raw-event-derived episode index and `relevant_episodes` payload entries with source, evidence file, and time filters
 - `teamctx explain-episode` / `teamctx.explain_episode` for episode reference inspection
 - status summaries for recent promoted, dropped, contested, and stale records
+- CLI batch recording for candidate and verified raw observations from JSON files
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx compact` for local and GitHub retention and archive compaction
 - opt-in real GitHub smoke test for the MVP remote context flow
@@ -104,6 +105,15 @@ Check the current binding:
 ```bash
 teamctx status
 ```
+
+Record one or more verified observations from a JSON file:
+
+```bash
+teamctx record-verified observations.json
+teamctx normalize
+```
+
+The file can contain one observation object or an array of observation objects. Verified observations must include non-manual evidence.
 
 Compact expired local context-store data into the configured archive path:
 

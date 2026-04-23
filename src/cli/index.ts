@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -15,6 +17,10 @@ import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStoreAsync } from "../core/retention/compact.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
+import {
+  recordObservationCandidateToolAsync,
+  recordObservationVerifiedToolAsync
+} from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 
 type ParsedArgs = {
@@ -57,6 +63,8 @@ Usage:
   teamctx init-store
   teamctx normalize
   teamctx compact
+  teamctx record-candidate <json-file>
+  teamctx record-verified <json-file>
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
   teamctx invalidate <item-id> [--reason <reason>]
@@ -67,6 +75,7 @@ Usage:
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx bind . --path .teamctx
+  teamctx record-verified observations.json
 `);
 }
 
@@ -125,6 +134,40 @@ async function compact(): Promise<void> {
   console.log(`  audit_entries_retained: ${result.auditEntriesRetained}`);
   console.log(`  archived_records_archived: ${result.archivedRecordsArchived}`);
   console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
+}
+
+async function recordObservation(args: ParsedArgs, trust: "candidate" | "verified"): Promise<void> {
+  const [inputPath] = args.positional;
+
+  if (!inputPath) {
+    throw new Error(`Missing json file. Usage: teamctx record-${trust} <json-file>`);
+  }
+
+  const input = JSON.parse(readFileSync(resolve(inputPath), "utf8")) as unknown;
+  const observations = Array.isArray(input) ? input : [input];
+
+  if (observations.length === 0) {
+    throw new Error("Observation json file must contain an object or a non-empty array.");
+  }
+
+  console.log(`Recorded ${trust} raw observations:`);
+
+  for (const [index, observation] of observations.entries()) {
+    const result =
+      trust === "verified"
+        ? await recordObservationVerifiedToolAsync(observation)
+        : await recordObservationCandidateToolAsync(observation);
+
+    console.log(`  - ${index + 1}: ${result.relative_path}`);
+
+    for (const finding of result.findings) {
+      console.log(
+        `      ${finding.severity}: ${finding.kind} in ${finding.field} ${finding.excerpt}`
+      );
+    }
+  }
+
+  console.log(`  count: ${observations.length}`);
 }
 
 async function explain(args: ParsedArgs): Promise<void> {
@@ -208,25 +251,29 @@ async function status(): Promise<void> {
     summary.recent_promoted_items.map((item) => ({
       id: item.item_id,
       detail: item.record?.text ?? item.reason ?? "record not found"
-    }))
+    })),
+    summary.counts.promoted_records
   );
   printStatusList(
     "contested",
     summary.contested_items.map((item) => ({
       id: item.item_id,
       detail: contestedStatusDetail(item)
-    }))
+    })),
+    summary.counts.contested_records
   );
   printStatusList(
     "dropped",
     summary.dropped_items.map((item) => ({
       id: item.source_event_ids.join(",") || "(unknown event)",
       detail: item.reason ?? "dropped"
-    }))
+    })),
+    summary.counts.dropped_events
   );
   printStatusList(
     "stale",
-    summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text }))
+    summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text })),
+    summary.counts.stale_records
   );
 }
 
@@ -249,8 +296,15 @@ function contestedStatusDetail(item: {
   return parts.join(" | ");
 }
 
-function printStatusList(label: string, rows: Array<{ id: string; detail: string }>): void {
-  console.log(`  ${label}: ${rows.length}`);
+function printStatusList(
+  label: string,
+  rows: Array<{ id: string; detail: string }>,
+  total = rows.length
+): void {
+  const visibleCount =
+    rows.length === total ? String(rows.length) : `${rows.length} of ${total} shown`;
+
+  console.log(`  ${label}: ${visibleCount}`);
 
   for (const row of rows) {
     console.log(`    - ${row.id}: ${row.detail}`);
@@ -317,6 +371,12 @@ async function main(): Promise<void> {
       return;
     case "compact":
       await compact();
+      return;
+    case "record-candidate":
+      await recordObservation(args, "candidate");
+      return;
+    case "record-verified":
+      await recordObservation(args, "verified");
       return;
     case "explain":
       await explain(args);

@@ -106,6 +106,7 @@ test("statusTool returns the enabled binding summary", () => {
         superseded_records: 0,
         archived_records: 0,
         audit_entries: 0,
+        promoted_records: 0,
         dropped_events: 0
       },
       recent_promoted_items: [],

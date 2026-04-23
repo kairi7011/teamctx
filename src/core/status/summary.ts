@@ -64,6 +64,7 @@ export type StatusSummary = {
     superseded_records: number;
     archived_records: number;
     audit_entries: number;
+    promoted_records: number;
     dropped_events: number;
   };
   recent_promoted_items: PromotedItemSummary[];
@@ -207,6 +208,7 @@ function buildStatusSummary(options: {
       superseded_records: options.records.filter((record) => record.state === "superseded").length,
       archived_records: options.records.filter((record) => record.state === "archived").length,
       audit_entries: options.auditEntries.length,
+      promoted_records: createdEntries.length,
       dropped_events: droppedEntries.length
     },
     recent_promoted_items: sortAuditEntriesNewestFirst(createdEntries)

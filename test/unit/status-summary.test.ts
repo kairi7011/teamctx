@@ -66,6 +66,7 @@ test("summarizeContextStore returns local status buckets and last normalize resu
   assert.equal(summary.counts.active_records, 1);
   assert.equal(summary.counts.contested_records, 2);
   assert.equal(summary.counts.stale_records, 1);
+  assert.equal(summary.counts.promoted_records, 1);
   assert.equal(summary.counts.dropped_events, 1);
   assert.equal(summary.recent_promoted_items[0]?.item_id, "pitfall-auth-order");
   assert.equal(
