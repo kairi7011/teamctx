@@ -41,6 +41,8 @@ export type EnabledContextPayload = {
       scope: Record<string, unknown>;
       content: string;
       reason: string;
+      rank_score: number;
+      rank_reasons: string[];
       confidence_level: string;
       confidence_score?: number;
       last_verified_at?: string;

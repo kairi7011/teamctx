@@ -30,6 +30,8 @@ export type ScopedContextItem = {
   scope: NormalizedRecord["scope"];
   content: string;
   reason: string;
+  rank_score: number;
+  rank_reasons: string[];
   confidence_level: NormalizedRecord["confidence_level"];
   confidence_score?: number;
   last_verified_at?: string;
@@ -87,6 +89,8 @@ export function scopedContextItem(
     scope: ranked.record.scope,
     content: truncateText(ranked.record.text, maxContentChars),
     reason: selectionReason(ranked),
+    rank_score: ranked.score,
+    rank_reasons: ranked.reasons,
     confidence_level: ranked.record.confidence_level
   };
 
@@ -107,30 +111,36 @@ export function rankedTexts(ranked: RankedRecord[], maxContentChars: number): st
 function rankRecord(record: NormalizedRecord, input: GetContextInput): RankedRecord {
   const reasons: string[] = [];
   let score = KIND_WEIGHT[record.kind] + CONFIDENCE_WEIGHT[record.confidence_level];
+  const targetFileMatches = matchingPathFiles(record, input.target_files ?? []);
+  const changedFileMatches = matchingPathFiles(record, input.changed_files ?? []);
+  const symbolMatches = matchingOverlapValues(record.scope.symbols, input.symbols ?? [], exactKey);
+  const domainMatches = matchingOverlapValues(record.scope.domains, input.domains ?? [], textKey);
+  const tagMatches = matchingOverlapValues(record.scope.tags, input.tags ?? [], textKey);
+  const queryMatches = matchingQueryTokens(record, input.query);
 
-  if (matchesAnyPath(record, input.target_files ?? [])) {
+  if (targetFileMatches.length > 0) {
     score += 80;
-    reasons.push("target file match");
+    reasons.push(formatMatchReason("target file match", targetFileMatches));
   }
-  if (matchesAnyPath(record, input.changed_files ?? [])) {
+  if (changedFileMatches.length > 0) {
     score += 60;
-    reasons.push("changed file match");
+    reasons.push(formatMatchReason("changed file match", changedFileMatches));
   }
-  if (hasOverlap(record.scope.symbols, input.symbols ?? [], exactKey)) {
+  if (symbolMatches.length > 0) {
     score += 70;
-    reasons.push("symbol match");
+    reasons.push(formatMatchReason("symbol match", symbolMatches));
   }
-  if (hasOverlap(record.scope.domains, input.domains ?? [], textKey)) {
+  if (domainMatches.length > 0) {
     score += 45;
-    reasons.push("domain match");
+    reasons.push(formatMatchReason("domain match", domainMatches));
   }
-  if (hasOverlap(record.scope.tags, input.tags ?? [], textKey)) {
+  if (tagMatches.length > 0) {
     score += 25;
-    reasons.push("tag match");
+    reasons.push(formatMatchReason("tag match", tagMatches));
   }
-  if (matchesQuery(record, input.query)) {
+  if (queryMatches.length > 0) {
     score += 50;
-    reasons.push("text query match");
+    reasons.push(formatMatchReason("text query match", queryMatches));
   }
 
   reasons.push(`${record.kind} context`);
@@ -157,26 +167,28 @@ function selectionReason(ranked: RankedRecord): string {
   return ranked.reasons.slice(0, 3).join("; ");
 }
 
-function matchesAnyPath(record: NormalizedRecord, files: string[]): boolean {
+function matchingPathFiles(record: NormalizedRecord, files: string[]): string[] {
   if (files.length === 0 || record.scope.paths.length === 0) {
-    return false;
+    return [];
   }
 
-  return record.scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file)));
+  return uniqueSorted(
+    files.filter((file) => record.scope.paths.some((pattern) => matchesPath(pattern, file)))
+  );
 }
 
-function hasOverlap(
+function matchingOverlapValues(
   left: string[],
   right: string[],
   normalize: (value: string) => string
-): boolean {
+): string[] {
   if (left.length === 0 || right.length === 0) {
-    return false;
+    return [];
   }
 
-  const rightKeys = new Set(right.map(normalize));
+  const leftKeys = new Set(left.map(normalize));
 
-  return left.some((value) => rightKeys.has(normalize(value)));
+  return uniqueSorted(right.filter((value) => leftKeys.has(normalize(value))));
 }
 
 function recency(record: NormalizedRecord): number {
@@ -201,11 +213,11 @@ function exactKey(value: string): string {
   return value.trim();
 }
 
-function matchesQuery(record: NormalizedRecord, query: string | undefined): boolean {
+function matchingQueryTokens(record: NormalizedRecord, query: string | undefined): string[] {
   const tokens = textTokens(query ?? "");
 
   if (tokens.length === 0) {
-    return false;
+    return [];
   }
 
   const recordTokens = new Set(
@@ -220,7 +232,14 @@ function matchesQuery(record: NormalizedRecord, query: string | undefined): bool
     )
   );
 
-  return tokens.every((token) => recordTokens.has(token));
+  return tokens.every((token) => recordTokens.has(token)) ? tokens : [];
+}
+
+function formatMatchReason(label: string, matches: string[]): string {
+  const visibleMatches = matches.slice(0, 3);
+  const suffix = matches.length > visibleMatches.length ? ` (+${matches.length - 3} more)` : "";
+
+  return `${label}: ${visibleMatches.join(", ")}${suffix}`;
 }
 
 function textTokens(value: string): string[] {
@@ -258,3 +277,9 @@ const TEXT_STOP_WORDS = new Set([
   "to",
   "with"
 ]);
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort(
+    (left, right) => left.localeCompare(right)
+  );
+}

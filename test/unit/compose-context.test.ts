@@ -69,16 +69,22 @@ test("composeContextFromStore returns active scoped context and diagnostics", (c
         id: "pitfall-auth-order",
         kind: "pitfall",
         content: "pitfall-auth-order text",
-        reason: "target file match; pitfall context; medium confidence"
+        reason: "target file match: src/auth/middleware.ts; pitfall context; medium confidence"
       },
       {
         id: "decision-auth-order",
         kind: "decision",
         content: "decision-auth-order text",
-        reason: "target file match; decision context; medium confidence"
+        reason: "target file match: src/auth/middleware.ts; decision context; medium confidence"
       }
     ]
   );
+  assert.equal(composed.normalized_context.scoped[0]?.rank_score, 123);
+  assert.deepEqual(composed.normalized_context.scoped[0]?.rank_reasons, [
+    "target file match: src/auth/middleware.ts",
+    "pitfall context",
+    "medium confidence"
+  ]);
   assert.deepEqual(composed.normalized_context.scoped[0]?.scope, {
     paths: ["src/auth/**"],
     domains: ["auth"],

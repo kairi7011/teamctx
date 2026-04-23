@@ -32,6 +32,7 @@ Implemented:
 - index-backed context selection by paths, domains, symbols, tags, and deterministic text queries
 - canonical docs references from scoped docs evidence
 - ranked context payloads with selection reasons and category budgets
+- structured scoped ranking scores and match reasons in context payloads
 - selector-driven remote context retrieval that skips unrelated normalized shards
 - context diagnostics for missing, stale, or invalid generated indexes
 - `teamctx.get_context` time filters with `since` / `until`
