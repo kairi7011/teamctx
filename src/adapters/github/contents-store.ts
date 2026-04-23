@@ -253,8 +253,16 @@ function validateFileContent(value: unknown): {
   return {
     path: requiredString(record.path, "content path"),
     sha: requiredString(record.sha, "content sha"),
-    content: requiredString(record.content, "content body")
+    content: requiredContentString(record.content)
   };
+}
+
+function requiredContentString(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("content body must be a string");
+  }
+
+  return value;
 }
 
 function clientOptionsFromResolvedToken(): GitHubClientOptions {

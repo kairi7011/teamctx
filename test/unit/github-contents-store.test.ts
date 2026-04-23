@@ -5,6 +5,7 @@ import { resolveGitHubToken, type GitHubFetch } from "../../src/adapters/github/
 
 test("GitHubContentsStore reads, writes, appends, lists files, and reports revision", async () => {
   const fake = new FakeGitHubApi();
+  fake.putFile("contexts/service/normalized/empty.jsonl", "", "sha-empty");
   fake.putFile("contexts/service/normalized/facts.jsonl", "fact-1\n", "sha-1");
   fake.putFile("contexts/service/normalized/rules.jsonl", "rule-1\n", "sha-2");
 
@@ -21,6 +22,11 @@ test("GitHubContentsStore reads, writes, appends, lists files, and reports revis
     path: "normalized/facts.jsonl",
     content: "fact-1\n",
     revision: "sha-1"
+  });
+  assert.deepEqual(await store.readText("normalized/empty.jsonl"), {
+    path: "normalized/empty.jsonl",
+    content: "",
+    revision: "sha-empty"
   });
 
   const writeResult = await store.writeText("normalized/facts.jsonl", "fact-2\n", {
@@ -42,7 +48,10 @@ test("GitHubContentsStore reads, writes, appends, lists files, and reports revis
   });
   assert.equal(fake.fileContent("contexts/service/normalized/rules.jsonl"), undefined);
 
-  assert.deepEqual(await store.listFiles("normalized"), ["normalized/facts.jsonl"]);
+  assert.deepEqual(await store.listFiles("normalized"), [
+    "normalized/empty.jsonl",
+    "normalized/facts.jsonl"
+  ]);
   assert.equal(
     fake.requests.some((request) => request.authorization === "Bearer token-1"),
     true
