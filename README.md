@@ -43,6 +43,7 @@ Implemented:
 - CLI batch recording for candidate and verified raw observations from JSON files
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx context` for previewing the current `teamctx.get_context` payload
+- `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx compact` for local and GitHub retention and archive compaction
 - opt-in real GitHub smoke test for the MVP remote context flow
 - Node built-in test runner setup
@@ -114,6 +115,13 @@ Preview the current task context:
 ```bash
 teamctx context --target-files src/index.ts --domains cli --query "record verified"
 teamctx context context-input.json
+```
+
+List normalized records:
+
+```bash
+teamctx list --state active --domains cli --limit 20
+teamctx list --kind workflow --tags preview-cli --query "context preview"
 ```
 
 Record one or more verified observations from a JSON file:
