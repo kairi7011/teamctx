@@ -44,6 +44,7 @@ Implemented:
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx context` for previewing the current `teamctx.get_context` payload
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
+- `teamctx audit` for listing audit changes by action, item, source event, query, and limit
 - `teamctx compact` for local and GitHub retention and archive compaction
 - opt-in real GitHub smoke test for the MVP remote context flow
 - Node built-in test runner setup
@@ -122,6 +123,13 @@ List normalized records:
 ```bash
 teamctx list --state active --domains cli --limit 20
 teamctx list --kind workflow --tags preview-cli --query "context preview"
+```
+
+List audit changes:
+
+```bash
+teamctx audit --action created --limit 20
+teamctx audit --item workflow-example --query "evidence minimum"
 ```
 
 Record one or more verified observations from a JSON file:

@@ -10,6 +10,11 @@ import {
 } from "../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { explainBoundItemAsync, invalidateBoundItemAsync } from "../core/audit/control.js";
+import {
+  getBoundAuditSummary,
+  parseAuditActions,
+  type AuditSummaryInput
+} from "../core/audit/summary.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { explainBoundEpisodeAsync } from "../core/episodes/explain.js";
@@ -73,6 +78,7 @@ Usage:
   teamctx compact
   teamctx context [json-file]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>]
+  teamctx audit [--action <action>] [--limit <n>]
   teamctx record-candidate <json-file>
   teamctx record-verified <json-file>
   teamctx explain <item-id>
@@ -87,6 +93,7 @@ Examples:
   teamctx bind . --path .teamctx
   teamctx context --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
+  teamctx audit --action created --limit 20
   teamctx record-verified observations.json
 `);
 }
@@ -171,6 +178,42 @@ async function list(args: ParsedArgs): Promise<void> {
   }
 
   console.log(JSON.stringify(await listBoundRecords(input), null, 2));
+}
+
+async function audit(args: ParsedArgs): Promise<void> {
+  const limit = typeof args.flags.limit === "string" ? Number(args.flags.limit) : undefined;
+  const input: AuditSummaryInput = {};
+
+  assignAuditInput(
+    input,
+    "actions",
+    parseAuditActions(csvFlag(args.flags.action ?? args.flags.actions))
+  );
+  assignAuditInput(input, "item_ids", csvFlag(args.flags.item ?? args.flags.items));
+  assignAuditInput(
+    input,
+    "source_event_ids",
+    csvFlag(args.flags["source-event"] ?? args.flags["source-events"])
+  );
+
+  if (typeof args.flags.query === "string") {
+    input.query = args.flags.query;
+  }
+  if (limit !== undefined) {
+    input.limit = limit;
+  }
+
+  console.log(JSON.stringify(await getBoundAuditSummary(input), null, 2));
+}
+
+function assignAuditInput<T extends keyof AuditSummaryInput>(
+  input: AuditSummaryInput,
+  key: T,
+  value: AuditSummaryInput[T] | undefined
+): void {
+  if (value !== undefined) {
+    Object.assign(input, { [key]: value });
+  }
 }
 
 function assignListInput<T extends keyof ListRecordsInput>(
@@ -489,6 +532,9 @@ async function main(): Promise<void> {
       return;
     case "list":
       await list(args);
+      return;
+    case "audit":
+      await audit(args);
       return;
     case "record-candidate":
       await recordObservation(args, "candidate");
