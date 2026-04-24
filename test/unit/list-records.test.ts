@@ -148,8 +148,9 @@ function record(
     },
     confidence_level: "medium",
     confidence_score: 0.65,
-    last_verified_at:
+    valid_from:
       id === "workflow-cli-second" ? "2026-04-22T10:01:00.000Z" : "2026-04-22T10:02:00.000Z",
+    last_verified_at: "2026-04-22T11:00:00.000Z",
     supersedes: [],
     conflicts_with: []
   };

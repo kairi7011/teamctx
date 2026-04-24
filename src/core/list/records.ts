@@ -331,7 +331,7 @@ function sortRecords(records: NormalizedRecord[]): NormalizedRecord[] {
 }
 
 function comparableTime(record: NormalizedRecord): string {
-  return record.last_verified_at ?? record.valid_from ?? record.provenance.observed_at;
+  return record.valid_from ?? record.last_verified_at ?? record.provenance.observed_at;
 }
 
 function limitValue(limit: number | undefined): number {
