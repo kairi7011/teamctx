@@ -17,11 +17,13 @@ import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStoreAsync } from "../core/retention/compact.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
+import { getContextToolAsync } from "../mcp/tools/get-context.js";
 import {
   recordObservationCandidateToolAsync,
   recordObservationVerifiedToolAsync
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
+import type { GetContextInput } from "../schemas/context-payload.js";
 
 type ParsedArgs = {
   command: string;
@@ -63,6 +65,7 @@ Usage:
   teamctx init-store
   teamctx normalize
   teamctx compact
+  teamctx context [json-file]
   teamctx record-candidate <json-file>
   teamctx record-verified <json-file>
   teamctx explain <item-id>
@@ -75,6 +78,7 @@ Usage:
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx bind . --path .teamctx
+  teamctx context --target-files src/index.ts --domains cli
   teamctx record-verified observations.json
 `);
 }
@@ -134,6 +138,64 @@ async function compact(): Promise<void> {
   console.log(`  audit_entries_retained: ${result.auditEntriesRetained}`);
   console.log(`  archived_records_archived: ${result.archivedRecordsArchived}`);
   console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
+}
+
+async function context(args: ParsedArgs): Promise<void> {
+  console.log(JSON.stringify(await getContextToolAsync(contextInput(args)), null, 2));
+}
+
+function contextInput(args: ParsedArgs): GetContextInput {
+  const [inputPath] = args.positional;
+
+  if (inputPath) {
+    return JSON.parse(readFileSync(resolve(inputPath), "utf8")) as GetContextInput;
+  }
+
+  const input: GetContextInput = {};
+
+  assignCsvFlag(input, "target_files", args.flags["target-files"]);
+  assignCsvFlag(input, "changed_files", args.flags["changed-files"]);
+  assignCsvFlag(input, "domains", args.flags.domains);
+  assignCsvFlag(input, "symbols", args.flags.symbols);
+  assignCsvFlag(input, "tags", args.flags.tags);
+  assignCsvFlag(input, "source_types", args.flags["source-types"]);
+  assignCsvFlag(input, "evidence_files", args.flags["evidence-files"]);
+  assignStringFlag(input, "query", args.flags.query);
+  assignStringFlag(input, "since", args.flags.since);
+  assignStringFlag(input, "until", args.flags.until);
+  assignStringFlag(input, "branch", args.flags.branch);
+  assignStringFlag(input, "head_commit", args.flags["head-commit"]);
+
+  return input;
+}
+
+function assignCsvFlag<T extends keyof GetContextInput>(
+  input: GetContextInput,
+  key: T,
+  value: string | boolean | undefined
+): void {
+  if (typeof value !== "string") {
+    return;
+  }
+
+  const values = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (values.length > 0) {
+    Object.assign(input, { [key]: values });
+  }
+}
+
+function assignStringFlag<T extends keyof GetContextInput>(
+  input: GetContextInput,
+  key: T,
+  value: string | boolean | undefined
+): void {
+  if (typeof value === "string") {
+    Object.assign(input, { [key]: value });
+  }
 }
 
 async function recordObservation(args: ParsedArgs, trust: "candidate" | "verified"): Promise<void> {
@@ -371,6 +433,9 @@ async function main(): Promise<void> {
       return;
     case "compact":
       await compact();
+      return;
+    case "context":
+      await context(args);
       return;
     case "record-candidate":
       await recordObservation(args, "candidate");

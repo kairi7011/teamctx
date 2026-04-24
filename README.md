@@ -42,6 +42,7 @@ Implemented:
 - status summaries for recent promoted, dropped, contested, and stale records
 - CLI batch recording for candidate and verified raw observations from JSON files
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
+- `teamctx context` for previewing the current `teamctx.get_context` payload
 - `teamctx compact` for local and GitHub retention and archive compaction
 - opt-in real GitHub smoke test for the MVP remote context flow
 - Node built-in test runner setup
@@ -106,6 +107,13 @@ Check the current binding:
 
 ```bash
 teamctx status
+```
+
+Preview the current task context:
+
+```bash
+teamctx context --target-files src/index.ts --domains cli --query "record verified"
+teamctx context context-input.json
 ```
 
 Record one or more verified observations from a JSON file:
