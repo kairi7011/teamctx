@@ -3,7 +3,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describeGitHubAuth } from "../adapters/github/github-client.js";
+import {
+  describeGitHubAuth,
+  GitHubClient,
+  parseGitHubRepository
+} from "../adapters/github/github-client.js";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -477,12 +481,13 @@ function printStatusList(
   }
 }
 
-function doctor(): void {
+async function doctor(): Promise<void> {
   console.log("teamctx doctor");
   console.log(`  version: ${packageVersion()}`);
   console.log(`  node: ${process.version}`);
   console.log(`  config: ${getConfigPath()}`);
-  console.log(`  github_auth: ${describeGitHubAuth({ allowGh: true }).source}`);
+  const auth = describeGitHubAuth({ allowGh: true });
+  console.log(`  github_auth: ${auth.source}`);
 
   let root: string;
   let repo: string;
@@ -503,19 +508,63 @@ function doctor(): void {
   console.log(`  branch: ${getCurrentBranch(root)}`);
   console.log(`  head: ${getHeadCommit(root)}`);
 
-  try {
-    const binding = findBinding(repo);
+  let binding: ReturnType<typeof findBinding>;
 
-    if (binding) {
-      console.log("  binding: found");
-      console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
-    } else {
-      console.log("  binding: missing");
-      console.log("  next: teamctx bind <store> --path <path>");
-    }
+  try {
+    binding = findBinding(repo);
   } catch (error) {
     console.log("  config: invalid");
     console.log(`  reason: ${error instanceof Error ? error.message : String(error)}`);
+    return;
+  }
+
+  if (!binding) {
+    console.log("  binding: missing");
+    console.log("  next: teamctx bind <store> --path <path>");
+    return;
+  }
+
+  console.log("  binding: found");
+  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+
+  if (binding.contextStore.provider === "github" && binding.contextStore.repo !== repo) {
+    await reportStoreVisibility(binding.contextStore.repo, auth.token);
+  }
+}
+
+async function reportStoreVisibility(storeRepo: string, token: string | undefined): Promise<void> {
+  if (token === undefined) {
+    console.log("  store_visibility: unknown (no GitHub token available)");
+    return;
+  }
+
+  let owner: string;
+  let name: string;
+
+  try {
+    ({ owner, name } = parseGitHubRepository(storeRepo));
+  } catch (error) {
+    console.log(
+      `  store_visibility: unknown (${error instanceof Error ? error.message : String(error)})`
+    );
+    return;
+  }
+
+  try {
+    const client = new GitHubClient({ token });
+    const response = (await client.requestJson("GET", `/repos/${owner}/${name}`)) as {
+      private?: unknown;
+    };
+    const isPrivate = response.private === true;
+    console.log(`  store_visibility: ${isPrivate ? "private" : "public"}`);
+
+    if (!isPrivate && process.env.TEAMCTX_ALLOW_PUBLIC_STORE !== "1") {
+      console.log("  warning: context store is public; set TEAMCTX_ALLOW_PUBLIC_STORE=1 to allow");
+    }
+  } catch (error) {
+    console.log(
+      `  store_visibility: unknown (${error instanceof Error ? error.message : String(error)})`
+    );
   }
 }
 
@@ -580,7 +629,7 @@ async function main(): Promise<void> {
       await status();
       return;
     case "doctor":
-      doctor();
+      await doctor();
       return;
     case "tools":
       tools();
