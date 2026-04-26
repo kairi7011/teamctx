@@ -25,6 +25,7 @@ export type AuditLogEntry = {
   after_state?: AuditState;
   reason?: string;
   source_event_ids: string[];
+  run_id?: string;
 };
 
 export function validateAuditLogEntry(value: unknown): AuditLogEntry {
@@ -68,6 +69,10 @@ export function validateAuditLogEntry(value: unknown): AuditLogEntry {
 
   if (value.reason !== undefined) {
     entry.reason = requiredString(value.reason, "reason");
+  }
+
+  if (value.run_id !== undefined) {
+    entry.run_id = requiredString(value.run_id, "run_id");
   }
 
   return entry;

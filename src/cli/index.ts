@@ -134,6 +134,7 @@ async function normalize(): Promise<void> {
   const result = await normalizeBoundStoreAsync();
 
   console.log("Normalized context store:");
+  console.log(`  run_id: ${result.runId}`);
   console.log(`  normalized_at: ${result.normalizedAt}`);
   console.log(`  raw_events_read: ${result.rawEventsRead}`);
   console.log(`  records_written: ${result.recordsWritten}`);
@@ -405,7 +406,7 @@ async function status(): Promise<void> {
   console.log(
     `  last_normalize: ${
       lastNormalize
-        ? `${lastNormalize.normalizedAt} raw=${lastNormalize.rawEventsRead} promoted=${lastNormalize.recordsWritten} dropped=${lastNormalize.droppedEvents}`
+        ? `${lastNormalize.normalizedAt} run=${lastNormalize.runId} raw=${lastNormalize.rawEventsRead} promoted=${lastNormalize.recordsWritten} dropped=${lastNormalize.droppedEvents}`
         : "never"
     }`
   );

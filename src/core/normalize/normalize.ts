@@ -45,6 +45,7 @@ import { resolveStoreRoot } from "../store/layout.js";
 import { calculateConfidence } from "./confidence.js";
 
 export type NormalizeStoreResult = {
+  runId: string;
   normalizedAt: string;
   rawEventsRead: number;
   recordsWritten: number;
@@ -224,6 +225,7 @@ function normalizeRun(options: {
   const runAt = options.now();
   const runNow = () => runAt;
   const rawEvents = options.rawEvents;
+  const runId = makeRunId(options.repo, runAt, rawEvents);
   const existingRecords = options.existingRecords;
   const existingRecordsById = new Map(existingRecords.map((record) => [record.id, record]));
   const recordsByKey = new Map<string, NormalizedRecord>();
@@ -252,7 +254,8 @@ function normalizeRun(options: {
               afterState: "active",
               sourceEventIds,
               reason: "evidence minimum check passed",
-              now: runNow
+              now: runNow,
+              runId
             })
           );
         }
@@ -264,7 +267,8 @@ function normalizeRun(options: {
           action: "dropped",
           sourceEventIds: rawEvent.observation ? [rawEvent.observation.event_id] : [],
           reason: normalized.reason,
-          now: runNow
+          now: runNow,
+          runId
         })
       );
     }
@@ -275,9 +279,11 @@ function normalizeRun(options: {
     existingRecordsById,
     ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
     auditEntries,
-    now: runNow
+    now: runNow,
+    runId
   }).sort((left, right) => left.id.localeCompare(right.id));
   const result = {
+    runId,
     normalizedAt: runAt.toISOString(),
     rawEventsRead: rawEvents.length,
     recordsWritten: records.length,
@@ -286,6 +292,16 @@ function normalizeRun(options: {
   };
 
   return { result, records, auditEntries };
+}
+
+function makeRunId(repo: string, runAt: Date, rawEvents: RawEventFile[]): string {
+  const eventIds = rawEvents
+    .map((event) => event.observation?.event_id ?? "")
+    .filter((id) => id.length > 0)
+    .sort();
+  const idSource = [repo, runAt.toISOString(), eventIds.join(",")].join("|");
+
+  return `run-${hash(idSource).slice(0, 16)}`;
 }
 
 function preserveExistingState(
@@ -316,6 +332,7 @@ function applyStateTransitions(options: {
   repoRoot?: string;
   auditEntries: AuditLogEntry[];
   now: () => Date;
+  runId: string;
 }): NormalizedRecord[] {
   const recordsById = new Map(options.records.map((record) => [record.id, record]));
   const supersededIds = new Set<string>();
@@ -338,7 +355,8 @@ function applyStateTransitions(options: {
           reason: "superseded by a newer normalized record",
           existingRecordsById: options.existingRecordsById,
           auditEntries: options.auditEntries,
-          now: options.now
+          now: options.now,
+          runId: options.runId
         })
       );
     }
@@ -348,7 +366,8 @@ function applyStateTransitions(options: {
     recordsById,
     existingRecordsById: options.existingRecordsById,
     auditEntries: options.auditEntries,
-    now: options.now
+    now: options.now,
+    runId: options.runId
   });
 
   if (options.repoRoot !== undefined) {
@@ -364,7 +383,8 @@ function applyStateTransitions(options: {
             reason,
             existingRecordsById: options.existingRecordsById,
             auditEntries: options.auditEntries,
-            now: options.now
+            now: options.now,
+            runId: options.runId
           })
         );
       }
@@ -379,6 +399,7 @@ function applyConflictTransitions(options: {
   existingRecordsById: Map<string, NormalizedRecord>;
   auditEntries: AuditLogEntry[];
   now: () => Date;
+  runId: string;
 }): void {
   const activeRecords = [...options.recordsById.values()].filter(
     (record) => record.state === "active"
@@ -418,7 +439,8 @@ function applyConflictTransitions(options: {
           reason: "conflicting same-scope assertion detected",
           existingRecordsById: options.existingRecordsById,
           auditEntries: options.auditEntries,
-          now: options.now
+          now: options.now,
+          runId: options.runId
         })
       );
     }
@@ -433,6 +455,7 @@ function transitionRecord(options: {
   existingRecordsById: Map<string, NormalizedRecord>;
   auditEntries: AuditLogEntry[];
   now: () => Date;
+  runId: string;
 }): NormalizedRecord {
   const existingRecord = options.existingRecordsById.get(options.record.id);
   const beforeState = existingRecord?.state ?? options.record.state;
@@ -451,7 +474,8 @@ function transitionRecord(options: {
         evidence.file ? [`file:${evidence.file}`] : []
       ),
       reason: options.reason,
-      now: options.now
+      now: options.now,
+      runId: options.runId
     })
   );
 
@@ -945,6 +969,7 @@ function createAuditEntry(options: {
   sourceEventIds: string[];
   reason: string;
   now: () => Date;
+  runId?: string;
 }): AuditLogEntry {
   const idSource = [
     options.action,
@@ -972,6 +997,10 @@ function createAuditEntry(options: {
 
   if (options.afterState !== undefined) {
     entry.after_state = options.afterState;
+  }
+
+  if (options.runId !== undefined) {
+    entry.run_id = options.runId;
   }
 
   return validateAuditLogEntry(entry);

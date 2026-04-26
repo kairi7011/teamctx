@@ -82,13 +82,12 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
     now: fixedNow
   });
 
-  assert.deepEqual(result, {
-    normalizedAt: "2026-04-22T11:00:00.000Z",
-    rawEventsRead: 1,
-    recordsWritten: 1,
-    droppedEvents: 0,
-    auditEntriesWritten: 1
-  });
+  assert.match(result.runId, /^run-[0-9a-f]{16}$/);
+  assert.equal(result.normalizedAt, "2026-04-22T11:00:00.000Z");
+  assert.equal(result.rawEventsRead, 1);
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.droppedEvents, 0);
+  assert.equal(result.auditEntriesWritten, 1);
 
   const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
   assert.equal(records.length, 1);
@@ -105,14 +104,9 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
 
   assert.deepEqual(
     JSON.parse(readFileSync(join(storeRoot, "indexes", "last-normalize.json"), "utf8")),
-    {
-      normalizedAt: "2026-04-22T11:00:00.000Z",
-      rawEventsRead: 1,
-      recordsWritten: 1,
-      droppedEvents: 0,
-      auditEntriesWritten: 1
-    }
+    result
   );
+  assert.equal(audit[0]?.run_id, result.runId);
 
   const pathIndex = JSON.parse(
     readFileSync(join(storeRoot, "indexes", "path-index.json"), "utf8")
@@ -319,6 +313,9 @@ test("normalizeStore marks active records stale when all file evidence is missin
   assert.equal(audit[1]?.action, "state_changed");
   assert.equal(audit[1]?.before_state, "active");
   assert.equal(audit[1]?.after_state, "stale");
+  assert.equal(audit[0]?.run_id, result.runId);
+  assert.equal(audit[1]?.run_id, result.runId);
+  assert.match(result.runId, /^run-[0-9a-f]{16}$/);
 });
 
 test("normalizeStore marks active records stale when scoped symbols disappear", (context) => {
@@ -546,13 +543,12 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
     now: fixedNow
   });
 
-  assert.deepEqual(result, {
-    normalizedAt: "2026-04-22T11:00:00.000Z",
-    rawEventsRead: 1,
-    recordsWritten: 1,
-    droppedEvents: 0,
-    auditEntriesWritten: 1
-  });
+  assert.match(result.runId, /^run-[0-9a-f]{16}$/);
+  assert.equal(result.normalizedAt, "2026-04-22T11:00:00.000Z");
+  assert.equal(result.rawEventsRead, 1);
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.droppedEvents, 0);
+  assert.equal(result.auditEntriesWritten, 1);
   assert.equal(readJsonl(join(remoteRoot, "normalized", "pitfalls.jsonl"))[0]?.state, "active");
   assert.equal(readJsonl(join(remoteRoot, "audit", "changes.jsonl"))[0]?.action, "created");
   assert.deepEqual(

@@ -234,6 +234,7 @@ function validateLastNormalizeResult(value: unknown): NormalizeStoreResult {
   }
 
   return {
+    runId: typeof value.runId === "string" && value.runId.length > 0 ? value.runId : "legacy",
     normalizedAt: requiredString(value.normalizedAt, "normalizedAt"),
     rawEventsRead: requiredInteger(value.rawEventsRead, "rawEventsRead"),
     recordsWritten: requiredInteger(value.recordsWritten, "recordsWritten"),
