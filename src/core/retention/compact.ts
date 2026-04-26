@@ -49,6 +49,7 @@ export type CompactOptions = {
   cwd?: string;
   now?: () => Date;
   services?: CompactServices;
+  dryRun?: boolean;
 };
 
 const defaultServices: CompactServices = {
@@ -73,7 +74,8 @@ export function compactBoundStore(options: CompactOptions = {}): CompactStoreRes
 
   return compactStore({
     storeRoot: resolveStoreRoot(root, binding.contextStore.path),
-    ...(options.now !== undefined ? { now: options.now } : {})
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
   });
 }
 
@@ -92,7 +94,8 @@ export async function compactBoundStoreAsync(
   if (binding.contextStore.repo === repo) {
     return compactStore({
       storeRoot: resolveStoreRoot(root, binding.contextStore.path),
-      ...(options.now !== undefined ? { now: options.now } : {})
+      ...(options.now !== undefined ? { now: options.now } : {}),
+      ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
     });
   }
 
@@ -101,30 +104,39 @@ export async function compactBoundStoreAsync(
       services.createContextStore?.({ repo, repoRoot: root, binding }) ??
       createContextStoreForBinding({ repo, repoRoot: root, binding }),
     storeRoot: `${binding.contextStore.repo}/${binding.contextStore.path}`,
-    ...(options.now !== undefined ? { now: options.now } : {})
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
   });
 }
 
-export function compactStore(options: { storeRoot: string; now?: () => Date }): CompactStoreResult {
+export function compactStore(options: {
+  storeRoot: string;
+  now?: () => Date;
+  dryRun?: boolean;
+}): CompactStoreResult {
   const now = options.now ?? (() => new Date());
   const compactedAt = now().toISOString();
   const projectConfig = readProjectConfig(options.storeRoot);
   const archiveRoot = resolveArchiveRoot(options.storeRoot, projectConfig);
+  const dryRun = options.dryRun === true;
   const rawResult = compactRawCandidateEvents({
     storeRoot: options.storeRoot,
     archiveRoot,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.raw_candidate_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.raw_candidate_days),
+    dryRun
   });
   const auditResult = compactAuditLogs({
     storeRoot: options.storeRoot,
     archiveRoot,
     compactedAt,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days),
+    dryRun
   });
   const normalizedResult = compactArchivedRecords({
     storeRoot: options.storeRoot,
     archiveRoot,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days),
+    dryRun
   });
 
   return {
@@ -144,26 +156,31 @@ export async function compactContextStore(options: {
   store: ContextStoreAdapter;
   storeRoot: string;
   now?: () => Date;
+  dryRun?: boolean;
 }): Promise<CompactStoreResult> {
   const now = options.now ?? (() => new Date());
   const compactedAt = now().toISOString();
   const projectConfig = await readProjectConfigFromContextStore(options.store);
   const archiveRoot = normalizeStorePath(projectConfig.retention.archive_path);
+  const dryRun = options.dryRun === true;
   const rawResult = await compactRawCandidateEventsInContextStore({
     store: options.store,
     archiveRoot,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.raw_candidate_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.raw_candidate_days),
+    dryRun
   });
   const auditResult = await compactAuditLogsInContextStore({
     store: options.store,
     archiveRoot,
     compactedAt,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days),
+    dryRun
   });
   const normalizedResult = await compactArchivedRecordsInContextStore({
     store: options.store,
     archiveRoot,
-    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days)
+    cutoff: daysBefore(compactedAt, projectConfig.retention.audit_days),
+    dryRun
   });
 
   return {
@@ -221,6 +238,7 @@ function compactRawCandidateEvents(options: {
   storeRoot: string;
   archiveRoot: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): { archived: number; retained: number } {
   const rawRoot = join(options.storeRoot, "raw", "events");
   let archived = 0;
@@ -234,7 +252,9 @@ function compactRawCandidateEvents(options: {
       rawEvent.trust === "candidate" &&
       isBefore(rawEvent.observed_at, options.cutoff)
     ) {
-      moveFile(path, join(options.archiveRoot, "raw", "events", relative(rawRoot, path)));
+      if (options.dryRun !== true) {
+        moveFile(path, join(options.archiveRoot, "raw", "events", relative(rawRoot, path)));
+      }
       archived += 1;
     } else {
       retained += 1;
@@ -248,6 +268,7 @@ async function compactRawCandidateEventsInContextStore(options: {
   store: ContextStoreAdapter;
   archiveRoot: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): Promise<{ archived: number; retained: number }> {
   let archived = 0;
   let retained = 0;
@@ -266,18 +287,20 @@ async function compactRawCandidateEventsInContextStore(options: {
       rawEvent.trust === "candidate" &&
       isBefore(rawEvent.observed_at, options.cutoff)
     ) {
-      await options.store.writeText(
-        joinStorePath(options.archiveRoot, "raw/events", path.slice("raw/events/".length)),
-        file.content,
-        {
-          message: `Archive teamctx raw event ${path}`,
-          expectedRevision: null
-        }
-      );
-      await options.store.deleteText(path, {
-        message: `Delete compacted teamctx raw event ${path}`,
-        expectedRevision: file.revision
-      });
+      if (options.dryRun !== true) {
+        await options.store.writeText(
+          joinStorePath(options.archiveRoot, "raw/events", path.slice("raw/events/".length)),
+          file.content,
+          {
+            message: `Archive teamctx raw event ${path}`,
+            expectedRevision: null
+          }
+        );
+        await options.store.deleteText(path, {
+          message: `Delete compacted teamctx raw event ${path}`,
+          expectedRevision: file.revision
+        });
+      }
       archived += 1;
     } else {
       retained += 1;
@@ -292,6 +315,7 @@ function compactAuditLogs(options: {
   archiveRoot: string;
   compactedAt: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): { archived: number; retained: number } {
   let archived = 0;
   let retained = 0;
@@ -302,7 +326,7 @@ function compactAuditLogs(options: {
     const oldEntries = entries.filter((entry) => isBefore(entry.at, options.cutoff));
     const retainedEntries = entries.filter((entry) => !isBefore(entry.at, options.cutoff));
 
-    if (oldEntries.length > 0) {
+    if (oldEntries.length > 0 && options.dryRun !== true) {
       appendJsonl(
         join(options.archiveRoot, "audit", archivedFileName(file, options.compactedAt)),
         oldEntries
@@ -322,6 +346,7 @@ async function compactAuditLogsInContextStore(options: {
   archiveRoot: string;
   compactedAt: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): Promise<{ archived: number; retained: number }> {
   let archived = 0;
   let retained = 0;
@@ -335,7 +360,7 @@ async function compactAuditLogsInContextStore(options: {
     const oldEntries = entries.filter((entry) => isBefore(entry.at, options.cutoff));
     const retainedEntries = entries.filter((entry) => !isBefore(entry.at, options.cutoff));
 
-    if (oldEntries.length > 0) {
+    if (oldEntries.length > 0 && options.dryRun !== true) {
       await options.store.appendJsonl(
         joinStorePath(options.archiveRoot, "audit", archivedFileName(file, options.compactedAt)),
         oldEntries,
@@ -358,6 +383,7 @@ function compactArchivedRecords(options: {
   storeRoot: string;
   archiveRoot: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): { archived: number; retained: number } {
   let archived = 0;
   let retained = 0;
@@ -372,7 +398,7 @@ function compactArchivedRecords(options: {
       (record) => record.state !== "archived" || !isBefore(recordTimestamp(record), options.cutoff)
     );
 
-    if (oldArchivedRecords.length > 0) {
+    if (oldArchivedRecords.length > 0 && options.dryRun !== true) {
       appendJsonl(join(options.archiveRoot, "normalized", file), oldArchivedRecords);
       writeJsonl(path, retainedRecords);
     }
@@ -388,6 +414,7 @@ async function compactArchivedRecordsInContextStore(options: {
   store: ContextStoreAdapter;
   archiveRoot: string;
   cutoff: Date;
+  dryRun?: boolean;
 }): Promise<{ archived: number; retained: number }> {
   let archived = 0;
   let retained = 0;
@@ -405,7 +432,7 @@ async function compactArchivedRecordsInContextStore(options: {
       (record) => record.state !== "archived" || !isBefore(recordTimestamp(record), options.cutoff)
     );
 
-    if (oldArchivedRecords.length > 0) {
+    if (oldArchivedRecords.length > 0 && options.dryRun !== true) {
       await options.store.appendJsonl(
         joinStorePath(options.archiveRoot, "normalized", file),
         oldArchivedRecords,

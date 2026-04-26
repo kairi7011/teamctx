@@ -81,6 +81,41 @@ test("compactStore archives expired local retention targets", (context) => {
   );
 });
 
+test("compactStore dryRun reports planned archives without touching the store", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeProject(storeRoot);
+  writeRaw(storeRoot, observation("candidate-old", "candidate", "2026-04-19T10:00:00.000Z"));
+  writeAudit(storeRoot, [auditEntry("audit-old", "2026-04-19T10:00:00.000Z")]);
+  writeRecords(storeRoot, [record("pitfall-archived", "archived")]);
+
+  const result = compactStore({
+    storeRoot,
+    now: () => new Date("2026-04-22T12:00:00.000Z"),
+    dryRun: true
+  });
+
+  assert.equal(result.rawCandidateEventsArchived, 1);
+  assert.equal(result.auditEntriesArchived, 1);
+  assert.equal(result.archivedRecordsArchived, 1);
+  // Source files should remain in place because dry-run skips writes.
+  assert.equal(
+    existsSync(join(storeRoot, "raw", "events", "2026-04-19", "session-1-candidate-old.json")),
+    true
+  );
+  assert.equal(
+    existsSync(
+      join(storeRoot, "archive", "raw", "events", "2026-04-19", "session-1-candidate-old.json")
+    ),
+    false
+  );
+  const retainedAudit = readJsonl(join(storeRoot, "audit", "changes.jsonl"));
+  assert.equal(retainedAudit.length, 1);
+  assert.equal(retainedAudit[0]?.id, "audit-old");
+  assert.equal(existsSync(join(storeRoot, "archive", "audit")), false);
+});
+
 test("compactBoundStore resolves the same-repository binding", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

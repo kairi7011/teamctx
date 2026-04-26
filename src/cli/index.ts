@@ -82,7 +82,7 @@ Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
   teamctx normalize [--dry-run]
-  teamctx compact
+  teamctx compact [--dry-run]
   teamctx context [json-file]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
@@ -156,10 +156,11 @@ async function normalize(args: ParsedArgs): Promise<void> {
   }
 }
 
-async function compact(): Promise<void> {
-  const result = await compactBoundStoreAsync();
+async function compact(args: ParsedArgs): Promise<void> {
+  const dryRun = args.flags["dry-run"] === true;
+  const result = await compactBoundStoreAsync(dryRun ? { dryRun: true } : {});
 
-  console.log("Compacted context store:");
+  console.log(dryRun ? "Compacted context store (dry-run):" : "Compacted context store:");
   console.log(`  compacted_at: ${result.compactedAt}`);
   console.log(`  archive_root: ${result.archiveRoot}`);
   console.log(`  raw_candidate_events_archived: ${result.rawCandidateEventsArchived}`);
@@ -168,6 +169,9 @@ async function compact(): Promise<void> {
   console.log(`  audit_entries_retained: ${result.auditEntriesRetained}`);
   console.log(`  archived_records_archived: ${result.archivedRecordsArchived}`);
   console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
+  if (dryRun) {
+    console.log("  note: no files were archived; rerun without --dry-run to apply");
+  }
 }
 
 async function context(args: ParsedArgs): Promise<void> {
@@ -619,7 +623,7 @@ async function main(): Promise<void> {
       await normalize(args);
       return;
     case "compact":
-      await compact();
+      await compact(args);
       return;
     case "context":
       await context(args);
