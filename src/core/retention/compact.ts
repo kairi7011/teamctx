@@ -10,7 +10,8 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
-import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
+import { serializeJsonl, type ContextStoreAdapter } from "../../adapters/store/context-store.js";
+import { jsonlLines } from "../store/jsonl.js";
 import { validateAuditLogEntry } from "../../schemas/audit.js";
 import {
   validateNormalizedRecord,
@@ -340,7 +341,7 @@ async function compactAuditLogsInContextStore(options: {
         oldEntries,
         { message: `Archive teamctx audit ${file}` }
       );
-      await options.store.writeText(path, serializeRows(retainedEntries), {
+      await options.store.writeText(path, serializeJsonl(retainedEntries), {
         message: `Retain compacted teamctx audit ${file}`,
         expectedRevision: storeFile?.revision ?? null
       });
@@ -410,7 +411,7 @@ async function compactArchivedRecordsInContextStore(options: {
         oldArchivedRecords,
         { message: `Archive teamctx normalized ${file}` }
       );
-      await options.store.writeText(path, serializeRows(retainedRecords), {
+      await options.store.writeText(path, serializeJsonl(retainedRecords), {
         message: `Retain compacted teamctx normalized ${file}`,
         expectedRevision: storeFile?.revision ?? null
       });
@@ -471,17 +472,6 @@ function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
   }
 
   return content.split("\n").map((line) => validate(JSON.parse(line) as unknown));
-}
-
-function jsonlLines(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-function serializeRows(rows: unknown[]): string {
-  return rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length > 0 ? "\n" : "");
 }
 
 function writeJsonl(path: string, rows: unknown[]): void {

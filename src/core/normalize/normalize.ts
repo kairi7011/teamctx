@@ -8,7 +8,12 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
-import type { ContextStoreAdapter, ContextStoreFile } from "../../adapters/store/context-store.js";
+import {
+  serializeJsonl,
+  type ContextStoreAdapter,
+  type ContextStoreFile
+} from "../../adapters/store/context-store.js";
+import { jsonlLines } from "../store/jsonl.js";
 import { getOriginRemote, getRepoRoot, git } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { validateAuditLogEntry, type AuditLogEntry } from "../../schemas/audit.js";
@@ -845,7 +850,7 @@ async function writeNormalizedRecordsToContextStore(
     const existingFile = existingFilesByName.get(file);
     const kindRecords = records.filter((record) => record.kind === kind);
 
-    await store.writeText(`normalized/${file}`, serializeRows(kindRecords), {
+    await store.writeText(`normalized/${file}`, serializeJsonl(kindRecords), {
       message: `Write teamctx normalized ${file}`,
       expectedRevision: existingFile?.revision ?? null
     });
@@ -948,17 +953,6 @@ function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
   } catch {
     return [];
   }
-}
-
-function jsonlLines(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-function serializeRows(rows: unknown[]): string {
-  return rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length > 0 ? "\n" : "");
 }
 
 function createAuditEntry(options: {

@@ -13,6 +13,7 @@ import {
   createContextStoreForBinding,
   type ContextStoreFactoryServices
 } from "../store/bound-store.js";
+import { parseJsonlValidated } from "../store/jsonl.js";
 import { resolveStoreRoot } from "../store/layout.js";
 import {
   AUDIT_ACTIONS,
@@ -238,13 +239,7 @@ async function readAdapterAudit(store: ContextStoreAdapter): Promise<AuditLogEnt
 }
 
 function parseAuditJsonl(content: string): AuditLogEntry[] {
-  const trimmed = content.trim();
-
-  if (trimmed.length === 0) {
-    return [];
-  }
-
-  return trimmed.split("\n").map((line) => validateAuditLogEntry(JSON.parse(line) as unknown));
+  return parseJsonlValidated(content, validateAuditLogEntry);
 }
 
 function sortAuditEntries(entries: AuditLogEntry[]): AuditLogEntry[] {

@@ -16,6 +16,7 @@ import {
 } from "../store/bound-store.js";
 import { resolveStoreRoot } from "../store/layout.js";
 import { matchesPath } from "../indexes/record-index.js";
+import { parseJsonlValidated } from "../store/jsonl.js";
 import {
   isKnowledgeKind,
   isRecordState,
@@ -319,13 +320,7 @@ function readJsonl(path: string): NormalizedRecord[] {
 }
 
 function parseJsonl(content: string): NormalizedRecord[] {
-  const trimmed = content.trim();
-
-  if (trimmed.length === 0) {
-    return [];
-  }
-
-  return trimmed.split("\n").map((line) => validateNormalizedRecord(JSON.parse(line) as unknown));
+  return parseJsonlValidated(content, validateNormalizedRecord);
 }
 
 function sortRecords(records: NormalizedRecord[]): NormalizedRecord[] {

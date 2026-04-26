@@ -8,6 +8,7 @@ import {
   type ContextStoreAdapter,
   type ContextStoreFile
 } from "../../adapters/store/context-store.js";
+import { jsonlLines } from "../store/jsonl.js";
 import { validateAuditLogEntry, type AuditLogEntry, type AuditState } from "../../schemas/audit.js";
 import {
   validateNormalizedRecord,
@@ -377,13 +378,6 @@ function readJsonl(path: string): string[] {
   } catch {
     return [];
   }
-}
-
-function jsonlLines(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 }
 
 function writeJsonl(path: string, records: NormalizedRecord[]): void {

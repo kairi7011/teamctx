@@ -8,6 +8,7 @@ import {
   scopedContextItem,
   type RankedRecord
 } from "./context-ranking.js";
+import { jsonlLines } from "../store/jsonl.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import {
@@ -503,13 +504,6 @@ function readJsonlLines(path: string): string[] {
   } catch {
     return [];
   }
-}
-
-function jsonlLines(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 }
 
 function globalContext(ranked: RankedRecord[]): string {
