@@ -2,6 +2,8 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describeGitHubAuth } from "../adapters/github/github-client.js";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -477,7 +479,10 @@ function printStatusList(
 
 function doctor(): void {
   console.log("teamctx doctor");
+  console.log(`  version: ${packageVersion()}`);
+  console.log(`  node: ${process.version}`);
   console.log(`  config: ${getConfigPath()}`);
+  console.log(`  github_auth: ${describeGitHubAuth({ allowGh: true }).source}`);
 
   let root: string;
   let repo: string;
@@ -511,6 +516,17 @@ function doctor(): void {
   } catch (error) {
     console.log("  config: invalid");
     console.log(`  reason: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function packageVersion(): string {
+  try {
+    const path = fileURLToPath(new URL("../../package.json", import.meta.url));
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { version?: unknown };
+
+    return typeof parsed.version === "string" ? parsed.version : "unknown";
+  } catch {
+    return "unknown";
   }
 }
 

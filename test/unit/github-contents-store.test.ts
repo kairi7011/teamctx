@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GitHubContentsStore } from "../../src/adapters/github/contents-store.js";
-import { resolveGitHubToken, type GitHubFetch } from "../../src/adapters/github/github-client.js";
+import {
+  describeGitHubAuth,
+  resolveGitHubToken,
+  type GitHubFetch
+} from "../../src/adapters/github/github-client.js";
 
 test("GitHubContentsStore reads, writes, appends, lists files, and reports revision", async () => {
   const fake = new FakeGitHubApi();
@@ -98,6 +102,21 @@ test("resolveGitHubToken prefers TEAMCTX_GITHUB_TOKEN and then GITHUB_TOKEN", ()
     }),
     "github-token"
   );
+});
+
+test("describeGitHubAuth reports the resolved token source", () => {
+  assert.deepEqual(
+    describeGitHubAuth({
+      env: { TEAMCTX_GITHUB_TOKEN: "teamctx-token", GITHUB_TOKEN: "github-token" },
+      allowGh: false
+    }),
+    { source: "env:TEAMCTX_GITHUB_TOKEN", token: "teamctx-token" }
+  );
+  assert.deepEqual(describeGitHubAuth({ env: { GITHUB_TOKEN: "github-token" }, allowGh: false }), {
+    source: "env:GITHUB_TOKEN",
+    token: "github-token"
+  });
+  assert.deepEqual(describeGitHubAuth({ env: {}, allowGh: false }), { source: "none" });
 });
 
 type FakeFile = {

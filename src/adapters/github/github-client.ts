@@ -101,15 +101,32 @@ export function parseGitHubRepository(value: string): GitHubRepository {
 export function resolveGitHubToken(
   options: { env?: NodeJS.ProcessEnv; allowGh?: boolean; execFile?: typeof execFileSync } = {}
 ): string | undefined {
-  const env = options.env ?? process.env;
-  const envToken = firstNonEmpty(env.TEAMCTX_GITHUB_TOKEN, env.GITHUB_TOKEN);
+  return describeGitHubAuth(options).token;
+}
 
-  if (envToken !== undefined) {
-    return envToken;
+export type GitHubAuthDescription = {
+  source: "env:TEAMCTX_GITHUB_TOKEN" | "env:GITHUB_TOKEN" | "gh" | "none";
+  token?: string;
+};
+
+export function describeGitHubAuth(
+  options: { env?: NodeJS.ProcessEnv; allowGh?: boolean; execFile?: typeof execFileSync } = {}
+): GitHubAuthDescription {
+  const env = options.env ?? process.env;
+  const teamctxToken = firstNonEmpty(env.TEAMCTX_GITHUB_TOKEN);
+
+  if (teamctxToken !== undefined) {
+    return { source: "env:TEAMCTX_GITHUB_TOKEN", token: teamctxToken };
+  }
+
+  const githubToken = firstNonEmpty(env.GITHUB_TOKEN);
+
+  if (githubToken !== undefined) {
+    return { source: "env:GITHUB_TOKEN", token: githubToken };
   }
 
   if (options.allowGh === false) {
-    return undefined;
+    return { source: "none" };
   }
 
   try {
@@ -119,11 +136,16 @@ export function resolveGitHubToken(
       stdio: ["ignore", "pipe", "ignore"],
       timeout: 5000
     });
+    const trimmed = firstNonEmpty(token.trim());
 
-    return firstNonEmpty(token.trim());
+    if (trimmed !== undefined) {
+      return { source: "gh", token: trimmed };
+    }
   } catch {
-    return undefined;
+    // gh not available or not authenticated
   }
+
+  return { source: "none" };
 }
 
 export function requiredString(value: unknown, name: string): string {
