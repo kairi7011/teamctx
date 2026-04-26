@@ -8,6 +8,7 @@ import {
   GitHubClient,
   parseGitHubRepository
 } from "../adapters/github/github-client.js";
+import { assignDefined, parseCsvFlag, parseLimitFlag, parseOffsetFlag } from "./cli-args.js";
 import { CliError, CLI_EXIT, mapErrorToExitCode } from "./cli-error.js";
 import {
   getCurrentBranch,
@@ -179,78 +180,50 @@ async function context(args: ParsedArgs): Promise<void> {
 }
 
 async function list(args: ParsedArgs): Promise<void> {
-  const limit = typeof args.flags.limit === "string" ? Number(args.flags.limit) : undefined;
-  const offset = typeof args.flags.offset === "string" ? Number(args.flags.offset) : undefined;
   const input: ListRecordsInput = {};
 
-  assignListInput(input, "kinds", parseListKinds(csvFlag(args.flags.kind ?? args.flags.kinds)));
-  assignListInput(input, "states", parseListStates(csvFlag(args.flags.state ?? args.flags.states)));
-  assignListInput(input, "paths", csvFlag(args.flags.path ?? args.flags.paths));
-  assignListInput(input, "domains", csvFlag(args.flags.domain ?? args.flags.domains));
-  assignListInput(input, "symbols", csvFlag(args.flags.symbol ?? args.flags.symbols));
-  assignListInput(input, "tags", csvFlag(args.flags.tag ?? args.flags.tags));
+  assignDefined(input, "kinds", parseListKinds(parseCsvFlag(args.flags.kind ?? args.flags.kinds)));
+  assignDefined(
+    input,
+    "states",
+    parseListStates(parseCsvFlag(args.flags.state ?? args.flags.states))
+  );
+  assignDefined(input, "paths", parseCsvFlag(args.flags.path ?? args.flags.paths));
+  assignDefined(input, "domains", parseCsvFlag(args.flags.domain ?? args.flags.domains));
+  assignDefined(input, "symbols", parseCsvFlag(args.flags.symbol ?? args.flags.symbols));
+  assignDefined(input, "tags", parseCsvFlag(args.flags.tag ?? args.flags.tags));
 
   if (typeof args.flags.query === "string") {
     input.query = args.flags.query;
   }
-  if (limit !== undefined) {
-    input.limit = limit;
-  }
-  if (offset !== undefined) {
-    input.offset = offset;
-  }
+  assignDefined(input, "limit", parseLimitFlag(args.flags.limit));
+  assignDefined(input, "offset", parseOffsetFlag(args.flags.offset));
 
   console.log(JSON.stringify(await listBoundRecords(input), null, 2));
 }
 
 async function audit(args: ParsedArgs): Promise<void> {
-  const limit = typeof args.flags.limit === "string" ? Number(args.flags.limit) : undefined;
-  const offset = typeof args.flags.offset === "string" ? Number(args.flags.offset) : undefined;
   const input: AuditSummaryInput = {};
 
-  assignAuditInput(
+  assignDefined(
     input,
     "actions",
-    parseAuditActions(csvFlag(args.flags.action ?? args.flags.actions))
+    parseAuditActions(parseCsvFlag(args.flags.action ?? args.flags.actions))
   );
-  assignAuditInput(input, "item_ids", csvFlag(args.flags.item ?? args.flags.items));
-  assignAuditInput(
+  assignDefined(input, "item_ids", parseCsvFlag(args.flags.item ?? args.flags.items));
+  assignDefined(
     input,
     "source_event_ids",
-    csvFlag(args.flags["source-event"] ?? args.flags["source-events"])
+    parseCsvFlag(args.flags["source-event"] ?? args.flags["source-events"])
   );
 
   if (typeof args.flags.query === "string") {
     input.query = args.flags.query;
   }
-  if (limit !== undefined) {
-    input.limit = limit;
-  }
-  if (offset !== undefined) {
-    input.offset = offset;
-  }
+  assignDefined(input, "limit", parseLimitFlag(args.flags.limit));
+  assignDefined(input, "offset", parseOffsetFlag(args.flags.offset));
 
   console.log(JSON.stringify(await getBoundAuditSummary(input), null, 2));
-}
-
-function assignAuditInput<T extends keyof AuditSummaryInput>(
-  input: AuditSummaryInput,
-  key: T,
-  value: AuditSummaryInput[T] | undefined
-): void {
-  if (value !== undefined) {
-    Object.assign(input, { [key]: value });
-  }
-}
-
-function assignListInput<T extends keyof ListRecordsInput>(
-  input: ListRecordsInput,
-  key: T,
-  value: ListRecordsInput[T] | undefined
-): void {
-  if (value !== undefined) {
-    Object.assign(input, { [key]: value });
-  }
 }
 
 function contextInput(args: ParsedArgs): GetContextInput {
@@ -262,53 +235,35 @@ function contextInput(args: ParsedArgs): GetContextInput {
 
   const input: GetContextInput = {};
 
-  assignCsvFlag(input, "target_files", args.flags["target-files"]);
-  assignCsvFlag(input, "changed_files", args.flags["changed-files"]);
-  assignCsvFlag(input, "domains", args.flags.domains);
-  assignCsvFlag(input, "symbols", args.flags.symbols);
-  assignCsvFlag(input, "tags", args.flags.tags);
-  assignCsvFlag(input, "source_types", args.flags["source-types"]);
-  assignCsvFlag(input, "evidence_files", args.flags["evidence-files"]);
-  assignStringFlag(input, "query", args.flags.query);
-  assignStringFlag(input, "since", args.flags.since);
-  assignStringFlag(input, "until", args.flags.until);
-  assignStringFlag(input, "branch", args.flags.branch);
-  assignStringFlag(input, "head_commit", args.flags["head-commit"]);
+  assignCsv(input, "target_files", args.flags["target-files"]);
+  assignCsv(input, "changed_files", args.flags["changed-files"]);
+  assignCsv(input, "domains", args.flags.domains);
+  assignCsv(input, "symbols", args.flags.symbols);
+  assignCsv(input, "tags", args.flags.tags);
+  assignCsv(input, "source_types", args.flags["source-types"]);
+  assignCsv(input, "evidence_files", args.flags["evidence-files"]);
+  assignString(input, "query", args.flags.query);
+  assignString(input, "since", args.flags.since);
+  assignString(input, "until", args.flags.until);
+  assignString(input, "branch", args.flags.branch);
+  assignString(input, "head_commit", args.flags["head-commit"]);
 
   return input;
 }
 
-function csvFlag(value: string | boolean | undefined): string[] | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
-function assignCsvFlag<T extends keyof GetContextInput>(
+function assignCsv<T extends keyof GetContextInput>(
   input: GetContextInput,
   key: T,
   value: string | boolean | undefined
 ): void {
-  if (typeof value !== "string") {
-    return;
-  }
+  const values = parseCsvFlag(value);
 
-  const values = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-
-  if (values.length > 0) {
+  if (values !== undefined && values.length > 0) {
     Object.assign(input, { [key]: values });
   }
 }
 
-function assignStringFlag<T extends keyof GetContextInput>(
+function assignString<T extends keyof GetContextInput>(
   input: GetContextInput,
   key: T,
   value: string | boolean | undefined
