@@ -36,6 +36,7 @@ export type ListRecordsInput = {
   tags?: string[];
   query?: string;
   limit?: number;
+  offset?: number;
 };
 
 export type ListRecordItem = {
@@ -65,6 +66,8 @@ export type EnabledListRecordsResult = {
   local_store: boolean;
   total_matches: number;
   returned: number;
+  offset: number;
+  next_offset: number | null;
   records: ListRecordItem[];
 };
 
@@ -171,7 +174,9 @@ function listResult(options: {
     options.records.filter((record) => matchesInput(record, options.input))
   );
   const limit = limitValue(options.input.limit);
-  const selected = matches.slice(0, limit);
+  const offset = offsetValue(options.input.offset);
+  const selected = matches.slice(offset, offset + limit);
+  const nextOffset = offset + selected.length < matches.length ? offset + selected.length : null;
 
   return {
     enabled: true,
@@ -184,6 +189,8 @@ function listResult(options: {
     local_store: options.localStore,
     total_matches: matches.length,
     returned: selected.length,
+    offset,
+    next_offset: nextOffset,
     records: selected.map(listItem)
   };
 }
@@ -344,6 +351,18 @@ function limitValue(limit: number | undefined): number {
   }
 
   return limit;
+}
+
+function offsetValue(offset: number | undefined): number {
+  if (offset === undefined) {
+    return 0;
+  }
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error("list offset must be a non-negative integer");
+  }
+
+  return offset;
 }
 
 function normalizeText(value: string): string {

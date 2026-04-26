@@ -88,6 +88,49 @@ test("getBoundAuditSummary filters remote audit entries and applies limit", asyn
   assert.equal(result.entries[0]?.id, "audit-2");
 });
 
+test("getBoundAuditSummary paginates with offset and reports next_offset", async () => {
+  const store = new MemoryContextStore("remote-head");
+  await store.writeText(
+    "audit/changes.jsonl",
+    `${[
+      auditEntry("audit-1", "created", "item-1", "2026-04-22T10:00:00.000Z"),
+      auditEntry("audit-2", "created", "item-2", "2026-04-22T10:01:00.000Z"),
+      auditEntry("audit-3", "created", "item-3", "2026-04-22T10:02:00.000Z")
+    ]
+      .map((entry) => JSON.stringify(entry))
+      .join("\n")}\n`,
+    { message: "seed" }
+  );
+
+  const firstPage = await getBoundAuditSummary({ limit: 2, offset: 0 }, servicesForRemote(store));
+
+  assert.equal(firstPage.enabled, true);
+  if (!firstPage.enabled) throw new Error("expected enabled result");
+  assert.equal(firstPage.total_matches, 3);
+  assert.equal(firstPage.returned, 2);
+  assert.equal(firstPage.offset, 0);
+  assert.equal(firstPage.next_offset, 2);
+  assert.equal(firstPage.entries[0]?.id, "audit-3");
+
+  const secondPage = await getBoundAuditSummary({ limit: 2, offset: 2 }, servicesForRemote(store));
+
+  assert.equal(secondPage.enabled, true);
+  if (!secondPage.enabled) throw new Error("expected enabled result");
+  assert.equal(secondPage.returned, 1);
+  assert.equal(secondPage.offset, 2);
+  assert.equal(secondPage.next_offset, null);
+  assert.equal(secondPage.entries[0]?.id, "audit-1");
+});
+
+test("getBoundAuditSummary rejects negative offset", async () => {
+  const store = new MemoryContextStore("remote-head");
+
+  await assert.rejects(
+    () => getBoundAuditSummary({ offset: -1 }, servicesForRemote(store)),
+    /offset must be a non-negative integer/
+  );
+});
+
 function writeAudit(storeRoot: string, entries: AuditLogEntry[]): void {
   const directory = join(storeRoot, "audit");
   mkdirSync(directory, { recursive: true });

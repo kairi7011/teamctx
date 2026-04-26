@@ -77,8 +77,8 @@ Usage:
   teamctx normalize
   teamctx compact
   teamctx context [json-file]
-  teamctx list [--kind <kind>] [--state <state>] [--limit <n>]
-  teamctx audit [--action <action>] [--limit <n>]
+  teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
+  teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file>
   teamctx record-verified <json-file>
   teamctx explain <item-id>
@@ -161,6 +161,7 @@ async function context(args: ParsedArgs): Promise<void> {
 
 async function list(args: ParsedArgs): Promise<void> {
   const limit = typeof args.flags.limit === "string" ? Number(args.flags.limit) : undefined;
+  const offset = typeof args.flags.offset === "string" ? Number(args.flags.offset) : undefined;
   const input: ListRecordsInput = {};
 
   assignListInput(input, "kinds", parseListKinds(csvFlag(args.flags.kind ?? args.flags.kinds)));
@@ -176,12 +177,16 @@ async function list(args: ParsedArgs): Promise<void> {
   if (limit !== undefined) {
     input.limit = limit;
   }
+  if (offset !== undefined) {
+    input.offset = offset;
+  }
 
   console.log(JSON.stringify(await listBoundRecords(input), null, 2));
 }
 
 async function audit(args: ParsedArgs): Promise<void> {
   const limit = typeof args.flags.limit === "string" ? Number(args.flags.limit) : undefined;
+  const offset = typeof args.flags.offset === "string" ? Number(args.flags.offset) : undefined;
   const input: AuditSummaryInput = {};
 
   assignAuditInput(
@@ -201,6 +206,9 @@ async function audit(args: ParsedArgs): Promise<void> {
   }
   if (limit !== undefined) {
     input.limit = limit;
+  }
+  if (offset !== undefined) {
+    input.offset = offset;
   }
 
   console.log(JSON.stringify(await getBoundAuditSummary(input), null, 2));

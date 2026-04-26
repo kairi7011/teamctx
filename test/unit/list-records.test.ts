@@ -66,6 +66,51 @@ test("listBoundRecords filters local records by kind state scope and query", asy
   );
 });
 
+test("listBoundRecords paginates results with offset and reports next_offset", async () => {
+  const store = new MemoryContextStore("remote-head");
+  await store.appendJsonl(
+    "normalized/workflows.jsonl",
+    [
+      record("workflow-cli-a", "workflow"),
+      record("workflow-cli-b", "workflow"),
+      record("workflow-cli-c", "workflow")
+    ],
+    { message: "seed" }
+  );
+
+  const firstPage = await listBoundRecords(
+    { kinds: ["workflow"], limit: 2, offset: 0 },
+    servicesForRemote(store)
+  );
+
+  assert.equal(firstPage.enabled, true);
+  if (!firstPage.enabled) throw new Error("expected enabled result");
+  assert.equal(firstPage.total_matches, 3);
+  assert.equal(firstPage.returned, 2);
+  assert.equal(firstPage.offset, 0);
+  assert.equal(firstPage.next_offset, 2);
+
+  const secondPage = await listBoundRecords(
+    { kinds: ["workflow"], limit: 2, offset: 2 },
+    servicesForRemote(store)
+  );
+
+  assert.equal(secondPage.enabled, true);
+  if (!secondPage.enabled) throw new Error("expected enabled result");
+  assert.equal(secondPage.returned, 1);
+  assert.equal(secondPage.offset, 2);
+  assert.equal(secondPage.next_offset, null);
+});
+
+test("listBoundRecords rejects negative offset", async () => {
+  const store = new MemoryContextStore("remote-head");
+
+  await assert.rejects(
+    () => listBoundRecords({ offset: -1 }, servicesForRemote(store)),
+    /offset must be a non-negative integer/
+  );
+});
+
 test("listBoundRecords filters remote context store records and applies limit", async () => {
   const store = new MemoryContextStore("remote-head");
   await store.appendJsonl(

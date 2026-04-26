@@ -29,6 +29,7 @@ export type AuditSummaryInput = {
   source_event_ids?: string[];
   query?: string;
   limit?: number;
+  offset?: number;
 };
 
 export type EnabledAuditSummary = {
@@ -42,6 +43,8 @@ export type EnabledAuditSummary = {
   local_store: boolean;
   total_matches: number;
   returned: number;
+  offset: number;
+  next_offset: number | null;
   entries: AuditLogEntry[];
 };
 
@@ -148,7 +151,9 @@ function auditResult(options: {
     options.entries.filter((entry) => matchesAuditInput(entry, options.input))
   );
   const limit = limitValue(options.input.limit);
-  const selected = matches.slice(0, limit);
+  const offset = offsetValue(options.input.offset);
+  const selected = matches.slice(offset, offset + limit);
+  const nextOffset = offset + selected.length < matches.length ? offset + selected.length : null;
 
   return {
     enabled: true,
@@ -161,6 +166,8 @@ function auditResult(options: {
     local_store: options.localStore,
     total_matches: matches.length,
     returned: selected.length,
+    offset,
+    next_offset: nextOffset,
     entries: selected
   };
 }
@@ -256,6 +263,18 @@ function limitValue(limit: number | undefined): number {
   }
 
   return limit;
+}
+
+function offsetValue(offset: number | undefined): number {
+  if (offset === undefined) {
+    return 0;
+  }
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error("audit offset must be a non-negative integer");
+  }
+
+  return offset;
 }
 
 function queryTokens(query: string | undefined): string[] {
