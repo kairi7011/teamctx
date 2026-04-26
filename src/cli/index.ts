@@ -8,6 +8,7 @@ import {
   GitHubClient,
   parseGitHubRepository
 } from "../adapters/github/github-client.js";
+import { CliError, CLI_EXIT, mapErrorToExitCode } from "./cli-error.js";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -108,7 +109,10 @@ function bind(args: ParsedArgs): void {
   const [storeInput] = args.positional;
 
   if (!storeInput) {
-    throw new Error("Missing context store. Usage: teamctx bind <store> [--path <path>]");
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing context store. Usage: teamctx bind <store> [--path <path>]"
+    );
   }
 
   const root = getRepoRoot();
@@ -310,14 +314,20 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
   const [inputPath] = args.positional;
 
   if (!inputPath) {
-    throw new Error(`Missing json file. Usage: teamctx record-${trust} <json-file>`);
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      `Missing json file. Usage: teamctx record-${trust} <json-file>`
+    );
   }
 
   const input = JSON.parse(readFileSync(resolve(inputPath), "utf8")) as unknown;
   const observations = Array.isArray(input) ? input : [input];
 
   if (observations.length === 0) {
-    throw new Error("Observation json file must contain an object or a non-empty array.");
+    throw new CliError(
+      CLI_EXIT.VALIDATION,
+      "Observation json file must contain an object or a non-empty array."
+    );
   }
 
   console.log(`Recorded ${trust} raw observations:`);
@@ -344,7 +354,7 @@ async function explain(args: ParsedArgs): Promise<void> {
   const [itemId] = args.positional;
 
   if (!itemId) {
-    throw new Error("Missing item id. Usage: teamctx explain <item-id>");
+    throw new CliError(CLI_EXIT.USAGE, "Missing item id. Usage: teamctx explain <item-id>");
   }
 
   console.log(JSON.stringify(await explainBoundItemAsync({ itemId }), null, 2));
@@ -354,7 +364,10 @@ async function explainEpisode(args: ParsedArgs): Promise<void> {
   const [episodeId] = args.positional;
 
   if (!episodeId) {
-    throw new Error("Missing episode id. Usage: teamctx explain-episode <episode-id>");
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing episode id. Usage: teamctx explain-episode <episode-id>"
+    );
   }
 
   console.log(JSON.stringify(await explainBoundEpisodeAsync({ episodeId }), null, 2));
@@ -364,7 +377,10 @@ async function invalidate(args: ParsedArgs): Promise<void> {
   const [itemId] = args.positional;
 
   if (!itemId) {
-    throw new Error("Missing item id. Usage: teamctx invalidate <item-id> [--reason <reason>]");
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing item id. Usage: teamctx invalidate <item-id> [--reason <reason>]"
+    );
   }
 
   const reason = typeof args.flags.reason === "string" ? args.flags.reason : undefined;
@@ -640,7 +656,7 @@ async function main(): Promise<void> {
       printHelp();
       return;
     default:
-      throw new Error(`Unknown command: ${args.command}`);
+      throw new CliError(CLI_EXIT.USAGE, `Unknown command: ${args.command}`);
   }
 }
 
@@ -648,5 +664,5 @@ try {
   await main();
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+  process.exitCode = mapErrorToExitCode(error);
 }
