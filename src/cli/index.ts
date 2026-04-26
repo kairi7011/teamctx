@@ -81,7 +81,7 @@ function printHelp(): void {
 Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
-  teamctx normalize
+  teamctx normalize [--dry-run]
   teamctx compact
   teamctx context [json-file]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
@@ -140,16 +140,20 @@ async function initStore(): Promise<void> {
   console.log(`  existing_files: ${result.existingFiles.length}`);
 }
 
-async function normalize(): Promise<void> {
-  const result = await normalizeBoundStoreAsync();
+async function normalize(args: ParsedArgs): Promise<void> {
+  const dryRun = args.flags["dry-run"] === true;
+  const result = await normalizeBoundStoreAsync(dryRun ? { dryRun: true } : {});
 
-  console.log("Normalized context store:");
+  console.log(dryRun ? "Normalized context store (dry-run):" : "Normalized context store:");
   console.log(`  run_id: ${result.runId}`);
   console.log(`  normalized_at: ${result.normalizedAt}`);
   console.log(`  raw_events_read: ${result.rawEventsRead}`);
   console.log(`  records_written: ${result.recordsWritten}`);
   console.log(`  dropped_events: ${result.droppedEvents}`);
   console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
+  if (dryRun) {
+    console.log("  note: no files were written; rerun without --dry-run to apply");
+  }
 }
 
 async function compact(): Promise<void> {
@@ -612,7 +616,7 @@ async function main(): Promise<void> {
       await initStore();
       return;
     case "normalize":
-      await normalize();
+      await normalize(args);
       return;
     case "compact":
       await compact();

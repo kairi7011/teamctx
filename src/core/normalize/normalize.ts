@@ -68,6 +68,7 @@ export type NormalizeOptions = {
   cwd?: string;
   now?: () => Date;
   services?: NormalizeServices;
+  dryRun?: boolean;
 };
 
 const NORMALIZER_VERSION = "0.1.0";
@@ -105,7 +106,8 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
     repo,
     storeRoot: resolveStoreRoot(root, binding.contextStore.path),
     repoRoot: root,
-    ...(options.now !== undefined ? { now: options.now } : {})
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
   });
 }
 
@@ -126,7 +128,8 @@ export async function normalizeBoundStoreAsync(
       repo,
       storeRoot: resolveStoreRoot(root, binding.contextStore.path),
       repoRoot: root,
-      ...(options.now !== undefined ? { now: options.now } : {})
+      ...(options.now !== undefined ? { now: options.now } : {}),
+      ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
     });
   }
 
@@ -136,7 +139,8 @@ export async function normalizeBoundStoreAsync(
     store:
       services.createContextStore?.({ repo, repoRoot: root, binding }) ??
       createContextStoreForBinding({ repo, repoRoot: root, binding }),
-    ...(options.now !== undefined ? { now: options.now } : {})
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
   });
 }
 
@@ -145,6 +149,7 @@ export function normalizeStore(options: {
   storeRoot: string;
   repoRoot?: string;
   now?: () => Date;
+  dryRun?: boolean;
 }): NormalizeStoreResult {
   const now = options.now ?? (() => new Date());
   const runAt = now();
@@ -158,6 +163,11 @@ export function normalizeStore(options: {
     rawEvents,
     existingRecords
   });
+
+  if (options.dryRun === true) {
+    return run.result;
+  }
+
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
   const episodeIndex = buildEpisodeIndex(
     safeEpisodeObservations(rawEvents, options.repo),
@@ -178,6 +188,7 @@ export async function normalizeContextStore(options: {
   store: ContextStoreAdapter;
   repoRoot?: string;
   now?: () => Date;
+  dryRun?: boolean;
 }): Promise<NormalizeStoreResult> {
   const now = options.now ?? (() => new Date());
   const runAt = now();
@@ -191,6 +202,11 @@ export async function normalizeContextStore(options: {
     rawEvents,
     existingRecords: existing.records
   });
+
+  if (options.dryRun === true) {
+    return run.result;
+  }
+
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
   const episodeIndex = buildEpisodeIndex(
     safeEpisodeObservations(rawEvents, options.repo),

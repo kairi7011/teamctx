@@ -156,6 +156,37 @@ test("normalizeStore promotes verified raw events into normalized JSONL", (conte
   assert.equal(episodeId, "event-1");
 });
 
+test("normalizeStore dryRun reports planned writes without touching the store", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow,
+    dryRun: true
+  });
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.auditEntriesWritten, 1);
+  assert.match(result.runId, /^run-[0-9a-f]{16}$/);
+  // No writes should have happened.
+  assert.equal(existsSyncOrFalse(join(storeRoot, "normalized", "pitfalls.jsonl")), false);
+  assert.equal(existsSyncOrFalse(join(storeRoot, "audit", "changes.jsonl")), false);
+  assert.equal(existsSyncOrFalse(join(storeRoot, "indexes", "last-normalize.json")), false);
+});
+
+function existsSyncOrFalse(path: string): boolean {
+  try {
+    readFileSync(path, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 test("normalizeStore drops raw events that fail evidence minimum", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
