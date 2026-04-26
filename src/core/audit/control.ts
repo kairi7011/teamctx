@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
+import { sha256Hex } from "../store/hash.js";
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import {
@@ -406,7 +406,7 @@ function createAuditEntry(options: {
 
   return validateAuditLogEntry({
     schema_version: 1,
-    id: `audit-${hash(`${options.itemId}|${options.beforeState}|archived|${options.reason}|${at}`).slice(0, 16)}`,
+    id: `audit-${sha256Hex(`${options.itemId}|${options.beforeState}|archived|${options.reason}|${at}`).slice(0, 16)}`,
     at,
     action: "invalidated",
     item_id: options.itemId,
@@ -415,8 +415,4 @@ function createAuditEntry(options: {
     reason: options.reason,
     source_event_ids: []
   });
-}
-
-function hash(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }

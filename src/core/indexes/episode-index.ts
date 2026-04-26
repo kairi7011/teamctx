@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../store/hash.js";
 import type {
   ObservationSourceType,
   RawObservation,
@@ -209,9 +209,7 @@ function validateEpisodeReference(value: unknown): EpisodeReference {
 }
 
 function episodeId(eventId: string): string {
-  const digest = createHash("sha256").update(eventId).digest("hex").slice(0, 16);
-
-  return `episode-${digest}`;
+  return `episode-${sha256Hex(eventId).slice(0, 16)}`;
 }
 
 function summarize(text: string): string {

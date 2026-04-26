@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../../core/store/hash.js";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -193,7 +193,5 @@ function readRepoState(
 }
 
 function hashPayload(value: unknown): string {
-  const hash = createHash("sha256").update(JSON.stringify(value)).digest("hex");
-
-  return `sha256:${hash}`;
+  return `sha256:${sha256Hex(JSON.stringify(value))}`;
 }

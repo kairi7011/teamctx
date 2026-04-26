@@ -6,7 +6,7 @@ import {
   readdirSync,
   writeFileSync
 } from "node:fs";
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../store/hash.js";
 import { dirname, join } from "node:path";
 import {
   serializeJsonl,
@@ -306,7 +306,7 @@ function makeRunId(repo: string, runAt: Date, rawEvents: RawEventFile[]): string
     .sort();
   const idSource = [repo, runAt.toISOString(), eventIds.join(",")].join("|");
 
-  return `run-${hash(idSource).slice(0, 16)}`;
+  return `run-${sha256Hex(idSource).slice(0, 16)}`;
 }
 
 function preserveExistingState(
@@ -974,7 +974,7 @@ function createAuditEntry(options: {
   ].join("|");
   const entry: AuditLogEntry = {
     schema_version: 1,
-    id: `audit-${hash(idSource).slice(0, 16)}`,
+    id: `audit-${sha256Hex(idSource).slice(0, 16)}`,
     at: options.now().toISOString(),
     action: options.action,
     reason: options.reason,
@@ -1001,7 +1001,7 @@ function createAuditEntry(options: {
 }
 
 function recordId(observation: RawObservation): string {
-  return `${observation.kind}-${hash(
+  return `${observation.kind}-${sha256Hex(
     JSON.stringify({
       kind: observation.kind,
       text: observation.text,
@@ -1196,7 +1196,3 @@ const ORDERING_FILLER_TOKENS = new Set([
   "an"
 ]);
 const DEDUPE_FILLER_TOKENS = new Set([...ORDERING_FILLER_TOKENS, "can", "could", "may", "might"]);
-
-function hash(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
