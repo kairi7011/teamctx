@@ -74,6 +74,8 @@ Planned:
 - Semantic memory is the normalized JSONL layer: facts, rules, decisions, workflows, pitfalls, and glossary terms with evidence and state. MVP retrieval is deterministic and index-backed, not embedding-based.
 - Procedural memory is represented as rule, workflow, and pitfall records. MVP procedures are guidance text, not executable checklists or enforced automation.
 
+Trust labels describe how an observation entered the store, not whether the underlying claim is factually true. A `verified` observation only means a trusted source (typically an AI agent reading code, tests, or docs) recorded it with non-manual evidence; it can still become contested, stale, superseded, or invalidated as the codebase evolves. `candidate` observations stay out of `get_context` payloads until they are explicitly promoted with verifying evidence.
+
 Post-MVP work may add embeddings, richer temporal models, executable procedures, background consolidation, and UI surfaces. Automatic truth resolution and automatic conflict resolution are intentionally out of scope for the MVP.
 
 ## Install
@@ -139,7 +141,7 @@ teamctx record-verified observations.json
 teamctx normalize
 ```
 
-The file can contain one observation object or an array of observation objects. Verified observations must include non-manual evidence.
+The file can contain one observation object or an array of observation objects. Verified observations must include non-manual evidence. The `verified` label describes provenance, not truth: records can still transition to `contested`, `stale`, `superseded`, or `archived` over time.
 
 Compact expired local context-store data into the configured archive path:
 
