@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import {
@@ -8,38 +8,36 @@ import {
   scopedContextItem,
   type RankedRecord
 } from "./context-ranking.js";
+import {
+  readEpisodeIndex,
+  readEpisodeIndexFromContextStore,
+  readLastNormalizeAt,
+  readLastNormalizeAtFromContextStore,
+  readRecordIndexes,
+  readRecordIndexesFromContextStore
+} from "./index-loader.js";
+import type { EpisodeIndex } from "../indexes/episode-index.js";
+import { selectRelevantEpisodes } from "./episode-selection.js";
 import { jsonlLines } from "../store/jsonl.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import {
   hasLookupSelectors,
-  matchesPath,
   matchesScopeInput,
   selectIndexedRecordIds,
-  validatePathIndex,
-  validateSymbolIndex,
-  validateTextIndex,
   type RecordIndexSet
 } from "../indexes/record-index.js";
-import {
-  selectIndexedEpisodeIds,
-  validateEpisodeIndex,
-  type EpisodeIndex
-} from "../indexes/episode-index.js";
 import {
   validateNormalizedRecord,
   type KnowledgeKind,
   type NormalizedRecord
 } from "../../schemas/normalized-record.js";
 import type { GetContextInput, EnabledContextPayload } from "../../schemas/context-payload.js";
-import type { EpisodeReference } from "../../schemas/episode.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
   "normalized_context" | "relevant_episodes" | "canonical_doc_refs" | "diagnostics"
 >;
-
-const EPISODE_LIMIT = 10;
 
 export function composeContextFromStore(
   storeRoot: string,
@@ -246,258 +244,6 @@ async function readNormalizedRecordsFromContextStore(
     : { records: sortedRecords, diagnostics: readPlan.diagnostics };
 }
 
-type RecordIndexReadResult = {
-  indexes: RecordIndexSet;
-  warnings: string[];
-};
-
-function readRecordIndexes(
-  storeRoot: string,
-  lastNormalizeAt: string | undefined
-): RecordIndexReadResult {
-  const pathIndex = readPathIndex(storeRoot, lastNormalizeAt);
-  const symbolIndex = readSymbolIndex(storeRoot, lastNormalizeAt);
-  const textIndex = readTextIndex(storeRoot, lastNormalizeAt);
-
-  return {
-    indexes: {
-      ...pathIndex.indexes,
-      ...symbolIndex.indexes,
-      ...textIndex.indexes
-    },
-    warnings: [...pathIndex.warnings, ...symbolIndex.warnings, ...textIndex.warnings]
-  };
-}
-
-async function readRecordIndexesFromContextStore(
-  store: ContextStoreAdapter,
-  lastNormalizeAt: string | undefined
-): Promise<RecordIndexReadResult> {
-  const pathIndex = await readPathIndexFromContextStore(store, lastNormalizeAt);
-  const symbolIndex = await readSymbolIndexFromContextStore(store, lastNormalizeAt);
-  const textIndex = await readTextIndexFromContextStore(store, lastNormalizeAt);
-
-  return {
-    indexes: {
-      ...pathIndex.indexes,
-      ...symbolIndex.indexes,
-      ...textIndex.indexes
-    },
-    warnings: [...pathIndex.warnings, ...symbolIndex.warnings, ...textIndex.warnings]
-  };
-}
-
-function readPathIndex(
-  storeRoot: string,
-  lastNormalizeAt: string | undefined
-): RecordIndexReadResult {
-  const path = join(storeRoot, "indexes", "path-index.json");
-
-  if (!existsSync(path)) {
-    return { indexes: {}, warnings: ["missing path index"] };
-  }
-
-  try {
-    const pathIndex = validatePathIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
-
-    return {
-      indexes: { pathIndex },
-      warnings: indexFreshnessWarnings("path", pathIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid path index: ${errorMessage(error)}`] };
-  }
-}
-
-function readSymbolIndex(
-  storeRoot: string,
-  lastNormalizeAt: string | undefined
-): RecordIndexReadResult {
-  const path = join(storeRoot, "indexes", "symbol-index.json");
-
-  if (!existsSync(path)) {
-    return { indexes: {}, warnings: ["missing symbol index"] };
-  }
-
-  try {
-    const symbolIndex = validateSymbolIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
-
-    return {
-      indexes: { symbolIndex },
-      warnings: indexFreshnessWarnings("symbol", symbolIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
-  }
-}
-
-function readTextIndex(
-  storeRoot: string,
-  lastNormalizeAt: string | undefined
-): RecordIndexReadResult {
-  const path = join(storeRoot, "indexes", "text-index.json");
-
-  if (!existsSync(path)) {
-    return { indexes: {}, warnings: ["missing text index"] };
-  }
-
-  try {
-    const textIndex = validateTextIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
-
-    return {
-      indexes: { textIndex },
-      warnings: indexFreshnessWarnings("text", textIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid text index: ${errorMessage(error)}`] };
-  }
-}
-
-function readEpisodeIndex(
-  storeRoot: string,
-  lastNormalizeAt: string | undefined
-): { index?: EpisodeIndex; warnings: string[] } {
-  const path = join(storeRoot, "indexes", "episode-index.json");
-
-  if (!existsSync(path)) {
-    return { warnings: ["missing episode index"] };
-  }
-
-  try {
-    const index = validateEpisodeIndex(JSON.parse(readFileSync(path, "utf8")) as unknown);
-
-    return {
-      index,
-      warnings: indexFreshnessWarnings("episode", index.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { warnings: [`invalid episode index: ${errorMessage(error)}`] };
-  }
-}
-
-async function readPathIndexFromContextStore(
-  store: ContextStoreAdapter,
-  lastNormalizeAt: string | undefined
-): Promise<RecordIndexReadResult> {
-  try {
-    const file = await store.readText("indexes/path-index.json");
-
-    if (!file) {
-      return { indexes: {}, warnings: ["missing path index"] };
-    }
-
-    const pathIndex = validatePathIndex(JSON.parse(file.content) as unknown);
-
-    return {
-      indexes: { pathIndex },
-      warnings: indexFreshnessWarnings("path", pathIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid path index: ${errorMessage(error)}`] };
-  }
-}
-
-async function readSymbolIndexFromContextStore(
-  store: ContextStoreAdapter,
-  lastNormalizeAt: string | undefined
-): Promise<RecordIndexReadResult> {
-  try {
-    const file = await store.readText("indexes/symbol-index.json");
-
-    if (!file) {
-      return { indexes: {}, warnings: ["missing symbol index"] };
-    }
-
-    const symbolIndex = validateSymbolIndex(JSON.parse(file.content) as unknown);
-
-    return {
-      indexes: { symbolIndex },
-      warnings: indexFreshnessWarnings("symbol", symbolIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid symbol index: ${errorMessage(error)}`] };
-  }
-}
-
-async function readTextIndexFromContextStore(
-  store: ContextStoreAdapter,
-  lastNormalizeAt: string | undefined
-): Promise<RecordIndexReadResult> {
-  try {
-    const file = await store.readText("indexes/text-index.json");
-
-    if (!file) {
-      return { indexes: {}, warnings: ["missing text index"] };
-    }
-
-    const textIndex = validateTextIndex(JSON.parse(file.content) as unknown);
-
-    return {
-      indexes: { textIndex },
-      warnings: indexFreshnessWarnings("text", textIndex.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { indexes: {}, warnings: [`invalid text index: ${errorMessage(error)}`] };
-  }
-}
-
-async function readEpisodeIndexFromContextStore(
-  store: ContextStoreAdapter,
-  lastNormalizeAt: string | undefined
-): Promise<{ index?: EpisodeIndex; warnings: string[] }> {
-  try {
-    const file = await store.readText("indexes/episode-index.json");
-
-    if (!file) {
-      return { warnings: ["missing episode index"] };
-    }
-
-    const index = validateEpisodeIndex(JSON.parse(file.content) as unknown);
-
-    return {
-      index,
-      warnings: indexFreshnessWarnings("episode", index.generated_at, lastNormalizeAt)
-    };
-  } catch (error) {
-    return { warnings: [`invalid episode index: ${errorMessage(error)}`] };
-  }
-}
-
-function readLastNormalizeAt(storeRoot: string): string | undefined {
-  try {
-    const value = JSON.parse(
-      readFileSync(join(storeRoot, "indexes", "last-normalize.json"), "utf8")
-    ) as unknown;
-
-    return typeof value === "object" &&
-      value !== null &&
-      "normalizedAt" in value &&
-      typeof value.normalizedAt === "string"
-      ? value.normalizedAt
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function readLastNormalizeAtFromContextStore(
-  store: ContextStoreAdapter
-): Promise<string | undefined> {
-  try {
-    const file = await store.readText("indexes/last-normalize.json");
-    const value = file ? (JSON.parse(file.content) as unknown) : undefined;
-
-    return typeof value === "object" &&
-      value !== null &&
-      "normalizedAt" in value &&
-      typeof value.normalizedAt === "string"
-      ? value.normalizedAt
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function readJsonlLines(path: string): string[] {
   try {
     return jsonlLines(readFileSync(path, "utf8"));
@@ -678,128 +424,6 @@ function matchesTimeInput(record: NormalizedRecord, input: GetContextInput): boo
 
 function hasTimeFilters(input: GetContextInput): boolean {
   return input.since !== undefined || input.until !== undefined;
-}
-
-function indexFreshnessWarnings(
-  indexName: string,
-  generatedAt: string | null,
-  lastNormalizeAt: string | undefined
-): string[] {
-  if (generatedAt === null) {
-    return [`${indexName} index is uninitialized`];
-  }
-
-  if (lastNormalizeAt !== undefined && generatedAt !== lastNormalizeAt) {
-    return [
-      `${indexName} index generated_at ${generatedAt} differs from last normalize ${lastNormalizeAt}`
-    ];
-  }
-
-  return [];
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function selectRelevantEpisodes(
-  index: EpisodeIndex | undefined,
-  input: GetContextInput
-): EpisodeReference[] {
-  if (!index || !hasEpisodeSelectors(input) || typeof index.generated_at !== "string") {
-    return [];
-  }
-
-  const selectedIds = hasIndexedEpisodeSelectors(input)
-    ? selectIndexedEpisodeIds(index, input)
-    : new Set(index.episodes.map((episode) => episode.episode_id));
-  const episodesById = new Map(index.episodes.map((episode) => [episode.episode_id, episode]));
-
-  return [...selectedIds]
-    .flatMap((id) => {
-      const episode = episodesById.get(id);
-
-      return episode ? [episode] : [];
-    })
-    .filter((episode) => matchesEpisodeFilters(episode, input))
-    .sort(compareEpisodes)
-    .slice(0, EPISODE_LIMIT);
-}
-
-function compareEpisodes(left: EpisodeReference, right: EpisodeReference): number {
-  return (
-    Date.parse(right.observed_to) - Date.parse(left.observed_to) ||
-    left.episode_id.localeCompare(right.episode_id)
-  );
-}
-
-function hasEpisodeSelectors(input: GetContextInput): boolean {
-  return hasIndexedEpisodeSelectors(input) || hasTimeFilters(input);
-}
-
-function hasIndexedEpisodeSelectors(input: GetContextInput): boolean {
-  return (
-    selectedFiles(input).length > 0 ||
-    (input.domains ?? []).length > 0 ||
-    (input.symbols ?? []).length > 0 ||
-    (input.tags ?? []).length > 0 ||
-    (input.source_types ?? []).length > 0 ||
-    (input.evidence_files ?? []).length > 0
-  );
-}
-
-function selectedFiles(input: GetContextInput): string[] {
-  return [...(input.target_files ?? []), ...(input.changed_files ?? [])];
-}
-
-function matchesEpisodeFilters(episode: EpisodeReference, input: GetContextInput): boolean {
-  const sourceTypes = input.source_types ?? [];
-  const evidenceFiles = input.evidence_files ?? [];
-
-  if (sourceTypes.length > 0 && !sourceTypes.includes(episode.source_type)) {
-    return false;
-  }
-
-  if (
-    evidenceFiles.length > 0 &&
-    !episode.evidence.some((evidence) => {
-      if (evidence.file === undefined) {
-        return false;
-      }
-
-      const evidenceFile = evidence.file;
-
-      return evidenceFiles.some((file) => matchesEpisodeEvidenceFile(evidenceFile, file));
-    })
-  ) {
-    return false;
-  }
-
-  return matchesEpisodeTimeInput(episode, input);
-}
-
-function matchesEpisodeEvidenceFile(indexedFile: string, inputFile: string): boolean {
-  return matchesPath(indexedFile, inputFile) || matchesPath(inputFile, indexedFile);
-}
-
-function matchesEpisodeTimeInput(episode: EpisodeReference, input: GetContextInput): boolean {
-  const since = input.since === undefined ? undefined : Date.parse(input.since);
-  const until = input.until === undefined ? undefined : Date.parse(input.until);
-
-  if (since === undefined && until === undefined) {
-    return true;
-  }
-
-  const observedFrom = Date.parse(episode.observed_from);
-  const observedTo = Date.parse(episode.observed_to);
-
-  if (Number.isNaN(observedFrom) || Number.isNaN(observedTo)) {
-    return false;
-  }
-
-  return (
-    (since === undefined || observedTo >= since) && (until === undefined || observedFrom <= until)
-  );
 }
 
 function exclusionReason(state: NormalizedRecord["state"]): string {
