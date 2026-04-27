@@ -4,6 +4,7 @@ import type { ContextStoreAdapter } from "../../adapters/store/context-store.js"
 import {
   budgetRecords,
   DEFAULT_CONTEXT_BUDGETS,
+  rankRecords,
   rankedTexts,
   scopedContextItem,
   type BudgetedRecords,
@@ -488,6 +489,203 @@ function exclusionReason(state: NormalizedRecord["state"]): string {
     case "active":
       return "included";
   }
+}
+
+export type RankTraceEntry = {
+  id: string;
+  kind: string;
+  state: string;
+  scope_summary: string;
+  rank_score: number;
+  rank_reasons: string[];
+  in_context: boolean;
+  context_placement?: string;
+  exclusion_reason?: string;
+};
+
+export type RankTrace = {
+  total_records: number;
+  active_records: number;
+  candidates: number;
+  in_context: number;
+  entries: RankTraceEntry[];
+};
+
+export function rankContextFromStore(storeRoot: string, input: GetContextInput = {}): RankTrace {
+  const records = readNormalizedRecords(storeRoot);
+  const lastNormalizeAt = readLastNormalizeAt(storeRoot);
+  const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
+
+  return buildRankTrace(records, input, indexRead.indexes);
+}
+
+export async function rankContextFromContextStore(
+  store: ContextStoreAdapter,
+  input: GetContextInput = {}
+): Promise<RankTrace> {
+  const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
+  const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
+  const records: NormalizedRecord[] = [];
+
+  for (const file of NORMALIZED_RECORD_FILES) {
+    const storeFile = await store.readText(`normalized/${file}`);
+
+    for (const line of jsonlLines(storeFile?.content ?? "")) {
+      records.push(validateNormalizedRecord(JSON.parse(line) as unknown));
+    }
+  }
+
+  const sortedRecords = records.sort((left, right) => left.id.localeCompare(right.id));
+
+  return buildRankTrace(sortedRecords, input, indexRead.indexes);
+}
+
+function buildRankTrace(
+  records: NormalizedRecord[],
+  input: GetContextInput,
+  indexes: RecordIndexSet = {}
+): RankTrace {
+  const activeRecords = records.filter(
+    (record) => record.state === "active" && matchesTimeInput(record, input)
+  );
+  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
+  const globallyApplicableRecords = activeRecords.filter(isGloballyApplicableRecord);
+  const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
+  const applicableIds = new Set(applicableRecords.map((r) => r.id));
+
+  const scopedBudget = budgetRecords(scopedRecords, input, DEFAULT_CONTEXT_BUDGETS.scopedItems);
+  const globalBudget = budgetRecords(
+    globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.globalItems
+  );
+  const ruleBudget = budgetRecords(
+    applicableRecords.filter((record) => record.kind === "rule"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.globalItems
+  );
+  const decisionBudget = budgetRecords(
+    applicableRecords.filter((record) => record.kind === "decision"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.decisions
+  );
+  const pitfallBudget = budgetRecords(
+    applicableRecords.filter((record) => record.kind === "pitfall"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.pitfalls
+  );
+  const workflowBudget = budgetRecords(
+    applicableRecords.filter((record) => record.kind === "workflow"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.workflows
+  );
+  const glossaryBudget = budgetRecords(
+    applicableRecords.filter((record) => record.kind === "glossary"),
+    input,
+    DEFAULT_CONTEXT_BUDGETS.glossary
+  );
+
+  const placements = new Map<string, string>();
+  for (const ranked of scopedBudget.selected) placements.set(ranked.record.id, "scoped");
+  for (const ranked of globalBudget.selected) placements.set(ranked.record.id, "global");
+  for (const ranked of ruleBudget.selected) placements.set(ranked.record.id, "rules");
+  for (const ranked of decisionBudget.selected) placements.set(ranked.record.id, "decisions");
+  for (const ranked of pitfallBudget.selected) placements.set(ranked.record.id, "pitfalls");
+  for (const ranked of workflowBudget.selected) placements.set(ranked.record.id, "workflows");
+  for (const ranked of glossaryBudget.selected) placements.set(ranked.record.id, "glossary");
+
+  const overflowReasons = new Map<string, string>();
+  for (const [budget, reason] of [
+    [scopedBudget, "budget_overflow:scoped"],
+    [ruleBudget, "budget_overflow:rule"],
+    [decisionBudget, "budget_overflow:decision"],
+    [pitfallBudget, "budget_overflow:pitfall"],
+    [workflowBudget, "budget_overflow:workflow"],
+    [glossaryBudget, "budget_overflow:glossary"]
+  ] as Array<[BudgetedRecords, string]>) {
+    for (const ranked of budget.overflow) {
+      if (!overflowReasons.has(ranked.record.id)) {
+        overflowReasons.set(ranked.record.id, reason);
+      }
+    }
+  }
+
+  const entries: RankTraceEntry[] = [];
+
+  for (const entry of rankRecords(activeRecords, input)) {
+    const placement = placements.get(entry.record.id);
+    const overflowReason = overflowReasons.get(entry.record.id);
+    const traceEntry: RankTraceEntry = {
+      id: entry.record.id,
+      kind: entry.record.kind,
+      state: entry.record.state,
+      scope_summary: traceScopeSummary(entry.record),
+      rank_score: entry.score,
+      rank_reasons: entry.reasons,
+      in_context: placement !== undefined
+    };
+
+    if (placement !== undefined) {
+      traceEntry.context_placement = placement;
+    } else {
+      traceEntry.exclusion_reason =
+        overflowReason ??
+        (applicableIds.has(entry.record.id) ? "budget_overflow" : "scope_not_matched");
+    }
+
+    entries.push(traceEntry);
+  }
+
+  for (const record of records.filter((r) => r.state !== "active")) {
+    entries.push({
+      id: record.id,
+      kind: record.kind,
+      state: record.state,
+      scope_summary: traceScopeSummary(record),
+      rank_score: 0,
+      rank_reasons: [],
+      in_context: false,
+      exclusion_reason: `state_excluded:${record.state}`
+    });
+  }
+
+  entries.sort(
+    (left, right) =>
+      Number(right.in_context) - Number(left.in_context) ||
+      right.rank_score - left.rank_score ||
+      left.id.localeCompare(right.id)
+  );
+
+  return {
+    total_records: records.length,
+    active_records: activeRecords.length,
+    candidates: applicableIds.size,
+    in_context: placements.size,
+    entries
+  };
+}
+
+function traceScopeSummary(record: NormalizedRecord): string {
+  const parts: string[] = [];
+
+  if (record.scope.paths.length > 0) {
+    const shown = record.scope.paths.slice(0, 2);
+    const suffix = record.scope.paths.length > 2 ? "..." : "";
+    parts.push(`paths: [${shown.join(", ")}${suffix}]`);
+  }
+  if (record.scope.domains.length > 0) {
+    parts.push(`domains: [${record.scope.domains.join(", ")}]`);
+  }
+  if (record.scope.symbols.length > 0) {
+    const shown = record.scope.symbols.slice(0, 2);
+    const suffix = record.scope.symbols.length > 2 ? "..." : "";
+    parts.push(`symbols: [${shown.join(", ")}${suffix}]`);
+  }
+  if (record.scope.tags.length > 0) {
+    parts.push(`tags: [${record.scope.tags.join(", ")}]`);
+  }
+
+  return parts.length > 0 ? parts.join("; ") : "global";
 }
 
 function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unknown>> {

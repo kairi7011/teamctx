@@ -38,6 +38,12 @@ import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
 import {
+  rankContextFromStore,
+  rankContextFromContextStore
+} from "../core/context/compose-context.js";
+import { resolveStoreRoot } from "../core/store/layout.js";
+import { createContextStoreForBinding } from "../core/store/bound-store.js";
+import {
   recordObservationCandidateToolAsync,
   recordObservationVerifiedToolAsync
 } from "../mcp/tools/record-observation.js";
@@ -85,6 +91,7 @@ Usage:
   teamctx normalize [--dry-run]
   teamctx compact [--dry-run]
   teamctx context [json-file]
+  teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file>
@@ -100,6 +107,7 @@ Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx bind . --path .teamctx
   teamctx context --target-files src/index.ts --domains cli
+  teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
   teamctx audit --action created --limit 20
   teamctx record-verified observations.json
@@ -177,6 +185,31 @@ async function compact(args: ParsedArgs): Promise<void> {
 
 async function context(args: ParsedArgs): Promise<void> {
   console.log(JSON.stringify(await getContextToolAsync(contextInput(args)), null, 2));
+}
+
+async function rank(args: ParsedArgs): Promise<void> {
+  const root = getRepoRoot();
+  const repo = normalizeGitHubRepo(getOriginRemote(root));
+  const binding = findBinding(repo);
+
+  if (!binding) {
+    throw new CliError(CLI_EXIT.BINDING, "No teamctx binding found for this git root.");
+  }
+
+  const input = contextInput(args);
+
+  if (binding.contextStore.repo === repo) {
+    const storeRoot = resolveStoreRoot(root, binding.contextStore.path);
+    const trace = rankContextFromStore(storeRoot, input);
+
+    console.log(JSON.stringify(trace, null, 2));
+    return;
+  }
+
+  const store = createContextStoreForBinding({ repo, repoRoot: root, binding });
+  const trace = await rankContextFromContextStore(store, input);
+
+  console.log(JSON.stringify(trace, null, 2));
 }
 
 async function list(args: ParsedArgs): Promise<void> {
@@ -582,6 +615,9 @@ async function main(): Promise<void> {
       return;
     case "context":
       await context(args);
+      return;
+    case "rank":
+      await rank(args);
       return;
     case "list":
       await list(args);

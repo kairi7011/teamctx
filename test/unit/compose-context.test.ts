@@ -11,7 +11,8 @@ import type {
 } from "../../src/adapters/store/context-store.js";
 import {
   composeContextFromContextStore,
-  composeContextFromStore
+  composeContextFromStore,
+  rankContextFromStore
 } from "../../src/core/context/compose-context.js";
 import {
   buildRecordIndexes,
@@ -534,6 +535,95 @@ test("getContextTool composes normalized records for same-repository stores", (c
     result.normalized_context.scoped.map((entry) => entry.content),
     ["workflow-test text"]
   );
+});
+
+test("rankContextFromStore returns full ranked list with in_context and exclusion annotations", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeRecord(storeRoot, "rules.jsonl", record("rule-in-scope", "rule", "active"));
+  writeRecord(
+    storeRoot,
+    "pitfalls.jsonl",
+    record("pitfall-out-scope", "pitfall", "active", {
+      paths: ["src/billing/**"],
+      domains: ["billing"],
+      symbols: [],
+      tags: []
+    })
+  );
+  writeRecord(storeRoot, "decisions.jsonl", record("decision-contested", "decision", "contested"));
+
+  const trace = rankContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"],
+    domains: ["auth"]
+  });
+
+  assert.equal(trace.total_records, 3);
+  assert.equal(trace.active_records, 2);
+
+  const inContextEntry = trace.entries.find((e) => e.id === "rule-in-scope");
+  const outScopeEntry = trace.entries.find((e) => e.id === "pitfall-out-scope");
+  const excludedEntry = trace.entries.find((e) => e.id === "decision-contested");
+
+  assert.ok(inContextEntry, "rule-in-scope should appear in trace");
+  assert.ok(inContextEntry?.in_context, "rule-in-scope should be in_context");
+  assert.ok(inContextEntry?.rank_score > 0, "rule-in-scope should have positive rank score");
+  assert.ok(Array.isArray(inContextEntry?.rank_reasons), "rank_reasons should be an array");
+
+  assert.ok(outScopeEntry, "pitfall-out-scope should appear in trace");
+  assert.equal(outScopeEntry?.in_context, false, "pitfall-out-scope should not be in_context");
+  assert.equal(outScopeEntry?.exclusion_reason, "scope_not_matched");
+
+  assert.ok(excludedEntry, "decision-contested should appear in trace");
+  assert.equal(excludedEntry?.in_context, false);
+  assert.equal(excludedEntry?.exclusion_reason, "state_excluded:contested");
+  assert.equal(excludedEntry?.rank_score, 0);
+});
+
+test("rankContextFromStore sorts in_context entries before non-in_context, then by score descending", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeRecord(storeRoot, "rules.jsonl", record("rule-in-scope", "rule", "active"));
+  writeRecord(storeRoot, "facts.jsonl", record("fact-in-scope", "fact", "active"));
+  writeRecord(
+    storeRoot,
+    "pitfalls.jsonl",
+    record("pitfall-no-scope", "pitfall", "active", {
+      paths: [],
+      domains: [],
+      symbols: [],
+      tags: []
+    })
+  );
+
+  const trace = rankContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  const inContextEntries = trace.entries.filter((e) => e.in_context);
+  const outContextEntries = trace.entries.filter((e) => !e.in_context && e.state === "active");
+
+  assert.ok(inContextEntries.length > 0, "should have in-context entries");
+
+  for (let i = 1; i < inContextEntries.length; i++) {
+    assert.ok(
+      (inContextEntries[i - 1]?.rank_score ?? 0) >= (inContextEntries[i]?.rank_score ?? 0),
+      "in-context entries should be sorted by score descending"
+    );
+  }
+
+  const lastInContextIndex = trace.entries.findIndex((e) => !e.in_context);
+  const firstOutIndex = inContextEntries.length;
+  assert.equal(
+    lastInContextIndex,
+    firstOutIndex,
+    "all in_context entries should come before non-in_context entries"
+  );
+  assert.ok(outContextEntries.length >= 0);
 });
 
 function writeRecord(storeRoot: string, file: string, normalizedRecord: NormalizedRecord): void {
