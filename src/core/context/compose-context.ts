@@ -6,6 +6,7 @@ import {
   DEFAULT_CONTEXT_BUDGETS,
   rankedTexts,
   scopedContextItem,
+  type BudgetedRecords,
   type RankedRecord
 } from "./context-ranking.js";
 import {
@@ -149,6 +150,14 @@ function composeContextFromRecords(
         records.filter((record) => record.state === "stale").map((record) => record.id),
       dropped_items: budgetDroppedIds([scopedBudget]),
       excluded_items: diagnostics?.excluded_items ?? excludedItems(records),
+      budget_rejected: budgetRejected([
+        { budget: scopedBudget, reason: "budget_overflow:scoped" },
+        { budget: ruleBudget, reason: "budget_overflow:rule" },
+        { budget: decisionBudget, reason: "budget_overflow:decision" },
+        { budget: pitfallBudget, reason: "budget_overflow:pitfall" },
+        { budget: workflowBudget, reason: "budget_overflow:workflow" },
+        { budget: glossaryBudget, reason: "budget_overflow:glossary" }
+      ]),
       index_warnings: indexWarnings
     }
   };
@@ -202,6 +211,7 @@ export function emptyComposedContext(): ComposedContext {
       stale_items: [],
       dropped_items: [],
       excluded_items: [],
+      budget_rejected: [],
       index_warnings: []
     }
   };
@@ -294,6 +304,44 @@ function budgetDroppedIds(budgets: Array<{ overflow: RankedRecord[] }>): string[
   ].sort((left, right) => left.localeCompare(right));
 }
 
+function budgetRejected(budgets: Array<{ budget: BudgetedRecords; reason: string }>): Array<{
+  id: string;
+  kind: string;
+  rank_score: number;
+  rank_reasons: string[];
+  exclusion_reason: string;
+}> {
+  const seen = new Set<string>();
+  const rejected: Array<{
+    id: string;
+    kind: string;
+    rank_score: number;
+    rank_reasons: string[];
+    exclusion_reason: string;
+  }> = [];
+
+  for (const { budget, reason } of budgets) {
+    for (const ranked of budget.overflow) {
+      if (seen.has(ranked.record.id)) {
+        continue;
+      }
+
+      seen.add(ranked.record.id);
+      rejected.push({
+        id: ranked.record.id,
+        kind: ranked.record.kind,
+        rank_score: ranked.score,
+        rank_reasons: ranked.reasons,
+        exclusion_reason: reason
+      });
+    }
+  }
+
+  return rejected.sort(
+    (left, right) => right.rank_score - left.rank_score || left.id.localeCompare(right.id)
+  );
+}
+
 function excludedItems(records: NormalizedRecord[]): Array<{
   id: string;
   state: string;
@@ -316,7 +364,7 @@ type ContextStoreReadResult = {
 
 type PrecomputedDiagnostics = Pick<
   ComposedContext["diagnostics"],
-  "contested_items" | "stale_items" | "excluded_items"
+  "contested_items" | "stale_items" | "excluded_items" | "budget_rejected"
 >;
 
 function contextStoreReadPlan(
@@ -383,7 +431,8 @@ function diagnosticsFromIndexes(indexes: RecordIndexSet): PrecomputedDiagnostics
   return {
     contested_items: uniqueSorted(states.contested ?? []),
     stale_items: uniqueSorted(states.stale ?? []),
-    excluded_items: excluded_items.sort((left, right) => left.id.localeCompare(right.id))
+    excluded_items: excluded_items.sort((left, right) => left.id.localeCompare(right.id)),
+    budget_rejected: []
   };
 }
 

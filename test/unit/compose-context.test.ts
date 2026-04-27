@@ -450,6 +450,54 @@ test("composeContextFromStore ranks categories and reports budget overflow", (co
   ]);
 });
 
+test("composeContextFromStore reports budget_rejected with rank scores for overflow records", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  for (let index = 0; index < 12; index += 1) {
+    writeRecord(
+      storeRoot,
+      "pitfalls.jsonl",
+      record(`pitfall-${String(index).padStart(2, "0")}`, "pitfall", "active")
+    );
+  }
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  const rejected = composed.diagnostics.budget_rejected;
+  assert.ok(rejected.length > 0, "expected budget_rejected to have entries");
+
+  for (const entry of rejected) {
+    assert.ok(typeof entry.id === "string", "rejected entry must have id");
+    assert.ok(typeof entry.kind === "string", "rejected entry must have kind");
+    assert.ok(typeof entry.rank_score === "number", "rejected entry must have rank_score");
+    assert.ok(Array.isArray(entry.rank_reasons), "rejected entry must have rank_reasons");
+    assert.ok(
+      entry.exclusion_reason.startsWith("budget_overflow:"),
+      "exclusion_reason must start with budget_overflow:"
+    );
+  }
+
+  const rejectedIds = rejected.map((entry) => entry.id);
+
+  assert.ok(
+    rejectedIds.includes("pitfall-10") || rejectedIds.includes("pitfall-11"),
+    "overflow pitfalls should appear in budget_rejected"
+  );
+
+  for (let index = 0; index < rejected.length - 1; index += 1) {
+    const current = rejected[index];
+    const next = rejected[index + 1];
+    assert.ok(
+      current !== undefined && next !== undefined && current.rank_score >= next.rank_score,
+      "budget_rejected should be sorted by rank_score descending"
+    );
+  }
+});
+
 test("getContextTool composes normalized records for same-repository stores", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
