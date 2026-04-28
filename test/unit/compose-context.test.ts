@@ -451,6 +451,53 @@ test("composeContextFromStore ranks categories and reports budget overflow", (co
   ]);
 });
 
+test("composeContextFromStore honors project.yaml context_budgets overrides", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  for (let index = 0; index < 5; index += 1) {
+    writeRecord(
+      storeRoot,
+      "pitfalls.jsonl",
+      record(`pitfall-${String(index).padStart(2, "0")}`, "pitfall", "active")
+    );
+  }
+
+  writeFileSync(
+    join(storeRoot, "project.yaml"),
+    [
+      "format_version: 1",
+      'project_id: "test"',
+      'normalizer_version: "0.1.0"',
+      "retention:",
+      "  raw_candidate_days: 30",
+      "  audit_days: 180",
+      '  archive_path: "archive/"',
+      "context_budgets:",
+      "  pitfalls: 2",
+      "  scoped_items: 3",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.equal(composed.normalized_context.active_pitfalls.length, 2);
+  assert.equal(composed.normalized_context.scoped.length, 3);
+
+  const overflowReasons = composed.diagnostics.budget_rejected.map(
+    (entry) => entry.exclusion_reason
+  );
+  assert.ok(
+    overflowReasons.some((reason) => reason === "budget_overflow:pitfall"),
+    `expected pitfall overflow under tighter budget (got: ${overflowReasons.join(", ")})`
+  );
+});
+
 test("composeContextFromStore reports budget_rejected with rank scores for overflow records", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

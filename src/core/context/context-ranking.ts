@@ -5,12 +5,16 @@ import { matchesPath } from "../indexes/record-index.js";
 export type ContextBudgets = {
   scopedItems: number;
   globalItems: number;
+  rules: number;
   decisions: number;
   pitfalls: number;
   workflows: number;
   glossary: number;
+  episodes: number;
   contentChars: number;
 };
+
+export type ContextBudgetsOverride = Partial<ContextBudgets>;
 
 export type RankedRecord = {
   record: NormalizedRecord;
@@ -40,12 +44,18 @@ export type ScopedContextItem = {
 export const DEFAULT_CONTEXT_BUDGETS: ContextBudgets = {
   scopedItems: 20,
   globalItems: 20,
+  rules: 20,
   decisions: 10,
   pitfalls: 10,
   workflows: 10,
   glossary: 10,
+  episodes: 10,
   contentChars: 1200
 };
+
+export function resolveContextBudgets(override?: ContextBudgetsOverride): ContextBudgets {
+  return { ...DEFAULT_CONTEXT_BUDGETS, ...(override ?? {}) };
+}
 
 const KIND_WEIGHT: Record<KnowledgeKind, number> = {
   rule: 40,

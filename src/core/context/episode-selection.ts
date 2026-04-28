@@ -3,11 +3,12 @@ import { selectIndexedEpisodeIds, type EpisodeIndex } from "../indexes/episode-i
 import type { GetContextInput } from "../../schemas/context-payload.js";
 import type { EpisodeReference } from "../../schemas/episode.js";
 
-const EPISODE_LIMIT = 10;
+const DEFAULT_EPISODE_LIMIT = 10;
 
 export function selectRelevantEpisodes(
   index: EpisodeIndex | undefined,
-  input: GetContextInput
+  input: GetContextInput,
+  limit: number = DEFAULT_EPISODE_LIMIT
 ): EpisodeReference[] {
   if (!index || !hasEpisodeSelectors(input) || typeof index.generated_at !== "string") {
     return [];
@@ -26,7 +27,7 @@ export function selectRelevantEpisodes(
     })
     .filter((episode) => matchesEpisodeFilters(episode, input))
     .sort(compareEpisodes)
-    .slice(0, EPISODE_LIMIT);
+    .slice(0, limit);
 }
 
 function compareEpisodes(left: EpisodeReference, right: EpisodeReference): number {

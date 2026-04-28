@@ -8,8 +8,14 @@ import {
   rankedTexts,
   scopedContextItem,
   type BudgetedRecords,
+  type ContextBudgets,
   type RankedRecord
 } from "./context-ranking.js";
+import {
+  readProjectConfig,
+  readProjectConfigFromContextStore,
+  resolveBudgetsFromConfig
+} from "../store/project-config-loader.js";
 import {
   readEpisodeIndex,
   readEpisodeIndexFromContextStore,
@@ -45,6 +51,7 @@ export function composeContextFromStore(
   storeRoot: string,
   input: GetContextInput = {}
 ): ComposedContext {
+  const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
@@ -56,7 +63,8 @@ export function composeContextFromStore(
     indexRead.indexes,
     undefined,
     episodeRead.index,
-    [...indexRead.warnings, ...episodeRead.warnings]
+    [...indexRead.warnings, ...episodeRead.warnings],
+    budgets
   );
 }
 
@@ -64,6 +72,7 @@ export async function composeContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
+  const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const episodeRead = await readEpisodeIndexFromContextStore(store, lastNormalizeAt);
@@ -75,7 +84,8 @@ export async function composeContextFromContextStore(
     indexRead.indexes,
     readResult.diagnostics,
     episodeRead.index,
-    [...indexRead.warnings, ...episodeRead.warnings]
+    [...indexRead.warnings, ...episodeRead.warnings],
+    budgets
   );
 }
 
@@ -85,7 +95,8 @@ function composeContextFromRecords(
   indexes: RecordIndexSet = {},
   diagnostics?: PrecomputedDiagnostics,
   episodeIndex?: EpisodeIndex,
-  indexWarnings: string[] = []
+  indexWarnings: string[] = [],
+  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS
 ): ComposedContext {
   const activeRecords = records.filter(
     (record) => record.state === "active" && matchesTimeInput(record, input)
@@ -93,54 +104,51 @@ function composeContextFromRecords(
   const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
   const globallyApplicableRecords = activeRecords.filter(isGloballyApplicableRecord);
   const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
-  const scopedBudget = budgetRecords(scopedRecords, input, DEFAULT_CONTEXT_BUDGETS.scopedItems);
+  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems);
   const globalBudget = budgetRecords(
     globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
     input,
-    DEFAULT_CONTEXT_BUDGETS.globalItems
+    budgets.globalItems
   );
   const ruleBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "rule"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.globalItems
+    budgets.rules
   );
   const decisionBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "decision"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.decisions
+    budgets.decisions
   );
   const pitfallBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "pitfall"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.pitfalls
+    budgets.pitfalls
   );
   const workflowBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "workflow"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.workflows
+    budgets.workflows
   );
   const glossaryBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "glossary"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.glossary
+    budgets.glossary
   );
 
   return {
     normalized_context: {
-      global: globalContext(globalBudget.selected),
+      global: globalContext(globalBudget.selected, budgets.contentChars),
       scoped: scopedBudget.selected.map((ranked) =>
-        scopedContextItem(ranked, DEFAULT_CONTEXT_BUDGETS.contentChars)
+        scopedContextItem(ranked, budgets.contentChars)
       ),
-      must_follow_rules: rankedTexts(ruleBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
-      recent_decisions: rankedTexts(decisionBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
-      active_pitfalls: rankedTexts(pitfallBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars),
-      applicable_workflows: rankedTexts(
-        workflowBudget.selected,
-        DEFAULT_CONTEXT_BUDGETS.contentChars
-      ),
-      glossary_terms: rankedTexts(glossaryBudget.selected, DEFAULT_CONTEXT_BUDGETS.contentChars)
+      must_follow_rules: rankedTexts(ruleBudget.selected, budgets.contentChars),
+      recent_decisions: rankedTexts(decisionBudget.selected, budgets.contentChars),
+      active_pitfalls: rankedTexts(pitfallBudget.selected, budgets.contentChars),
+      applicable_workflows: rankedTexts(workflowBudget.selected, budgets.contentChars),
+      glossary_terms: rankedTexts(glossaryBudget.selected, budgets.contentChars)
     },
-    relevant_episodes: selectRelevantEpisodes(episodeIndex, input),
+    relevant_episodes: selectRelevantEpisodes(episodeIndex, input, budgets.episodes),
     canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
     diagnostics: {
       contested_items:
@@ -263,8 +271,8 @@ function readJsonlLines(path: string): string[] {
   }
 }
 
-function globalContext(ranked: RankedRecord[]): string {
-  return rankedTexts(ranked, DEFAULT_CONTEXT_BUDGETS.contentChars).join("\n");
+function globalContext(ranked: RankedRecord[], maxContentChars: number): string {
+  return rankedTexts(ranked, maxContentChars).join("\n");
 }
 
 function isGlobalKind(kind: NormalizedRecord["kind"]): boolean {
@@ -512,17 +520,19 @@ export type RankTrace = {
 };
 
 export function rankContextFromStore(storeRoot: string, input: GetContextInput = {}): RankTrace {
+  const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
 
-  return buildRankTrace(records, input, indexRead.indexes);
+  return buildRankTrace(records, input, indexRead.indexes, budgets);
 }
 
 export async function rankContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<RankTrace> {
+  const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const records: NormalizedRecord[] = [];
@@ -537,13 +547,14 @@ export async function rankContextFromContextStore(
 
   const sortedRecords = records.sort((left, right) => left.id.localeCompare(right.id));
 
-  return buildRankTrace(sortedRecords, input, indexRead.indexes);
+  return buildRankTrace(sortedRecords, input, indexRead.indexes, budgets);
 }
 
 function buildRankTrace(
   records: NormalizedRecord[],
   input: GetContextInput,
-  indexes: RecordIndexSet = {}
+  indexes: RecordIndexSet = {},
+  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS
 ): RankTrace {
   const activeRecords = records.filter(
     (record) => record.state === "active" && matchesTimeInput(record, input)
@@ -553,36 +564,36 @@ function buildRankTrace(
   const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
   const applicableIds = new Set(applicableRecords.map((r) => r.id));
 
-  const scopedBudget = budgetRecords(scopedRecords, input, DEFAULT_CONTEXT_BUDGETS.scopedItems);
+  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems);
   const globalBudget = budgetRecords(
     globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
     input,
-    DEFAULT_CONTEXT_BUDGETS.globalItems
+    budgets.globalItems
   );
   const ruleBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "rule"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.globalItems
+    budgets.rules
   );
   const decisionBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "decision"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.decisions
+    budgets.decisions
   );
   const pitfallBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "pitfall"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.pitfalls
+    budgets.pitfalls
   );
   const workflowBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "workflow"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.workflows
+    budgets.workflows
   );
   const glossaryBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "glossary"),
     input,
-    DEFAULT_CONTEXT_BUDGETS.glossary
+    budgets.glossary
   );
 
   const placements = new Map<string, string>();

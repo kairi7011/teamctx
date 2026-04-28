@@ -4,12 +4,37 @@ export type RetentionConfig = {
   archive_path: string;
 };
 
+export type ContextBudgetsConfig = {
+  scoped_items?: number;
+  global_items?: number;
+  rules?: number;
+  decisions?: number;
+  pitfalls?: number;
+  workflows?: number;
+  glossary?: number;
+  episodes?: number;
+  content_chars?: number;
+};
+
 export type ProjectConfig = {
   format_version: 1;
   project_id: string;
   normalizer_version: string;
   retention: RetentionConfig;
+  context_budgets?: ContextBudgetsConfig;
 };
+
+const CONTEXT_BUDGET_KEYS: ReadonlyArray<keyof ContextBudgetsConfig> = [
+  "scoped_items",
+  "global_items",
+  "rules",
+  "decisions",
+  "pitfalls",
+  "workflows",
+  "glossary",
+  "episodes",
+  "content_chars"
+];
 
 export function createDefaultProjectConfig(
   projectId: string,
@@ -48,33 +73,78 @@ export function validateProjectConfig(value: unknown): ProjectConfig {
     throw new Error("project config retention is invalid");
   }
 
-  return {
+  const config: ProjectConfig = {
     format_version: value.format_version,
     project_id: value.project_id,
     normalizer_version: value.normalizer_version,
     retention: value.retention
   };
+
+  if (value.context_budgets !== undefined) {
+    config.context_budgets = validateContextBudgets(value.context_budgets);
+  }
+
+  return config;
+}
+
+function validateContextBudgets(value: unknown): ContextBudgetsConfig {
+  if (!isRecord(value)) {
+    throw new Error("project config context_budgets must be an object");
+  }
+
+  const result: ContextBudgetsConfig = {};
+
+  for (const key of CONTEXT_BUDGET_KEYS) {
+    const raw = value[key];
+
+    if (raw === undefined) {
+      continue;
+    }
+
+    if (!isPositiveInteger(raw)) {
+      throw new Error(`project config context_budgets.${key} must be a positive integer`);
+    }
+
+    result[key] = raw;
+  }
+
+  return result;
 }
 
 export function serializeProjectConfig(value: ProjectConfig): string {
   const config = validateProjectConfig(value);
-
-  return [
+  const lines = [
     `format_version: ${config.format_version}`,
     `project_id: ${yamlString(config.project_id)}`,
     `normalizer_version: ${yamlString(config.normalizer_version)}`,
     "retention:",
     `  raw_candidate_days: ${config.retention.raw_candidate_days}`,
     `  audit_days: ${config.retention.audit_days}`,
-    `  archive_path: ${yamlString(config.retention.archive_path)}`,
-    ""
-  ].join("\n");
+    `  archive_path: ${yamlString(config.retention.archive_path)}`
+  ];
+
+  if (config.context_budgets !== undefined) {
+    lines.push("context_budgets:");
+    for (const key of CONTEXT_BUDGET_KEYS) {
+      const value = config.context_budgets[key];
+      if (value !== undefined) {
+        lines.push(`  ${key}: ${value}`);
+      }
+    }
+  }
+
+  lines.push("");
+
+  return lines.join("\n");
 }
 
 export function parseProjectConfig(content: string): ProjectConfig {
   const root: Record<string, unknown> = {};
-  const retention: Record<string, unknown> = {};
-  let section: "retention" | undefined;
+  const sections: Record<"retention" | "context_budgets", Record<string, unknown>> = {
+    retention: {},
+    context_budgets: {}
+  };
+  let section: "retention" | "context_budgets" | undefined;
 
   for (const line of content.split(/\r?\n/)) {
     if (line.trim().length === 0) {
@@ -93,19 +163,19 @@ export function parseProjectConfig(content: string): ProjectConfig {
     const rawValue = trimmed.slice(separatorIndex + 1).trim();
 
     if (rawValue.length === 0) {
-      if (key !== "retention" || indentation !== 0) {
+      if (indentation !== 0 || (key !== "retention" && key !== "context_budgets")) {
         throw new Error(`project config section is invalid: ${key}`);
       }
-      section = "retention";
-      root.retention = retention;
+      section = key;
+      root[key] = sections[key];
       continue;
     }
 
     if (indentation > 0) {
-      if (section !== "retention") {
+      if (section === undefined) {
         throw new Error(`project config nested key is invalid: ${key}`);
       }
-      retention[key] = parseScalar(rawValue);
+      sections[section][key] = parseScalar(rawValue);
     } else {
       section = undefined;
       root[key] = parseScalar(rawValue);
