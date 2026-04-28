@@ -48,7 +48,7 @@ Implemented:
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx audit` for listing audit changes by action, item, source event, query, and limit
 - `teamctx show` for inspecting one normalized record in human-readable form
-- `teamctx status --json` for automation-friendly status output
+- `--json` support for automation-friendly `teamctx status`, `teamctx normalize`, and `teamctx compact` output
 - `teamctx compact` for local and GitHub retention and archive compaction
 - `--dry-run` support for `teamctx normalize` and `teamctx compact`
 - opt-in real GitHub smoke test for the MVP remote context flow
@@ -158,6 +158,7 @@ Record one or more verified observations from a JSON file:
 ```bash
 teamctx record-verified observations.json
 teamctx normalize --dry-run
+teamctx normalize --json
 teamctx normalize
 ```
 
@@ -168,6 +169,7 @@ Compact expired local context-store data into the configured archive path:
 ```bash
 teamctx compact
 teamctx compact --dry-run
+teamctx compact --json
 ```
 
 Context text budgets are approximate token budgets. Configure them in `project.yaml`:

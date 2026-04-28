@@ -89,8 +89,8 @@ function printHelp(): void {
 Usage:
   teamctx bind <store> [--path <path>]
   teamctx init-store
-  teamctx normalize [--dry-run]
-  teamctx compact [--dry-run]
+  teamctx normalize [--dry-run] [--json]
+  teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
@@ -155,6 +155,11 @@ async function normalize(args: ParsedArgs): Promise<void> {
   const dryRun = args.flags["dry-run"] === true;
   const result = await normalizeBoundStoreAsync(dryRun ? { dryRun: true } : {});
 
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   console.log(dryRun ? "Normalized context store (dry-run):" : "Normalized context store:");
   console.log(`  run_id: ${result.runId}`);
   console.log(`  normalized_at: ${result.normalizedAt}`);
@@ -170,6 +175,11 @@ async function normalize(args: ParsedArgs): Promise<void> {
 async function compact(args: ParsedArgs): Promise<void> {
   const dryRun = args.flags["dry-run"] === true;
   const result = await compactBoundStoreAsync(dryRun ? { dryRun: true } : {});
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   console.log(dryRun ? "Compacted context store (dry-run):" : "Compacted context store:");
   console.log(`  compacted_at: ${result.compactedAt}`);
