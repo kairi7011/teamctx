@@ -1,5 +1,18 @@
 import { isRecord, optionalStringArray } from "./validation.js";
 import type { EpisodeReference } from "./episode.js";
+import type { DocRole, LineRange } from "./evidence.js";
+
+export type CanonicalDocRef = {
+  repo: string;
+  path: string;
+  commit: string;
+  item_id: string;
+  reason: string;
+  fetch_url?: string;
+  doc_role?: DocRole;
+  lines?: LineRange;
+  url?: string;
+};
 
 export type GetContextInput = {
   cwd?: string;
@@ -54,7 +67,7 @@ export type EnabledContextPayload = {
     glossary_terms: string[];
   };
   relevant_episodes: EpisodeReference[];
-  canonical_doc_refs: Array<Record<string, unknown>>;
+  canonical_doc_refs: CanonicalDocRef[];
   diagnostics: {
     contested_items: string[];
     stale_items: string[];

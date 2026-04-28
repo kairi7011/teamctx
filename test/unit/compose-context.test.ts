@@ -347,10 +347,93 @@ test("composeContextFromStore returns canonical doc refs for scoped docs evidenc
       commit: "abc123",
       item_id: "rule-docs",
       reason: "scope_match",
+      fetch_url: "https://raw.githubusercontent.com/team/service/abc123/docs/auth-runbook.md",
       doc_role: "runbook",
       lines: [4, 12]
     }
   ]);
+});
+
+test("composeContextFromStore omits fetch_url for non-github canonical docs", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const docsRecord = {
+    ...record("rule-docs-gitlab", "rule", "active"),
+    evidence: [
+      {
+        kind: "docs",
+        repo: "gitlab.com/team/service",
+        commit: "def456",
+        file: "docs/auth-runbook.md",
+        doc_role: "runbook",
+        url: "https://gitlab.com/team/service/-/blob/def456/docs/auth-runbook.md"
+      }
+    ]
+  } satisfies NormalizedRecord;
+
+  writeRecord(storeRoot, "rules.jsonl", docsRecord);
+  writeIndexes(storeRoot, [docsRecord], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(composed.canonical_doc_refs, [
+    {
+      repo: "gitlab.com/team/service",
+      path: "docs/auth-runbook.md",
+      commit: "def456",
+      item_id: "rule-docs-gitlab",
+      reason: "scope_match",
+      doc_role: "runbook",
+      url: "https://gitlab.com/team/service/-/blob/def456/docs/auth-runbook.md"
+    }
+  ]);
+});
+
+test("composeContextFromStore sorts canonical doc refs deterministically", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  const ruleA = {
+    ...record("rule-z", "rule", "active"),
+    evidence: [
+      {
+        kind: "docs",
+        repo: "github.com/team/service",
+        commit: "abc",
+        file: "docs/zeta.md",
+        doc_role: "runbook"
+      }
+    ]
+  } satisfies NormalizedRecord;
+  const ruleB = {
+    ...record("rule-a", "rule", "active"),
+    evidence: [
+      {
+        kind: "docs",
+        repo: "github.com/team/service",
+        commit: "abc",
+        file: "docs/alpha.md",
+        doc_role: "runbook"
+      }
+    ]
+  } satisfies NormalizedRecord;
+
+  writeRecord(storeRoot, "rules.jsonl", ruleA);
+  writeRecord(storeRoot, "rules.jsonl", ruleB);
+  writeIndexes(storeRoot, [ruleA, ruleB], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.deepEqual(
+    composed.canonical_doc_refs.map((ref) => ref.path),
+    ["docs/alpha.md", "docs/zeta.md"]
+  );
 });
 
 test("composeContextFromStore returns relevant episode references from the episode index", (context) => {

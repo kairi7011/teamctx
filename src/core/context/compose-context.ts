@@ -40,7 +40,11 @@ import {
   type KnowledgeKind,
   type NormalizedRecord
 } from "../../schemas/normalized-record.js";
-import type { GetContextInput, EnabledContextPayload } from "../../schemas/context-payload.js";
+import type {
+  CanonicalDocRef,
+  EnabledContextPayload,
+  GetContextInput
+} from "../../schemas/context-payload.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
@@ -699,9 +703,9 @@ function traceScopeSummary(record: NormalizedRecord): string {
   return parts.length > 0 ? parts.join("; ") : "global";
 }
 
-function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unknown>> {
+function canonicalDocRefs(records: NormalizedRecord[]): CanonicalDocRef[] {
   const seen = new Set<string>();
-  const refs: Array<Record<string, unknown>> = [];
+  const refs: CanonicalDocRef[] = [];
 
   for (const record of records) {
     for (const evidence of record.evidence) {
@@ -723,7 +727,7 @@ function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unk
 
       seen.add(key);
 
-      const ref: Record<string, unknown> = {
+      const ref: CanonicalDocRef = {
         repo: evidence.repo,
         path: evidence.file,
         commit: evidence.commit,
@@ -731,6 +735,10 @@ function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unk
         reason: "scope_match"
       };
 
+      const fetchUrl = derivedFetchUrl(evidence.repo, evidence.commit, evidence.file);
+      if (fetchUrl !== undefined) {
+        ref.fetch_url = fetchUrl;
+      }
       if (evidence.doc_role !== undefined) {
         ref.doc_role = evidence.doc_role;
       }
@@ -745,5 +753,27 @@ function canonicalDocRefs(records: NormalizedRecord[]): Array<Record<string, unk
     }
   }
 
-  return refs;
+  return refs.sort(
+    (left, right) =>
+      left.repo.localeCompare(right.repo) ||
+      left.path.localeCompare(right.path) ||
+      left.commit.localeCompare(right.commit) ||
+      left.item_id.localeCompare(right.item_id)
+  );
+}
+
+function derivedFetchUrl(repo: string, commit: string, path: string): string | undefined {
+  const githubMatch = /^github\.com\/([^/]+)\/([^/]+)$/.exec(repo);
+
+  if (!githubMatch) {
+    return undefined;
+  }
+
+  const [, owner, name] = githubMatch;
+  const encodedPath = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `https://raw.githubusercontent.com/${owner}/${name}/${encodeURIComponent(commit)}/${encodedPath}`;
 }
