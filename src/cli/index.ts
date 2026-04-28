@@ -34,6 +34,7 @@ import {
 } from "../core/list/records.js";
 import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStoreAsync } from "../core/retention/compact.js";
+import { formatShowRecord } from "../core/show/record.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
@@ -96,6 +97,7 @@ Usage:
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file>
   teamctx record-verified <json-file>
+  teamctx show <item-id>
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
   teamctx invalidate <item-id> [--reason <reason>]
@@ -354,6 +356,16 @@ async function explain(args: ParsedArgs): Promise<void> {
   }
 
   console.log(JSON.stringify(await explainBoundItemAsync({ itemId }), null, 2));
+}
+
+async function show(args: ParsedArgs): Promise<void> {
+  const [itemId] = args.positional;
+
+  if (!itemId) {
+    throw new CliError(CLI_EXIT.USAGE, "Missing item id. Usage: teamctx show <item-id>");
+  }
+
+  console.log(formatShowRecord(await explainBoundItemAsync({ itemId })));
 }
 
 async function explainEpisode(args: ParsedArgs): Promise<void> {
@@ -630,6 +642,9 @@ async function main(): Promise<void> {
       return;
     case "record-verified":
       await recordObservation(args, "verified");
+      return;
+    case "show":
+      await show(args);
       return;
     case "explain":
       await explain(args);
