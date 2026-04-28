@@ -626,6 +626,72 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
   );
 });
 
+test("normalizeBoundStoreAsync skips remote writes when content is unchanged", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  mkdirSync(join(directory, "src", "auth"), { recursive: true });
+  writeFileSync(
+    join(directory, "src", "auth", "middleware.ts"),
+    "export class AuthMiddleware {}\n",
+    "utf8"
+  );
+  writeRaw(remoteRoot, observation());
+
+  const counter = { writes: 0, paths: [] as string[] };
+  const buildStore = (): LocalContextStore => {
+    const inner = new LocalContextStore(remoteRoot);
+    const store = inner as unknown as {
+      writeText: (
+        ...args: Parameters<LocalContextStore["writeText"]>
+      ) => ReturnType<LocalContextStore["writeText"]>;
+    };
+    const original = inner.writeText.bind(inner);
+    store.writeText = async (...args) => {
+      counter.writes += 1;
+      counter.paths.push(args[0]);
+      return original(...args);
+    };
+    return inner;
+  };
+
+  const services = (): NormalizeServices => {
+    const base = servicesFor(directory, "github.com/team/context", remoteRoot);
+    return {
+      ...base,
+      createContextStore: () => buildStore()
+    };
+  };
+
+  await normalizeBoundStoreAsync({ services: services(), now: fixedNow });
+  const writesAfterFirstRun = counter.writes;
+  counter.writes = 0;
+  counter.paths = [];
+
+  await normalizeBoundStoreAsync({ services: services(), now: fixedNow });
+
+  assert.ok(
+    writesAfterFirstRun >= 11,
+    `first run should write all categories and indexes (got ${writesAfterFirstRun})`
+  );
+  assert.deepEqual(
+    counter.paths,
+    ["indexes/last-normalize.json"],
+    `second run should only update last-normalize (got: ${counter.paths.join(", ")})`
+  );
+
+  counter.writes = 0;
+  counter.paths = [];
+
+  await normalizeBoundStoreAsync({ services: services(), now: fixedNow });
+
+  assert.equal(
+    counter.writes,
+    0,
+    `third run with identical state should write nothing (got: ${counter.paths.join(", ")})`
+  );
+});
+
 function servicesFor(
   root: string,
   contextStoreRepo = "github.com/team/service",

@@ -224,13 +224,12 @@ export async function normalizeContextStore(options: {
   }
 
   const lastNormalize = await options.store.readText("indexes/last-normalize.json");
-  await options.store.writeText(
+  await writeIfChanged(
+    options.store,
     "indexes/last-normalize.json",
     `${JSON.stringify(run.result, null, 2)}\n`,
-    {
-      message: `Record teamctx normalize result ${run.result.normalizedAt}`,
-      expectedRevision: lastNormalize?.revision ?? null
-    }
+    lastNormalize,
+    { message: `Record teamctx normalize result ${run.result.normalizedAt}` }
   );
 
   return run.result;
@@ -530,10 +529,10 @@ async function writeNormalizedRecordsToContextStore(
     const file = NORMALIZED_FILE_BY_KIND[kind];
     const existingFile = existingFilesByName.get(file);
     const kindRecords = records.filter((record) => record.kind === kind);
+    const nextContent = serializeJsonl(kindRecords);
 
-    await store.writeText(`normalized/${file}`, serializeJsonl(kindRecords), {
-      message: `Write teamctx normalized ${file}`,
-      expectedRevision: existingFile?.revision ?? null
+    await writeIfChanged(store, `normalized/${file}`, nextContent, existingFile, {
+      message: `Write teamctx normalized ${file}`
     });
   }
 }
@@ -544,22 +543,31 @@ async function writeRecordIndexesToContextStore(
   normalizedAt: string
 ): Promise<void> {
   const pathIndexFile = await store.readText("indexes/path-index.json");
-  await store.writeText("indexes/path-index.json", serializePathIndex(indexes.pathIndex), {
-    message: `Write teamctx path index ${normalizedAt}`,
-    expectedRevision: pathIndexFile?.revision ?? null
-  });
+  await writeIfChanged(
+    store,
+    "indexes/path-index.json",
+    serializePathIndex(indexes.pathIndex),
+    pathIndexFile,
+    { message: `Write teamctx path index ${normalizedAt}` }
+  );
 
   const symbolIndexFile = await store.readText("indexes/symbol-index.json");
-  await store.writeText("indexes/symbol-index.json", serializeSymbolIndex(indexes.symbolIndex), {
-    message: `Write teamctx symbol index ${normalizedAt}`,
-    expectedRevision: symbolIndexFile?.revision ?? null
-  });
+  await writeIfChanged(
+    store,
+    "indexes/symbol-index.json",
+    serializeSymbolIndex(indexes.symbolIndex),
+    symbolIndexFile,
+    { message: `Write teamctx symbol index ${normalizedAt}` }
+  );
 
   const textIndexFile = await store.readText("indexes/text-index.json");
-  await store.writeText("indexes/text-index.json", serializeTextIndex(indexes.textIndex), {
-    message: `Write teamctx text index ${normalizedAt}`,
-    expectedRevision: textIndexFile?.revision ?? null
-  });
+  await writeIfChanged(
+    store,
+    "indexes/text-index.json",
+    serializeTextIndex(indexes.textIndex),
+    textIndexFile,
+    { message: `Write teamctx text index ${normalizedAt}` }
+  );
 }
 
 async function writeEpisodeIndexToContextStore(
@@ -568,9 +576,29 @@ async function writeEpisodeIndexToContextStore(
   normalizedAt: string
 ): Promise<void> {
   const episodeIndexFile = await store.readText("indexes/episode-index.json");
-  await store.writeText("indexes/episode-index.json", serializeEpisodeIndex(index), {
-    message: `Write teamctx episode index ${normalizedAt}`,
-    expectedRevision: episodeIndexFile?.revision ?? null
+  await writeIfChanged(
+    store,
+    "indexes/episode-index.json",
+    serializeEpisodeIndex(index),
+    episodeIndexFile,
+    { message: `Write teamctx episode index ${normalizedAt}` }
+  );
+}
+
+async function writeIfChanged(
+  store: ContextStoreAdapter,
+  path: string,
+  nextContent: string,
+  existingFile: ContextStoreFile | undefined,
+  options: { message: string }
+): Promise<void> {
+  if (existingFile && existingFile.content === nextContent) {
+    return;
+  }
+
+  await store.writeText(path, nextContent, {
+    message: options.message,
+    expectedRevision: existingFile?.revision ?? null
   });
 }
 
