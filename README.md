@@ -48,6 +48,7 @@ Implemented:
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx audit` for listing audit changes by action, item, source event, query, and limit
 - `teamctx show` for inspecting one normalized record in human-readable form
+- `teamctx status --json` for automation-friendly status output
 - `teamctx compact` for local and GitHub retention and archive compaction
 - `--dry-run` support for `teamctx normalize` and `teamctx compact`
 - opt-in real GitHub smoke test for the MVP remote context flow
@@ -115,6 +116,7 @@ Check the current binding:
 
 ```bash
 teamctx status
+teamctx status --json
 ```
 
 Preview the current task context:

@@ -101,7 +101,7 @@ Usage:
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
   teamctx invalidate <item-id> [--reason <reason>]
-  teamctx status
+  teamctx status [--json]
   teamctx doctor
   teamctx tools
 
@@ -403,8 +403,13 @@ async function invalidate(args: ParsedArgs): Promise<void> {
   console.log(`  after_state: ${result.after_state}`);
 }
 
-async function status(): Promise<void> {
+async function status(args: ParsedArgs): Promise<void> {
   const result = await getBoundStatusAsync();
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   if (!result.enabled) {
     console.log("teamctx disabled");
@@ -656,7 +661,7 @@ async function main(): Promise<void> {
       await invalidate(args);
       return;
     case "status":
-      await status();
+      await status(args);
       return;
     case "doctor":
       await doctor();
