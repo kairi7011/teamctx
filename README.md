@@ -34,6 +34,7 @@ Implemented:
 - canonical docs references from scoped docs evidence
 - ranked context payloads with selection reasons and category budgets
 - structured scoped ranking scores and match reasons in context payloads
+- approximate token budgeting for context text, configurable with `context_budgets.content_tokens`
 - selector-driven remote context retrieval that skips unrelated normalized shards
 - context diagnostics for missing, stale, or invalid generated indexes
 - `teamctx.get_context` time filters with `since` / `until`
@@ -43,17 +44,20 @@ Implemented:
 - CLI batch recording for candidate and verified raw observations from JSON files
 - `teamctx explain` / `teamctx invalidate` for local and GitHub normalized records
 - `teamctx context` for previewing the current `teamctx.get_context` payload
+- `teamctx rank` for inspecting ranking, placement, and exclusion reasons
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx audit` for listing audit changes by action, item, source event, query, and limit
+- `teamctx show` for inspecting one normalized record in human-readable form
 - `teamctx compact` for local and GitHub retention and archive compaction
+- `--dry-run` support for `teamctx normalize` and `teamctx compact`
 - opt-in real GitHub smoke test for the MVP remote context flow
 - Node built-in test runner setup
 - initial MCP tool shape definitions
 
 Planned:
 
-- richer stale scoring
 - deeper normalization quality beyond deterministic heuristics
+- richer temporal, procedural, and semantic memory after deterministic retrieval remains stable
 
 ## Design Principles
 
@@ -127,6 +131,19 @@ teamctx list --state active --domains cli --limit 20
 teamctx list --kind workflow --tags preview-cli --query "context preview"
 ```
 
+Inspect one normalized record:
+
+```bash
+teamctx show workflow-example
+teamctx explain workflow-example
+```
+
+Trace ranking and context placement:
+
+```bash
+teamctx rank --target-files src/index.ts --domains cli --query "record verified"
+```
+
 List audit changes:
 
 ```bash
@@ -138,6 +155,7 @@ Record one or more verified observations from a JSON file:
 
 ```bash
 teamctx record-verified observations.json
+teamctx normalize --dry-run
 teamctx normalize
 ```
 
@@ -147,7 +165,18 @@ Compact expired local context-store data into the configured archive path:
 
 ```bash
 teamctx compact
+teamctx compact --dry-run
 ```
+
+Context text budgets are approximate token budgets. Configure them in `project.yaml`:
+
+```yaml
+context_budgets:
+  scoped_items: 20
+  content_tokens: 300
+```
+
+Older `content_chars` settings are still accepted and converted to approximate tokens.
 
 Run diagnostics:
 
