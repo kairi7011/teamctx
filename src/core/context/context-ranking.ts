@@ -11,7 +11,7 @@ export type ContextBudgets = {
   workflows: number;
   glossary: number;
   episodes: number;
-  contentChars: number;
+  contentTokens: number;
 };
 
 export type ContextBudgetsOverride = Partial<ContextBudgets>;
@@ -50,7 +50,7 @@ export const DEFAULT_CONTEXT_BUDGETS: ContextBudgets = {
   workflows: 10,
   glossary: 10,
   episodes: 10,
-  contentChars: 1200
+  contentTokens: 300
 };
 
 export function resolveContextBudgets(override?: ContextBudgetsOverride): ContextBudgets {
@@ -91,13 +91,13 @@ export function budgetRecords(
 
 export function scopedContextItem(
   ranked: RankedRecord,
-  maxContentChars: number
+  maxContentTokens: number
 ): ScopedContextItem {
   const item: ScopedContextItem = {
     id: ranked.record.id,
     kind: ranked.record.kind,
     scope: ranked.record.scope,
-    content: truncateText(ranked.record.text, maxContentChars),
+    content: truncateTextByApproxTokens(ranked.record.text, maxContentTokens),
     reason: selectionReason(ranked),
     rank_score: ranked.score,
     rank_reasons: ranked.reasons,
@@ -114,8 +114,8 @@ export function scopedContextItem(
   return item;
 }
 
-export function rankedTexts(ranked: RankedRecord[], maxContentChars: number): string[] {
-  return ranked.map((item) => truncateText(item.record.text, maxContentChars));
+export function rankedTexts(ranked: RankedRecord[], maxContentTokens: number): string[] {
+  return ranked.map((item) => truncateTextByApproxTokens(item.record.text, maxContentTokens));
 }
 
 function rankRecord(record: NormalizedRecord, input: GetContextInput): RankedRecord {
@@ -207,12 +207,31 @@ function recency(record: NormalizedRecord): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function truncateText(value: string, maxChars: number): string {
-  if (value.length <= maxChars) {
+export function approximateTokenCount(value: string): number {
+  return value.match(/[A-Za-z0-9_]+|[^\sA-Za-z0-9_]/g)?.length ?? 0;
+}
+
+function truncateTextByApproxTokens(value: string, maxTokens: number): string {
+  if (approximateTokenCount(value) <= maxTokens) {
     return value;
   }
 
-  return `${value.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+  const words = value.split(/(\s+)/);
+  let tokens = 0;
+  let output = "";
+
+  for (const word of words) {
+    const nextTokens = approximateTokenCount(word);
+
+    if (tokens + nextTokens > maxTokens) {
+      break;
+    }
+
+    output += word;
+    tokens += nextTokens;
+  }
+
+  return `${output.trimEnd()}...`;
 }
 
 function textKey(value: string): string {

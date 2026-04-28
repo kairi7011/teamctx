@@ -58,3 +58,27 @@ test("parseProjectConfig reads generated project.yaml content", () => {
 
   assert.deepEqual(parseProjectConfig(serializeProjectConfig(config)), config);
 });
+
+test("parseProjectConfig reads token context budget values", () => {
+  assert.deepEqual(
+    parseProjectConfig(
+      [
+        "format_version: 1",
+        'project_id: "github.com/team/service"',
+        'normalizer_version: "0.1.0"',
+        "retention:",
+        "  raw_candidate_days: 30",
+        "  audit_days: 180",
+        '  archive_path: "archive/"',
+        "context_budgets:",
+        "  content_tokens: 64",
+        "  content_chars: 256",
+        ""
+      ].join("\n")
+    ).context_budgets,
+    {
+      content_tokens: 64,
+      content_chars: 256
+    }
+  );
+});

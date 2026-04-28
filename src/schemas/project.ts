@@ -13,6 +13,7 @@ export type ContextBudgetsConfig = {
   workflows?: number;
   glossary?: number;
   episodes?: number;
+  content_tokens?: number;
   content_chars?: number;
 };
 
@@ -33,6 +34,7 @@ const CONTEXT_BUDGET_KEYS: ReadonlyArray<keyof ContextBudgetsConfig> = [
   "workflows",
   "glossary",
   "episodes",
+  "content_tokens",
   "content_chars"
 ];
 

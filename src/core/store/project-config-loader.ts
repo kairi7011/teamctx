@@ -56,7 +56,11 @@ function toBudgetsOverride(config: ContextBudgetsConfig | undefined): ContextBud
   if (config.workflows !== undefined) override.workflows = config.workflows;
   if (config.glossary !== undefined) override.glossary = config.glossary;
   if (config.episodes !== undefined) override.episodes = config.episodes;
-  if (config.content_chars !== undefined) override.contentChars = config.content_chars;
+  if (config.content_tokens !== undefined) {
+    override.contentTokens = config.content_tokens;
+  } else if (config.content_chars !== undefined) {
+    override.contentTokens = Math.max(1, Math.ceil(config.content_chars / 4));
+  }
 
   return override;
 }

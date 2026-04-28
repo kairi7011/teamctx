@@ -142,15 +142,15 @@ function composeContextFromRecords(
 
   return {
     normalized_context: {
-      global: globalContext(globalBudget.selected, budgets.contentChars),
+      global: globalContext(globalBudget.selected, budgets.contentTokens),
       scoped: scopedBudget.selected.map((ranked) =>
-        scopedContextItem(ranked, budgets.contentChars)
+        scopedContextItem(ranked, budgets.contentTokens)
       ),
-      must_follow_rules: rankedTexts(ruleBudget.selected, budgets.contentChars),
-      recent_decisions: rankedTexts(decisionBudget.selected, budgets.contentChars),
-      active_pitfalls: rankedTexts(pitfallBudget.selected, budgets.contentChars),
-      applicable_workflows: rankedTexts(workflowBudget.selected, budgets.contentChars),
-      glossary_terms: rankedTexts(glossaryBudget.selected, budgets.contentChars)
+      must_follow_rules: rankedTexts(ruleBudget.selected, budgets.contentTokens),
+      recent_decisions: rankedTexts(decisionBudget.selected, budgets.contentTokens),
+      active_pitfalls: rankedTexts(pitfallBudget.selected, budgets.contentTokens),
+      applicable_workflows: rankedTexts(workflowBudget.selected, budgets.contentTokens),
+      glossary_terms: rankedTexts(glossaryBudget.selected, budgets.contentTokens)
     },
     relevant_episodes: selectRelevantEpisodes(episodeIndex, input, budgets.episodes),
     canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
@@ -275,8 +275,8 @@ function readJsonlLines(path: string): string[] {
   }
 }
 
-function globalContext(ranked: RankedRecord[], maxContentChars: number): string {
-  return rankedTexts(ranked, maxContentChars).join("\n");
+function globalContext(ranked: RankedRecord[], maxContentTokens: number): string {
+  return rankedTexts(ranked, maxContentTokens).join("\n");
 }
 
 function isGlobalKind(kind: NormalizedRecord["kind"]): boolean {
