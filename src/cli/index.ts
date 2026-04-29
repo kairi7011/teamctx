@@ -46,7 +46,8 @@ import { resolveStoreRoot } from "../core/store/layout.js";
 import { createContextStoreForBinding } from "../core/store/bound-store.js";
 import {
   recordObservationCandidateToolAsync,
-  recordObservationVerifiedToolAsync
+  recordObservationVerifiedToolAsync,
+  type RecordObservationToolResult
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import type { GetContextInput } from "../schemas/context-payload.js";
@@ -95,8 +96,8 @@ Usage:
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
-  teamctx record-candidate <json-file>
-  teamctx record-verified <json-file>
+  teamctx record-candidate <json-file> [--json]
+  teamctx record-verified <json-file> [--json]
   teamctx show <item-id>
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
@@ -343,7 +344,7 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
     );
   }
 
-  console.log(`Recorded ${trust} raw observations:`);
+  const results: Array<{ index: number; result: RecordObservationToolResult }> = [];
 
   for (const [index, observation] of observations.entries()) {
     const result =
@@ -351,7 +352,31 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
         ? await recordObservationVerifiedToolAsync(observation)
         : await recordObservationCandidateToolAsync(observation);
 
-    console.log(`  - ${index + 1}: ${result.relative_path}`);
+    results.push({ index: index + 1, result });
+  }
+
+  if (args.flags.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          trust,
+          count: results.length,
+          observations: results.map((item) => ({
+            index: item.index,
+            ...item.result
+          }))
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log(`Recorded ${trust} raw observations:`);
+
+  for (const { index, result } of results) {
+    console.log(`  - ${index}: ${result.relative_path}`);
 
     for (const finding of result.findings) {
       console.log(

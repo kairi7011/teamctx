@@ -48,7 +48,7 @@ Implemented:
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx audit` for listing audit changes by action, item, source event, query, and limit
 - `teamctx show` for inspecting one normalized record in human-readable form
-- `--json` support for automation-friendly `teamctx init-store`, `teamctx status`, `teamctx normalize`, `teamctx compact`, and `teamctx invalidate` output
+- `--json` support for automation-friendly `teamctx init-store`, `teamctx status`, `teamctx normalize`, `teamctx compact`, `teamctx invalidate`, and observation recording output
 - `teamctx compact` for local and GitHub retention and archive compaction
 - `--dry-run` support for `teamctx normalize` and `teamctx compact`
 - opt-in real GitHub smoke test for the MVP remote context flow
@@ -159,6 +159,7 @@ Record one or more verified observations from a JSON file:
 
 ```bash
 teamctx record-verified observations.json
+teamctx record-verified observations.json --json
 teamctx normalize --dry-run
 teamctx normalize --json
 teamctx normalize
