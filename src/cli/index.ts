@@ -40,6 +40,10 @@ import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
 import { diffContextPayloads } from "../core/context/context-diff.js";
 import {
+  explainContextQueryFromContextStore,
+  explainContextQueryFromStore
+} from "../core/context/query-explain.js";
+import {
   rankContextFromStore,
   rankContextFromContextStore
 } from "../core/context/compose-context.js";
@@ -95,6 +99,7 @@ Usage:
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
   teamctx context-diff <left-json> <right-json>
+  teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
@@ -113,6 +118,7 @@ Examples:
   teamctx bind . --path .teamctx
   teamctx context --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
+  teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
   teamctx audit --action created --limit 20
@@ -224,6 +230,27 @@ async function contextDiff(args: ParsedArgs): Promise<void> {
   const right = await getContextToolAsync(rightInput);
 
   console.log(JSON.stringify(diffContextPayloads(left, right, leftInput, rightInput), null, 2));
+}
+
+async function queryExplain(args: ParsedArgs): Promise<void> {
+  const root = getRepoRoot();
+  const repo = normalizeGitHubRepo(getOriginRemote(root));
+  const binding = findBinding(repo);
+
+  if (!binding) {
+    throw new CliError(CLI_EXIT.BINDING, "No teamctx binding found for this git root.");
+  }
+
+  const input = contextInput(args);
+
+  if (binding.contextStore.repo === repo) {
+    const storeRoot = resolveStoreRoot(root, binding.contextStore.path);
+    console.log(JSON.stringify(explainContextQueryFromStore(storeRoot, input), null, 2));
+    return;
+  }
+
+  const store = createContextStoreForBinding({ repo, repoRoot: root, binding });
+  console.log(JSON.stringify(await explainContextQueryFromContextStore(store, input), null, 2));
 }
 
 async function rank(args: ParsedArgs): Promise<void> {
@@ -705,6 +732,9 @@ async function main(): Promise<void> {
       return;
     case "context-diff":
       await contextDiff(args);
+      return;
+    case "query-explain":
+      await queryExplain(args);
       return;
     case "rank":
       await rank(args);
