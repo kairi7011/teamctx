@@ -13,6 +13,7 @@ import {
 } from "./tools/record-observation.js";
 import { statusToolAsync } from "./tools/status.js";
 import { toolDefinitions } from "./tools/definitions.js";
+import { structuredMcpError } from "./errors.js";
 
 type JsonRpcRequest = {
   jsonrpc: "2.0";
@@ -150,12 +151,15 @@ async function handleLine(line: string): Promise<void> {
       writeMessage(response);
     }
   } catch (error) {
+    const structured = structuredMcpError(error);
+
     writeMessage({
       jsonrpc: "2.0",
       id: null,
       error: {
         code: -32700,
-        message: error instanceof Error ? error.message : String(error)
+        message: structured.message,
+        data: structured
       }
     });
   }
@@ -173,12 +177,15 @@ async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
       result: await dispatchRequest(request)
     };
   } catch (error) {
+    const structured = structuredMcpError(error);
+
     return {
       jsonrpc: "2.0",
       id: request.id ?? null,
       error: {
         code: -32603,
-        message: error instanceof Error ? error.message : String(error)
+        message: structured.message,
+        data: structured
       }
     };
   }
