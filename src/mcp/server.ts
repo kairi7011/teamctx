@@ -2,6 +2,7 @@
 
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
+import { pathToFileURL } from "node:url";
 import { getContextToolAsync } from "./tools/get-context.js";
 import { explainEpisodeToolAsync } from "./tools/explain-episode.js";
 import { explainItemToolAsync } from "./tools/explain-item.js";
@@ -132,28 +133,18 @@ const inputSchemas: Record<string, Record<string, unknown>> = {
   }
 };
 
-const lineReader = createInterface({ input: stdin });
-
-lineReader.on("line", (line) => {
+export async function handleJsonRpcLine(line: string): Promise<unknown | undefined> {
   if (line.trim().length === 0) {
-    return;
+    return undefined;
   }
 
-  void handleLine(line);
-});
-
-async function handleLine(line: string): Promise<void> {
   try {
     const request = JSON.parse(line) as JsonRpcRequest;
-    const response = await handleRequest(request);
-
-    if (response !== undefined) {
-      writeMessage(response);
-    }
+    return await handleRequest(request);
   } catch (error) {
     const structured = structuredMcpError(error);
 
-    writeMessage({
+    return {
       jsonrpc: "2.0",
       id: null,
       error: {
@@ -161,8 +152,20 @@ async function handleLine(line: string): Promise<void> {
         message: structured.message,
         data: structured
       }
-    });
+    };
   }
+}
+
+function startServer(): void {
+  const lineReader = createInterface({ input: stdin });
+
+  lineReader.on("line", (line) => {
+    void handleJsonRpcLine(line).then((response) => {
+      if (response !== undefined) {
+        writeMessage(response);
+      }
+    });
+  });
 }
 
 async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
@@ -260,4 +263,8 @@ function isToolCallParams(value: unknown): value is ToolCallParams {
 
 function writeMessage(value: unknown): void {
   stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  startServer();
 }
