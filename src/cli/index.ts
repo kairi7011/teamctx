@@ -38,6 +38,7 @@ import { formatShowRecord } from "../core/show/record.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
+import { diffContextPayloads } from "../core/context/context-diff.js";
 import {
   rankContextFromStore,
   rankContextFromContextStore
@@ -50,7 +51,7 @@ import {
   type RecordObservationToolResult
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
-import type { GetContextInput } from "../schemas/context-payload.js";
+import { validateGetContextInput, type GetContextInput } from "../schemas/context-payload.js";
 
 type ParsedArgs = {
   command: string;
@@ -93,6 +94,7 @@ Usage:
   teamctx normalize [--dry-run] [--json]
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
+  teamctx context-diff <left-json> <right-json>
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
@@ -110,6 +112,7 @@ Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx bind . --path .teamctx
   teamctx context --target-files src/index.ts --domains cli
+  teamctx context-diff before.json after.json
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
   teamctx audit --action created --limit 20
@@ -205,6 +208,24 @@ async function context(args: ParsedArgs): Promise<void> {
   console.log(JSON.stringify(await getContextToolAsync(contextInput(args)), null, 2));
 }
 
+async function contextDiff(args: ParsedArgs): Promise<void> {
+  const [leftPath, rightPath] = args.positional;
+
+  if (!leftPath || !rightPath) {
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing input files. Usage: teamctx context-diff <left-json> <right-json>"
+    );
+  }
+
+  const leftInput = readContextInputFile(leftPath);
+  const rightInput = readContextInputFile(rightPath);
+  const left = await getContextToolAsync(leftInput);
+  const right = await getContextToolAsync(rightInput);
+
+  console.log(JSON.stringify(diffContextPayloads(left, right, leftInput, rightInput), null, 2));
+}
+
 async function rank(args: ParsedArgs): Promise<void> {
   const root = getRepoRoot();
   const repo = normalizeGitHubRepo(getOriginRemote(root));
@@ -281,7 +302,7 @@ function contextInput(args: ParsedArgs): GetContextInput {
   const [inputPath] = args.positional;
 
   if (inputPath) {
-    return JSON.parse(readFileSync(resolve(inputPath), "utf8")) as GetContextInput;
+    return readContextInputFile(inputPath);
   }
 
   const input: GetContextInput = {};
@@ -300,6 +321,10 @@ function contextInput(args: ParsedArgs): GetContextInput {
   assignString(input, "head_commit", args.flags["head-commit"]);
 
   return input;
+}
+
+function readContextInputFile(path: string): GetContextInput {
+  return validateGetContextInput(JSON.parse(readFileSync(resolve(path), "utf8")) as unknown);
 }
 
 function assignCsv<T extends keyof GetContextInput>(
@@ -677,6 +702,9 @@ async function main(): Promise<void> {
       return;
     case "context":
       await context(args);
+      return;
+    case "context-diff":
+      await contextDiff(args);
       return;
     case "rank":
       await rank(args);
