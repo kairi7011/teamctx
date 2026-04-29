@@ -88,7 +88,7 @@ function printHelp(): void {
 
 Usage:
   teamctx bind <store> [--path <path>]
-  teamctx init-store
+  teamctx init-store [--json]
   teamctx normalize [--dry-run] [--json]
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
@@ -100,7 +100,7 @@ Usage:
   teamctx show <item-id>
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
-  teamctx invalidate <item-id> [--reason <reason>]
+  teamctx invalidate <item-id> [--reason <reason>] [--json]
   teamctx status [--json]
   teamctx doctor
   teamctx tools
@@ -138,8 +138,13 @@ function bind(args: ParsedArgs): void {
   console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
 }
 
-async function initStore(): Promise<void> {
+async function initStore(args: ParsedArgs): Promise<void> {
   const result = await initBoundStoreAsync();
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   console.log("Initialized context store:");
   console.log(`  store: ${result.store}`);
@@ -407,6 +412,11 @@ async function invalidate(args: ParsedArgs): Promise<void> {
     ...(reason !== undefined ? { reason } : {})
   });
 
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   console.log("Invalidated context item:");
   console.log(`  item_id: ${result.item_id}`);
   console.log(`  before_state: ${result.before_state}`);
@@ -632,7 +642,7 @@ async function main(): Promise<void> {
       bind(args);
       return;
     case "init-store":
-      await initStore();
+      await initStore(args);
       return;
     case "normalize":
       await normalize(args);

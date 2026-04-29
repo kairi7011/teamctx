@@ -48,7 +48,7 @@ Implemented:
 - `teamctx list` for listing normalized records by kind, state, scope, query, and limit
 - `teamctx audit` for listing audit changes by action, item, source event, query, and limit
 - `teamctx show` for inspecting one normalized record in human-readable form
-- `--json` support for automation-friendly `teamctx status`, `teamctx normalize`, and `teamctx compact` output
+- `--json` support for automation-friendly `teamctx init-store`, `teamctx status`, `teamctx normalize`, `teamctx compact`, and `teamctx invalidate` output
 - `teamctx compact` for local and GitHub retention and archive compaction
 - `--dry-run` support for `teamctx normalize` and `teamctx compact`
 - opt-in real GitHub smoke test for the MVP remote context flow
@@ -110,6 +110,7 @@ Use the current repository as the store:
 ```bash
 teamctx bind . --path .teamctx
 teamctx init-store
+teamctx init-store --json
 ```
 
 Check the current binding:
@@ -138,6 +139,7 @@ Inspect one normalized record:
 ```bash
 teamctx show workflow-example
 teamctx explain workflow-example
+teamctx invalidate workflow-example --reason "obsolete" --json
 ```
 
 Trace ranking and context placement:
