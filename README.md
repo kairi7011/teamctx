@@ -177,6 +177,7 @@ Run diagnostics:
 ```bash
 teamctx doctor
 teamctx auth doctor
+teamctx tools --json
 ```
 
 Run the MCP server during local development:
@@ -227,6 +228,8 @@ claude mcp add --transport stdio teamctx -- cmd /c teamctx-mcp
 
 Verify the connection from the client by calling `teamctx.status` or
 `teamctx.get_context` from a repository that has already run `teamctx setup`.
+Use `teamctx tools --json` to inspect the MCP tool names, descriptions, and
+input schemas without starting an MCP client.
 
 ## Troubleshooting
 

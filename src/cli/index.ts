@@ -114,7 +114,7 @@ Usage:
   teamctx status [--json]
   teamctx doctor
   teamctx auth doctor
-  teamctx tools
+  teamctx tools [--json]
 
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
@@ -828,7 +828,12 @@ function packageVersion(): string {
   }
 }
 
-function tools(): void {
+function tools(args: ParsedArgs): void {
+  if (args.flags.json === true) {
+    console.log(JSON.stringify({ tools: toolDefinitions }, null, 2));
+    return;
+  }
+
   for (const tool of toolDefinitions) {
     console.log(`${tool.name}: ${tool.description}`);
   }
@@ -905,7 +910,7 @@ async function main(): Promise<void> {
       await authDoctor();
       return;
     case "tools":
-      tools();
+      tools(args);
       return;
     case "help":
     case "--help":
