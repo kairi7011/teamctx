@@ -51,6 +51,7 @@ The token must be able to read and write the repository that holds the context
 store. Local stores such as `.teamctx` do not need a GitHub token.
 
 Use `teamctx doctor` to check which auth source is active.
+Use `teamctx auth doctor` to diagnose GitHub auth without printing token values.
 
 Record project knowledge:
 
@@ -137,6 +138,7 @@ Run diagnostics:
 
 ```bash
 teamctx doctor
+teamctx auth doctor
 ```
 
 Run the MCP server during local development:

@@ -111,6 +111,7 @@ Usage:
   teamctx invalidate <item-id> [--reason <reason>] [--json]
   teamctx status [--json]
   teamctx doctor
+  teamctx auth doctor
   teamctx tools
 
 Examples:
@@ -658,6 +659,57 @@ async function doctor(): Promise<void> {
   }
 }
 
+async function authDoctor(): Promise<void> {
+  console.log("teamctx auth doctor");
+  const auth = describeGitHubAuth({ allowGh: true });
+  console.log(`  github_auth: ${auth.source}`);
+  console.log(`  token_available: ${auth.token === undefined ? "no" : "yes"}`);
+
+  if (auth.token === undefined) {
+    console.log("  github_api: unavailable");
+    console.log("  next: set TEAMCTX_GITHUB_TOKEN, GITHUB_TOKEN, or authenticate gh");
+    return;
+  }
+
+  let root: string;
+  let repo: string;
+
+  try {
+    root = getRepoRoot();
+    repo = normalizeGitHubRepo(getOriginRemote(root));
+  } catch {
+    console.log("  github_api: configured");
+    console.log("  note: run from a bound git repository to check context store access");
+    return;
+  }
+
+  let binding: ReturnType<typeof findBinding>;
+
+  try {
+    binding = findBinding(repo);
+  } catch (error) {
+    console.log("  github_api: configured");
+    console.log(`  config: invalid (${error instanceof Error ? error.message : String(error)})`);
+    return;
+  }
+
+  if (!binding) {
+    console.log("  github_api: configured");
+    console.log("  binding: missing");
+    return;
+  }
+
+  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+
+  if (binding.contextStore.provider !== "github") {
+    console.log("  github_api: not_required");
+    return;
+  }
+
+  console.log("  github_api: configured");
+  await reportStoreVisibility(binding.contextStore.repo, auth.token);
+}
+
 async function reportStoreVisibility(storeRepo: string, token: string | undefined): Promise<void> {
   if (token === undefined) {
     console.log("  store_visibility: unknown (no GitHub token available)");
@@ -768,6 +820,12 @@ async function main(): Promise<void> {
       return;
     case "doctor":
       await doctor();
+      return;
+    case "auth":
+      if (args.positional[0] !== "doctor") {
+        throw new CliError(CLI_EXIT.USAGE, "Unknown auth command. Usage: teamctx auth doctor");
+      }
+      await authDoctor();
       return;
     case "tools":
       tools();
