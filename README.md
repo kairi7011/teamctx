@@ -228,6 +228,53 @@ claude mcp add --transport stdio teamctx -- cmd /c teamctx-mcp
 Verify the connection from the client by calling `teamctx.status` or
 `teamctx.get_context` from a repository that has already run `teamctx setup`.
 
+## Troubleshooting
+
+Start with:
+
+```bash
+teamctx doctor
+teamctx status
+```
+
+If `teamctx.status` or `teamctx.get_context` says no binding exists, run setup
+from the repository root:
+
+```bash
+teamctx setup . --path .teamctx
+```
+
+For a separate GitHub context store, use the same store and path that the team
+expects:
+
+```bash
+teamctx setup github.com/my-org/ai-context --path contexts/my-service
+```
+
+If GitHub auth fails, check the active auth source:
+
+```bash
+teamctx auth doctor
+```
+
+Set `TEAMCTX_GITHUB_TOKEN` or `GITHUB_TOKEN`, or sign in with `gh auth login`.
+The token must be able to read and write the repository that stores context.
+
+If context looks stale or index warnings appear, refresh normalized records and
+indexes:
+
+```bash
+teamctx normalize --dry-run
+teamctx normalize
+teamctx status
+```
+
+If an MCP client reports that `teamctx` is disabled or returns no context, first
+run `teamctx status` in the same repository. A disabled response usually means
+the client started the server outside a Git repository or in a repo that has not
+been set up yet. Pass `cwd` in the MCP tool input when the client supports it,
+or start the client from the repository root.
+
 ## License
 
 MIT
