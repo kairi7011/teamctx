@@ -112,7 +112,9 @@ test("statusTool returns the enabled binding summary", () => {
       recent_promoted_items: [],
       contested_items: [],
       dropped_items: [],
-      stale_items: []
+      stale_items: [],
+      index_warnings: [],
+      recovery_suggestions: []
     }
   });
 });

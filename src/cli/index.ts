@@ -643,6 +643,22 @@ async function status(args: ParsedArgs): Promise<void> {
     summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text })),
     summary.counts.stale_records
   );
+
+  if (summary.index_warnings.length > 0) {
+    console.log("  index_warnings:");
+
+    for (const warning of summary.index_warnings) {
+      console.log(`    - ${warning}`);
+    }
+  }
+
+  if (summary.recovery_suggestions.length > 0) {
+    console.log("  recovery:");
+
+    for (const suggestion of summary.recovery_suggestions) {
+      console.log(`    - ${suggestion}`);
+    }
+  }
 }
 
 function contestedStatusDetail(item: {

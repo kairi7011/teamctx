@@ -58,6 +58,10 @@ test("summarizeContextStore returns local status buckets and last normalize resu
     })
   ]);
   writeLastNormalize(storeRoot);
+  writeIndexGeneratedAt(storeRoot, "path-index.json", "2026-04-22T11:02:00.000Z");
+  writeIndexGeneratedAt(storeRoot, "symbol-index.json", "2026-04-22T11:02:00.000Z");
+  writeIndexGeneratedAt(storeRoot, "text-index.json", "2026-04-22T11:02:00.000Z");
+  writeIndexGeneratedAt(storeRoot, "episode-index.json", "2026-04-22T11:02:00.000Z");
 
   const summary = summarizeContextStore({ storeRoot });
 
@@ -85,6 +89,30 @@ test("summarizeContextStore returns local status buckets and last normalize resu
     "conflicting same-scope assertion detected"
   );
   assert.equal(summary.contested_items[0]?.evidence[0]?.kind, "code");
+  assert.deepEqual(summary.index_warnings, []);
+  assert.deepEqual(summary.recovery_suggestions, []);
+});
+
+test("summarizeContextStore reports stale index recovery warnings", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeRecord(storeRoot, record("pitfall-auth-order", "active"));
+  writeLastNormalize(storeRoot);
+  writeIndexGeneratedAt(storeRoot, "path-index.json", "2026-04-22T10:00:00.000Z");
+  writeIndexGeneratedAt(storeRoot, "symbol-index.json", "2026-04-22T11:02:00.000Z");
+  writeIndexGeneratedAt(storeRoot, "text-index.json", "2026-04-22T11:02:00.000Z");
+
+  const summary = summarizeContextStore({ storeRoot });
+
+  assert.deepEqual(summary.index_warnings, [
+    "path index generated_at 2026-04-22T10:00:00.000Z differs from last normalize 2026-04-22T11:02:00.000Z",
+    "episode index is missing after last normalize 2026-04-22T11:02:00.000Z"
+  ]);
+  assert.deepEqual(summary.recovery_suggestions, [
+    "Run `teamctx normalize` to refresh normalized records and indexes."
+  ]);
 });
 
 test("getBoundStatus and statusTool include local store summaries", (context) => {
@@ -145,6 +173,16 @@ function writeLastNormalize(storeRoot: string): void {
       null,
       2
     )}\n`,
+    "utf8"
+  );
+}
+
+function writeIndexGeneratedAt(storeRoot: string, file: string, generatedAt: string): void {
+  const directory = join(storeRoot, "indexes");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, file),
+    `${JSON.stringify({ generated_at: generatedAt }, null, 2)}\n`,
     "utf8"
   );
 }

@@ -71,6 +71,8 @@ export type StatusSummary = {
   contested_items: ContestedItemSummary[];
   dropped_items: DroppedItemSummary[];
   stale_items: StatusItemSummary[];
+  index_warnings: string[];
+  recovery_suggestions: string[];
 };
 
 const DEFAULT_RECENT_LIMIT = 5;
@@ -84,6 +86,7 @@ export function summarizeContextStore(options: StatusSummaryOptions): StatusSumm
     records,
     auditEntries,
     lastNormalizeResult: readLastNormalizeResult(options.storeRoot),
+    indexWarnings: readIndexWarnings(options.storeRoot),
     recentLimit
   });
 }
@@ -100,6 +103,7 @@ export async function summarizeContextStoreAdapter(options: {
     records,
     auditEntries,
     lastNormalizeResult: await readLastNormalizeResultFromAdapter(options.store),
+    indexWarnings: await readIndexWarningsFromAdapter(options.store),
     recentLimit
   });
 }
@@ -140,6 +144,18 @@ function readLastNormalizeResult(storeRoot: string): NormalizeStoreResult | null
   return validateLastNormalizeResult(JSON.parse(readFileSync(path, "utf8")) as unknown);
 }
 
+function readIndexWarnings(storeRoot: string): string[] {
+  const lastNormalize = readLastNormalizeResult(storeRoot);
+
+  if (lastNormalize === null) {
+    return [];
+  }
+
+  return INDEX_FILES.flatMap((file) =>
+    indexWarning(file.label, lastNormalize.normalizedAt, readIndexGeneratedAt(storeRoot, file.path))
+  );
+}
+
 async function readLastNormalizeResultFromAdapter(
   store: ContextStoreAdapter
 ): Promise<NormalizeStoreResult | null> {
@@ -150,6 +166,62 @@ async function readLastNormalizeResultFromAdapter(
   }
 
   return validateLastNormalizeResult(JSON.parse(file.content) as unknown);
+}
+
+async function readIndexWarningsFromAdapter(store: ContextStoreAdapter): Promise<string[]> {
+  const lastNormalize = await readLastNormalizeResultFromAdapter(store);
+
+  if (lastNormalize === null) {
+    return [];
+  }
+
+  const warnings: string[] = [];
+
+  for (const file of INDEX_FILES) {
+    warnings.push(
+      ...indexWarning(
+        file.label,
+        lastNormalize.normalizedAt,
+        await readIndexGeneratedAtFromAdapter(store, file.path)
+      )
+    );
+  }
+
+  return warnings;
+}
+
+function readIndexGeneratedAt(
+  storeRoot: string,
+  path: string
+): { generatedAt?: string; error?: string; missing?: true } {
+  const filePath = join(storeRoot, path);
+
+  if (!existsSync(filePath)) {
+    return { missing: true };
+  }
+
+  try {
+    return generatedAtResult(JSON.parse(readFileSync(filePath, "utf8")) as unknown);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function readIndexGeneratedAtFromAdapter(
+  store: ContextStoreAdapter,
+  path: string
+): Promise<{ generatedAt?: string; error?: string; missing?: true }> {
+  const file = await store.readText(path);
+
+  if (!file) {
+    return { missing: true };
+  }
+
+  try {
+    return generatedAtResult(JSON.parse(file.content) as unknown);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function readJsonl<T>(path: string, validate: (value: unknown) => T): T[] {
@@ -190,6 +262,7 @@ function buildStatusSummary(options: {
   records: NormalizedRecord[];
   auditEntries: AuditLogEntry[];
   lastNormalizeResult: NormalizeStoreResult | null;
+  indexWarnings: string[];
   recentLimit: number;
 }): StatusSummary {
   const recordsById = new Map(options.records.map((record) => [record.id, record]));
@@ -224,8 +297,52 @@ function buildStatusSummary(options: {
     stale_items: options.records
       .filter((record) => record.state === "stale")
       .map(itemSummary)
-      .slice(0, options.recentLimit)
+      .slice(0, options.recentLimit),
+    index_warnings: options.indexWarnings,
+    recovery_suggestions:
+      options.indexWarnings.length > 0
+        ? ["Run `teamctx normalize` to refresh normalized records and indexes."]
+        : []
   };
+}
+
+const INDEX_FILES = [
+  { label: "path index", path: "indexes/path-index.json" },
+  { label: "symbol index", path: "indexes/symbol-index.json" },
+  { label: "text index", path: "indexes/text-index.json" },
+  { label: "episode index", path: "indexes/episode-index.json" }
+];
+
+function generatedAtResult(value: unknown): { generatedAt?: string; error?: string } {
+  if (!isRecord(value)) {
+    return { error: "index file must be an object" };
+  }
+
+  return typeof value.generated_at === "string" && value.generated_at.length > 0
+    ? { generatedAt: value.generated_at }
+    : { error: "index generated_at is missing" };
+}
+
+function indexWarning(
+  label: string,
+  lastNormalizeAt: string,
+  result: { generatedAt?: string; error?: string; missing?: true }
+): string[] {
+  if (result.missing === true) {
+    return [`${label} is missing after last normalize ${lastNormalizeAt}`];
+  }
+
+  if (result.error !== undefined) {
+    return [`${label} is invalid after last normalize ${lastNormalizeAt}: ${result.error}`];
+  }
+
+  if (result.generatedAt !== lastNormalizeAt) {
+    return [
+      `${label} generated_at ${result.generatedAt ?? "(unknown)"} differs from last normalize ${lastNormalizeAt}`
+    ];
+  }
+
+  return [];
 }
 
 function validateLastNormalizeResult(value: unknown): NormalizeStoreResult {
