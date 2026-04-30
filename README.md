@@ -24,18 +24,23 @@ node dist/cli/index.js doctor
 
 ## Quickstart
 
-Bind the current repository to a context store:
+Set up the current repository with a local context store:
 
 ```bash
-teamctx bind github.com/my-org/ai-context --path contexts/my-service
+teamctx setup . --path .teamctx
 ```
 
-Use the current repository as the store:
+Or bind to a separate GitHub context store:
+
+```bash
+teamctx setup github.com/my-org/ai-context --path contexts/my-service
+```
+
+You can also run setup one step at a time:
 
 ```bash
 teamctx bind . --path .teamctx
 teamctx init-store
-teamctx init-store --json
 ```
 
 ## GitHub Auth
@@ -68,6 +73,13 @@ teamctx context context-input.json
 ```
 
 ## Common Commands
+
+Set up a repository:
+
+```bash
+teamctx setup . --path .teamctx
+teamctx setup . --path .teamctx --json
+```
 
 Check the current binding:
 

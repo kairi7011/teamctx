@@ -94,6 +94,7 @@ function printHelp(): void {
 
 Usage:
   teamctx bind <store> [--path <path>]
+  teamctx setup <store> [--path <path>] [--json]
   teamctx init-store [--json]
   teamctx normalize [--dry-run] [--json]
   teamctx compact [--dry-run] [--json]
@@ -116,6 +117,7 @@ Usage:
 
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
+  teamctx setup . --path .teamctx
   teamctx bind . --path .teamctx
   teamctx context --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
@@ -128,6 +130,15 @@ Examples:
 }
 
 function bind(args: ParsedArgs): void {
+  const binding = bindCurrentRepo(args);
+
+  console.log("Bound repository:");
+  console.log(`  repo: ${binding.repo}`);
+  console.log(`  root: ${binding.root}`);
+  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+}
+
+function bindCurrentRepo(args: ParsedArgs): ReturnType<typeof upsertBinding> {
   const [storeInput] = args.positional;
 
   if (!storeInput) {
@@ -141,12 +152,42 @@ function bind(args: ParsedArgs): void {
   const repo = normalizeGitHubRepo(getOriginRemote(root));
   const storePath = typeof args.flags.path === "string" ? args.flags.path : ".teamctx";
   const contextStore = parseContextStore(storeInput, storePath, repo);
-  const binding = upsertBinding(repo, root, contextStore);
 
-  console.log("Bound repository:");
+  return upsertBinding(repo, root, contextStore);
+}
+
+async function setup(args: ParsedArgs): Promise<void> {
+  const binding = bindCurrentRepo(args);
+  const result = await initBoundStoreAsync();
+
+  if (args.flags.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          binding,
+          init_store: result,
+          next: [
+            "teamctx record-verified observations.json",
+            "teamctx normalize",
+            "teamctx context --target-files <file>"
+          ]
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log("Set up teamctx:");
   console.log(`  repo: ${binding.repo}`);
   console.log(`  root: ${binding.root}`);
   console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+  console.log(`  created_files: ${result.createdFiles.length}`);
+  console.log(`  existing_files: ${result.existingFiles.length}`);
+  console.log("  next: teamctx record-verified observations.json");
+  console.log("  next: teamctx normalize");
+  console.log("  next: teamctx context --target-files <file>");
 }
 
 async function initStore(args: ParsedArgs): Promise<void> {
@@ -769,6 +810,9 @@ async function main(): Promise<void> {
   switch (args.command) {
     case "bind":
       bind(args);
+      return;
+    case "setup":
+      await setup(args);
       return;
     case "init-store":
       await initStore(args);
