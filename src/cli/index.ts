@@ -106,6 +106,7 @@ Usage:
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file> [--json]
   teamctx record-verified <json-file> [--json]
+  teamctx first-record
   teamctx show <item-id>
   teamctx explain <item-id>
   teamctx explain-episode <episode-id>
@@ -125,6 +126,7 @@ Examples:
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
   teamctx audit --action created --limit 20
+  teamctx first-record > observations.json
   teamctx record-verified observations.json
 `);
 }
@@ -480,6 +482,34 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
   }
 
   console.log(`  count: ${observations.length}`);
+}
+
+function firstRecord(): void {
+  console.log(
+    JSON.stringify(
+      {
+        kind: "workflow",
+        text: "Describe one repo-specific workflow, rule, pitfall, decision, fact, or glossary term.",
+        source_type: "inferred_from_code",
+        scope: {
+          paths: ["src/**"],
+          domains: ["example"],
+          tags: ["first-record"]
+        },
+        evidence: [
+          {
+            kind: "code",
+            repo: "github.com/my-org/my-repo",
+            file: "src/index.ts",
+            line_start: 1,
+            line_end: 20
+          }
+        ]
+      },
+      null,
+      2
+    )
+  );
 }
 
 async function explain(args: ParsedArgs): Promise<void> {
@@ -846,6 +876,9 @@ async function main(): Promise<void> {
       return;
     case "record-verified":
       await recordObservation(args, "verified");
+      return;
+    case "first-record":
+      firstRecord();
       return;
     case "show":
       await show(args);

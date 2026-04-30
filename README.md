@@ -61,6 +61,7 @@ Use `teamctx auth doctor` to diagnose GitHub auth without printing token values.
 Record project knowledge:
 
 ```bash
+teamctx first-record > observations.json
 teamctx record-verified observations.json
 teamctx normalize
 ```
@@ -119,6 +120,7 @@ teamctx audit --item workflow-example --query "evidence minimum"
 Record one or more verified observations from a JSON file:
 
 ```bash
+teamctx first-record > observations.json
 teamctx record-verified observations.json
 teamctx record-verified observations.json --json
 teamctx normalize --dry-run
@@ -126,7 +128,12 @@ teamctx normalize --json
 teamctx normalize
 ```
 
-The file can contain one observation object or an array of observation objects. Verified observations must include non-manual evidence. The `verified` label describes provenance, not truth: records can still transition to `contested`, `stale`, `superseded`, or `archived` over time.
+`teamctx first-record` prints an editable starter observation. Replace the text,
+scope, and evidence with one repo-specific fact before recording it. The file can
+contain one observation object or an array of observation objects. Verified
+observations must include non-manual evidence. The `verified` label describes
+provenance, not truth: records can still transition to `contested`, `stale`,
+`superseded`, or `archived` over time.
 
 Compact expired local context-store data into the configured archive path:
 
