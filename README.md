@@ -43,6 +43,25 @@ teamctx bind . --path .teamctx
 teamctx init-store
 ```
 
+## Context Store
+
+For a single repository or a small team, keep the context store in the same repo:
+
+```bash
+teamctx setup . --path .teamctx
+```
+
+For shared context across multiple repos or a cleaner code/history boundary, use
+a separate private GitHub repository:
+
+```bash
+teamctx setup github.com/my-org/ai-context --path contexts/my-service
+```
+
+Keep context stores private unless the stored knowledge is safe to publish. A
+separate private repo lets you manage access to team context independently from
+the application code.
+
 ## GitHub Auth
 
 Remote GitHub stores use the first token available in this order:
