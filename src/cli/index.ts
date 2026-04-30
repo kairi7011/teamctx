@@ -57,13 +57,13 @@ import {
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { validateGetContextInput, type GetContextInput } from "../schemas/context-payload.js";
 
-type ParsedArgs = {
+export type ParsedArgs = {
   command: string;
   positional: string[];
   flags: Record<string, string | boolean>;
 };
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
