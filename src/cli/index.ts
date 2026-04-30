@@ -89,8 +89,8 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { command, positional, flags };
 }
 
-function printHelp(): void {
-  console.log(`teamctx
+export function formatHelp(): string {
+  return `teamctx
 
 Usage:
   teamctx bind <store> [--path <path>]
@@ -128,7 +128,11 @@ Examples:
   teamctx audit --action created --limit 20
   teamctx first-record > observations.json
   teamctx record-verified observations.json
-`);
+`;
+}
+
+function printHelp(): void {
+  console.log(formatHelp());
 }
 
 function bind(args: ParsedArgs): void {
@@ -938,9 +942,17 @@ async function main(): Promise<void> {
   }
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = mapErrorToExitCode(error);
+if (isDirectCliRun()) {
+  try {
+    await main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = mapErrorToExitCode(error);
+  }
+}
+
+function isDirectCliRun(): boolean {
+  return (
+    process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  );
 }
