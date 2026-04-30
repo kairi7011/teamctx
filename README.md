@@ -62,6 +62,9 @@ Keep context stores private unless the stored knowledge is safe to publish. A
 separate private repo lets you manage access to team context independently from
 the application code.
 
+See [Storage and Concurrency](docs/storage-concurrency.md) for GitHub store
+revision and retry behavior.
+
 ## GitHub Auth
 
 Remote GitHub stores use the first token available in this order:
