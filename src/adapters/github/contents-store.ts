@@ -15,6 +15,7 @@ import {
   type ContextStoreWriteOptions,
   type ContextStoreWriteResult
 } from "../store/context-store.js";
+import { normalizeStorePath } from "../store/store-path.js";
 
 export type GitHubContentsStoreOptions = GitHubClientOptions & {
   repository: string;
@@ -304,20 +305,6 @@ function validateDeleteResponse(value: unknown): { commitSha: string } {
   return {
     commitSha: requiredString(commit.sha, "commit sha")
   };
-}
-
-function normalizeStorePath(path: string): string {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-
-  if (
-    normalizedPath.length === 0 ||
-    normalizedPath === "." ||
-    normalizedPath.split("/").includes("..")
-  ) {
-    throw new Error("Context store path must be a relative path inside the store.");
-  }
-
-  return normalizedPath;
 }
 
 function joinGitHubPath(left: string, right: string): string {

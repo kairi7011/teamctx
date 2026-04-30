@@ -15,6 +15,7 @@ import {
   type ContextStoreWriteOptions,
   type ContextStoreWriteResult
 } from "./context-store.js";
+import { normalizeStorePath } from "./store-path.js";
 
 export class LocalContextStore implements ContextStoreAdapter {
   readonly root: string;
@@ -123,18 +124,4 @@ function listFiles(root: string): string[] {
   } catch {
     return [];
   }
-}
-
-function normalizeStorePath(path: string): string {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-
-  if (
-    normalizedPath.length === 0 ||
-    normalizedPath === "." ||
-    normalizedPath.split("/").includes("..")
-  ) {
-    throw new Error("Context store path must be a relative path inside the store.");
-  }
-
-  return normalizedPath;
 }

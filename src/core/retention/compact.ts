@@ -11,6 +11,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { serializeJsonl, type ContextStoreAdapter } from "../../adapters/store/context-store.js";
+import { normalizeStorePath } from "../../adapters/store/store-path.js";
 import { jsonlLines } from "../store/jsonl.js";
 import { validateAuditLogEntry } from "../../schemas/audit.js";
 import {
@@ -161,7 +162,9 @@ export async function compactContextStore(options: {
   const now = options.now ?? (() => new Date());
   const compactedAt = now().toISOString();
   const projectConfig = await readProjectConfigFromContextStore(options.store);
-  const archiveRoot = normalizeStorePath(projectConfig.retention.archive_path);
+  const archiveRoot = normalizeStorePath(projectConfig.retention.archive_path, {
+    errorMessage: "Retention archive_path must stay inside the context store."
+  });
   const dryRun = options.dryRun === true;
   const rawResult = await compactRawCandidateEventsInContextStore({
     store: options.store,
@@ -534,20 +537,6 @@ function isBefore(value: string, cutoff: Date): boolean {
   const time = Date.parse(value);
 
   return Number.isFinite(time) && time < cutoff.getTime();
-}
-
-function normalizeStorePath(path: string): string {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-
-  if (
-    normalizedPath.length === 0 ||
-    normalizedPath === "." ||
-    normalizedPath.split("/").includes("..")
-  ) {
-    throw new Error("Retention archive_path must stay inside the context store.");
-  }
-
-  return normalizedPath;
 }
 
 function joinStorePath(...parts: string[]): string {
