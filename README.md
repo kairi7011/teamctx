@@ -38,6 +38,20 @@ teamctx init-store
 teamctx init-store --json
 ```
 
+## GitHub Auth
+
+Remote GitHub stores use the first token available in this order:
+
+1. `TEAMCTX_GITHUB_TOKEN`
+2. `GITHUB_TOKEN`
+3. `gh auth token`
+
+Prefer `TEAMCTX_GITHUB_TOKEN` when you want credentials scoped specifically to `teamctx`.
+The token must be able to read and write the repository that holds the context
+store. Local stores such as `.teamctx` do not need a GitHub token.
+
+Use `teamctx doctor` to check which auth source is active.
+
 Record project knowledge:
 
 ```bash
