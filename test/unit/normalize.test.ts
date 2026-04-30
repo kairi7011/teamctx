@@ -692,6 +692,57 @@ test("normalizeBoundStoreAsync skips remote writes when content is unchanged", a
   );
 });
 
+test("normalizeBoundStoreAsync retries remote normalized writes after conflicts", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  mkdirSync(join(directory, "src", "auth"), { recursive: true });
+  writeFileSync(
+    join(directory, "src", "auth", "middleware.ts"),
+    "export class AuthMiddleware {}\n",
+    "utf8"
+  );
+  writeRaw(remoteRoot, observation());
+
+  const conflicts = { remaining: 1, attempts: 0 };
+  const buildStore = (): LocalContextStore => {
+    const inner = new LocalContextStore(remoteRoot);
+    const store = inner as unknown as {
+      writeText: (
+        ...args: Parameters<LocalContextStore["writeText"]>
+      ) => ReturnType<LocalContextStore["writeText"]>;
+    };
+    const original = inner.writeText.bind(inner);
+    store.writeText = async (...args) => {
+      if (args[0] === "normalized/pitfalls.jsonl") {
+        conflicts.attempts += 1;
+
+        if (conflicts.remaining > 0) {
+          conflicts.remaining -= 1;
+          const error = new Error("conflict") as Error & { status: number };
+          error.status = 409;
+          throw error;
+        }
+      }
+
+      return original(...args);
+    };
+    return inner;
+  };
+
+  const base = servicesFor(directory, "github.com/team/context", remoteRoot);
+  await normalizeBoundStoreAsync({
+    services: {
+      ...base,
+      createContextStore: () => buildStore()
+    },
+    now: fixedNow
+  });
+
+  assert.equal(conflicts.attempts, 2);
+  assert.match(readFileSync(join(remoteRoot, "normalized", "pitfalls.jsonl"), "utf8"), /Auth/);
+});
+
 function servicesFor(
   root: string,
   contextStoreRepo = "github.com/team/service",

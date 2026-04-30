@@ -585,14 +585,39 @@ async function writeIfChanged(
   existingFile: ContextStoreFile | undefined,
   options: { message: string }
 ): Promise<void> {
-  if (existingFile && existingFile.content === nextContent) {
-    return;
+  let currentFile = existingFile;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (currentFile && currentFile.content === nextContent) {
+      return;
+    }
+
+    try {
+      await store.writeText(path, nextContent, {
+        message: options.message,
+        expectedRevision: currentFile?.revision ?? null
+      });
+      return;
+    } catch (error) {
+      if (!isOptimisticWriteConflict(error) || attempt === 3) {
+        throw error;
+      }
+
+      currentFile = await store.readText(path);
+    }
+  }
+}
+
+function isOptimisticWriteConflict(error: unknown): boolean {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+
+    if (status === 409 || status === 422) {
+      return true;
+    }
   }
 
-  await store.writeText(path, nextContent, {
-    message: options.message,
-    expectedRevision: existingFile?.revision ?? null
-  });
+  return error instanceof Error && error.message.toLowerCase().includes("conflict");
 }
 
 function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawObservation[] {
