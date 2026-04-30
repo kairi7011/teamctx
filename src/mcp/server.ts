@@ -33,106 +33,6 @@ const serverInfo = {
   version: "0.1.0"
 };
 
-const inputSchemas: Record<string, Record<string, unknown>> = {
-  "teamctx.get_context": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      target_files: { type: "array", items: { type: "string" } },
-      changed_files: { type: "array", items: { type: "string" } },
-      domains: { type: "array", items: { type: "string" } },
-      symbols: { type: "array", items: { type: "string" } },
-      tags: { type: "array", items: { type: "string" } },
-      query: { type: "string" },
-      since: { type: "string" },
-      until: { type: "string" },
-      source_types: { type: "array", items: { type: "string" } },
-      evidence_files: { type: "array", items: { type: "string" } },
-      branch: { type: "string" },
-      head_commit: { type: "string" }
-    },
-    additionalProperties: false
-  },
-  "teamctx.status": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" }
-    },
-    additionalProperties: false
-  },
-  "teamctx.record_observation_candidate": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      event_id: { type: "string" },
-      session_id: { type: "string" },
-      observed_at: { type: "string" },
-      recorded_by: { type: "string" },
-      kind: { type: "string" },
-      text: { type: "string" },
-      source_type: { type: "string" },
-      evidence: { type: "array" },
-      scope: { type: "object" },
-      supersedes: { type: "array", items: { type: "string" } }
-    },
-    required: ["kind", "text", "source_type"],
-    additionalProperties: false
-  },
-  "teamctx.record_observation_verified": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      event_id: { type: "string" },
-      session_id: { type: "string" },
-      observed_at: { type: "string" },
-      recorded_by: { type: "string" },
-      kind: { type: "string" },
-      text: { type: "string" },
-      source_type: { type: "string" },
-      evidence: { type: "array" },
-      scope: { type: "object" },
-      supersedes: { type: "array", items: { type: "string" } }
-    },
-    required: ["kind", "text", "source_type", "evidence"],
-    additionalProperties: false
-  },
-  "teamctx.normalize": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" }
-    },
-    additionalProperties: false
-  },
-  "teamctx.explain_item": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      item_id: { type: "string" }
-    },
-    required: ["item_id"],
-    additionalProperties: false
-  },
-  "teamctx.explain_episode": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      episode_id: { type: "string" }
-    },
-    required: ["episode_id"],
-    additionalProperties: false
-  },
-  "teamctx.invalidate": {
-    type: "object",
-    properties: {
-      cwd: { type: "string" },
-      item_id: { type: "string" },
-      reason: { type: "string" }
-    },
-    required: ["item_id"],
-    additionalProperties: false
-  }
-};
-
 export async function handleJsonRpcLine(line: string): Promise<unknown | undefined> {
   if (line.trim().length === 0) {
     return undefined;
@@ -204,11 +104,7 @@ async function dispatchRequest(request: JsonRpcRequest): Promise<unknown> {
       };
     case "tools/list":
       return {
-        tools: toolDefinitions.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: inputSchemas[tool.name] ?? { type: "object", properties: {} }
-        }))
+        tools: toolDefinitions
       };
     case "tools/call":
       return callTool(request.params);
