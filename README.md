@@ -185,6 +185,49 @@ Run the MCP server during local development:
 node dist/mcp/server.js
 ```
 
+## MCP Client Setup
+
+`teamctx-mcp` starts the stdio MCP server from an installed package. During
+local development, run `npm run build` first and point the client at
+`node dist/mcp/server.js` instead.
+
+Register with Codex:
+
+```bash
+codex mcp add teamctx -- teamctx-mcp
+codex mcp list
+```
+
+Local development registration:
+
+```bash
+codex mcp add teamctx-dev -- node C:\path\to\teamctx\dist\mcp\server.js
+```
+
+You can also add the server directly to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.teamctx]
+command = "teamctx-mcp"
+```
+
+Register with Claude Code:
+
+```bash
+claude mcp add --transport stdio teamctx -- teamctx-mcp
+claude mcp list
+```
+
+On native Windows, if the client cannot launch the npm command shim directly,
+wrap it with `cmd /c`:
+
+```bash
+claude mcp add --transport stdio teamctx -- cmd /c teamctx-mcp
+```
+
+Verify the connection from the client by calling `teamctx.status` or
+`teamctx.get_context` from a repository that has already run `teamctx setup`.
+
 ## License
 
 MIT
