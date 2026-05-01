@@ -16,6 +16,7 @@ import {
 } from "../../schemas/normalized-record.js";
 import type { Binding } from "../../schemas/types.js";
 import { findBinding } from "../binding/local-bindings.js";
+import { bindingMissingError, itemNotFoundError } from "../errors.js";
 import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import {
   createContextStoreForBinding,
@@ -150,7 +151,7 @@ export function invalidateItem(options: {
   const match = findRecord(options.storeRoot, options.itemId);
 
   if (!match) {
-    throw new Error(`No normalized context item found: ${options.itemId}`);
+    throw itemNotFoundError(options.itemId);
   }
 
   const now = options.now ?? (() => new Date());
@@ -215,7 +216,7 @@ export async function invalidateItemInContextStore(options: {
   const match = await findRecordInContextStore(options.store, options.itemId);
 
   if (!match) {
-    throw new Error(`No normalized context item found: ${options.itemId}`);
+    throw itemNotFoundError(options.itemId);
   }
 
   const now = options.now ?? (() => new Date());
@@ -262,7 +263,7 @@ function resolveBoundStoreRoot(options: BoundControlOptions): string {
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo !== repo) {
@@ -285,7 +286,7 @@ function resolveBoundStore(
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo === repo) {

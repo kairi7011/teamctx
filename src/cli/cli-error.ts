@@ -1,3 +1,5 @@
+import { CoreError, type CoreErrorKind } from "../core/errors.js";
+
 export const CLI_EXIT = {
   SUCCESS: 0,
   UNEXPECTED: 1,
@@ -20,9 +22,21 @@ export class CliError extends Error {
   }
 }
 
+const CORE_KIND_TO_EXIT: Record<CoreErrorKind, CliExitCode> = {
+  binding: CLI_EXIT.BINDING,
+  auth: CLI_EXIT.AUTH,
+  store: CLI_EXIT.STORE,
+  validation: CLI_EXIT.VALIDATION,
+  internal: CLI_EXIT.UNEXPECTED
+};
+
 export function mapErrorToExitCode(error: unknown): CliExitCode {
   if (error instanceof CliError) {
     return error.code;
+  }
+
+  if (error instanceof CoreError) {
+    return CORE_KIND_TO_EXIT[error.kind];
   }
 
   const message = error instanceof Error ? error.message : String(error);

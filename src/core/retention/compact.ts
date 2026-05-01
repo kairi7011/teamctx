@@ -22,6 +22,11 @@ import { parseProjectConfig, type ProjectConfig } from "../../schemas/project.js
 import type { Binding } from "../../schemas/types.js";
 import { findBinding } from "../binding/local-bindings.js";
 import {
+  bindingMissingError,
+  projectConfigMissingError,
+  unsupportedRemoteOperationError
+} from "../errors.js";
+import {
   createContextStoreForBinding,
   type ContextStoreFactoryServices
 } from "../store/bound-store.js";
@@ -66,11 +71,11 @@ export function compactBoundStore(options: CompactOptions = {}): CompactStoreRes
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo !== repo) {
-    throw new Error("compact currently supports context stores inside the current repository.");
+    throw unsupportedRemoteOperationError("compact");
   }
 
   return compactStore({
@@ -89,7 +94,7 @@ export async function compactBoundStoreAsync(
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo === repo) {
@@ -203,7 +208,7 @@ function readProjectConfig(storeRoot: string): ProjectConfig {
   const path = join(storeRoot, "project.yaml");
 
   if (!existsSync(path)) {
-    throw new Error("Context store project.yaml is missing. Run: teamctx init-store");
+    throw projectConfigMissingError();
   }
 
   return parseProjectConfig(readFileSync(path, "utf8"));
@@ -215,7 +220,7 @@ async function readProjectConfigFromContextStore(
   const file = await store.readText("project.yaml");
 
   if (!file) {
-    throw new Error("Context store project.yaml is missing. Run: teamctx init-store");
+    throw projectConfigMissingError();
   }
 
   return parseProjectConfig(file.content);

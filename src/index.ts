@@ -16,6 +16,7 @@ export * from "./core/audit/control.js";
 export * from "./core/context/compose-context.js";
 export * from "./core/context/context-ranking.js";
 export * from "./core/episodes/explain.js";
+export * from "./core/errors.js";
 export * from "./core/indexes/episode-index.js";
 export * from "./core/indexes/record-index.js";
 export * from "./core/normalize/confidence.js";

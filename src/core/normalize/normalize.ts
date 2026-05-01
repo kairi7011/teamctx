@@ -16,6 +16,7 @@ import {
 import { validateRawObservation, type RawObservation } from "../../schemas/observation.js";
 import type { Binding } from "../../schemas/types.js";
 import { findBinding } from "../binding/local-bindings.js";
+import { bindingMissingError, unsupportedRemoteOperationError } from "../errors.js";
 import {
   buildRecordIndexes,
   serializePathIndex,
@@ -88,11 +89,11 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo !== repo) {
-    throw new Error("normalize currently supports context stores inside the current repository.");
+    throw unsupportedRemoteOperationError("normalize");
   }
 
   return normalizeStore({
@@ -113,7 +114,7 @@ export async function normalizeBoundStoreAsync(
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo === repo) {

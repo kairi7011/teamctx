@@ -1,3 +1,5 @@
+import { CoreError } from "../core/errors.js";
+
 export type McpErrorKind = "validation" | "binding" | "auth" | "store" | "internal";
 
 export type StructuredMcpError = {
@@ -6,6 +8,10 @@ export type StructuredMcpError = {
 };
 
 export function structuredMcpError(error: unknown): StructuredMcpError {
+  if (error instanceof CoreError) {
+    return { kind: error.kind, message: error.message };
+  }
+
   const message = error instanceof Error ? error.message : String(error);
 
   return {

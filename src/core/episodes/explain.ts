@@ -4,6 +4,7 @@ import type { ContextStoreAdapter } from "../../adapters/store/context-store.js"
 import { getOriginRemote, getRepoRoot } from "../../adapters/git/local-git.js";
 import { normalizeGitHubRepo } from "../../adapters/git/repo-url.js";
 import { findBinding } from "../binding/local-bindings.js";
+import { bindingMissingError } from "../errors.js";
 import {
   createContextStoreForBinding,
   type ContextStoreFactoryServices
@@ -72,7 +73,7 @@ export async function explainBoundEpisodeAsync(
   const binding = services.findBinding(repo);
 
   if (!binding) {
-    throw new Error("No teamctx binding found. Run: teamctx bind <store> --path <path>");
+    throw bindingMissingError();
   }
 
   if (binding.contextStore.repo === repo) {
