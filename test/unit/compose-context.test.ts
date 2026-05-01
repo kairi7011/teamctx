@@ -25,6 +25,7 @@ import { getContextTool, type GetContextServices } from "../../src/mcp/tools/get
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
 import type { Binding } from "../../src/schemas/types.js";
+import { fixtureObservation } from "../fixtures/observation.js";
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
   const directory = mkdtempSync(join(tmpdir(), "teamctx-compose-"));
@@ -952,33 +953,7 @@ function record(
 }
 
 function observation(overrides: Partial<RawObservation> = {}): RawObservation {
-  return {
-    schema_version: 1,
-    event_id: "event-1",
-    session_id: "session-1",
-    observed_at: "2026-04-22T10:00:00.000Z",
-    recorded_by: "codex",
-    trust: "verified",
-    kind: "pitfall",
-    text: "Auth middleware must run before tenant resolution.",
-    source_type: "inferred_from_code",
-    evidence: [
-      {
-        kind: "code",
-        repo: "github.com/team/service",
-        commit: "abc123",
-        file: "src/auth/middleware.ts"
-      }
-    ],
-    scope: {
-      paths: ["src/auth/**"],
-      domains: ["auth"],
-      symbols: ["AuthMiddleware"],
-      tags: ["request-lifecycle"]
-    },
-    supersedes: [],
-    ...overrides
-  };
+  return fixtureObservation({ evidenceLines: false, ...overrides });
 }
 
 class MemoryContextStore implements ContextStoreAdapter {

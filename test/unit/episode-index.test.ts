@@ -7,6 +7,7 @@ import {
   validateEpisodeIndex
 } from "../../src/core/indexes/episode-index.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
+import { fixtureObservation } from "../fixtures/observation.js";
 
 test("buildEpisodeIndex creates raw-event-derived episode references", () => {
   const index = buildEpisodeIndex([observation()], "2026-04-22T11:00:00.000Z");
@@ -62,32 +63,5 @@ test("validateEpisodeIndex round trips serialized indexes", () => {
 });
 
 function observation(overrides: Partial<RawObservation> = {}): RawObservation {
-  return {
-    schema_version: 1,
-    event_id: "event-1",
-    session_id: "session-1",
-    observed_at: "2026-04-22T10:00:00.000Z",
-    recorded_by: "codex",
-    trust: "verified",
-    kind: "pitfall",
-    text: "Auth middleware must run before tenant resolution.",
-    source_type: "inferred_from_code",
-    evidence: [
-      {
-        kind: "code",
-        repo: "github.com/team/service",
-        commit: "abc123",
-        file: "src/auth/middleware.ts",
-        lines: [10, 34]
-      }
-    ],
-    scope: {
-      paths: ["src/auth/**"],
-      domains: ["auth"],
-      symbols: ["AuthMiddleware"],
-      tags: ["request-lifecycle"]
-    },
-    supersedes: [],
-    ...overrides
-  };
+  return fixtureObservation(overrides);
 }
