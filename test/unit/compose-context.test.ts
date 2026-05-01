@@ -629,6 +629,81 @@ test("composeContextFromStore reports budget_rejected with rank scores for overf
   }
 });
 
+test("composeContextFromStore caps payload size under large stores at default budgets", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const longText = `${"alpha bravo charlie delta echo foxtrot golf hotel ".repeat(60)}end`;
+  const seed: Array<{ file: string; kind: NormalizedRecord["kind"]; count: number }> = [
+    { file: "rules.jsonl", kind: "rule", count: 200 },
+    { file: "pitfalls.jsonl", kind: "pitfall", count: 200 },
+    { file: "decisions.jsonl", kind: "decision", count: 200 },
+    { file: "workflows.jsonl", kind: "workflow", count: 200 },
+    { file: "glossary.jsonl", kind: "glossary", count: 200 },
+    { file: "facts.jsonl", kind: "fact", count: 200 }
+  ];
+
+  for (const entry of seed) {
+    for (let index = 0; index < entry.count; index += 1) {
+      const seededRecord = record(
+        `${entry.kind}-${String(index).padStart(3, "0")}`,
+        entry.kind,
+        "active"
+      );
+
+      writeRecord(storeRoot, entry.file, { ...seededRecord, text: longText });
+    }
+  }
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+
+  assert.ok(
+    composed.normalized_context.scoped.length <= 20,
+    `scoped entries (${composed.normalized_context.scoped.length}) must stay within scopedItems budget`
+  );
+
+  const expectedCategoryCaps: Array<{ key: string; list: string[]; cap: number }> = [
+    { key: "must_follow_rules", list: composed.normalized_context.must_follow_rules, cap: 20 },
+    { key: "active_pitfalls", list: composed.normalized_context.active_pitfalls, cap: 10 },
+    { key: "recent_decisions", list: composed.normalized_context.recent_decisions, cap: 10 },
+    {
+      key: "applicable_workflows",
+      list: composed.normalized_context.applicable_workflows,
+      cap: 10
+    },
+    { key: "glossary_terms", list: composed.normalized_context.glossary_terms, cap: 10 }
+  ];
+
+  for (const { key, list, cap } of expectedCategoryCaps) {
+    assert.ok(
+      list.length <= cap,
+      `${key} category (${list.length}) must not exceed budget ${cap}`
+    );
+  }
+
+  for (const entry of composed.normalized_context.scoped) {
+    assert.ok(
+      entry.content.length <= longText.length,
+      `scoped content (${entry.content.length}) should be bounded`
+    );
+    assert.ok(
+      entry.content.length < longText.length,
+      "scoped content should be truncated below the original long text"
+    );
+  }
+
+  for (const { list } of expectedCategoryCaps) {
+    for (const text of list) {
+      assert.ok(
+        text.length < longText.length,
+        "category text must be token-budgeted, not raw record text"
+      );
+    }
+  }
+});
+
 test("getContextTool composes normalized records for same-repository stores", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
