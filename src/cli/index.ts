@@ -488,32 +488,42 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
   console.log(`  count: ${observations.length}`);
 }
 
-function firstRecord(): void {
-  console.log(
-    JSON.stringify(
+export function buildFirstRecordTemplate(): {
+  kind: "workflow";
+  text: string;
+  source_type: "inferred_from_code";
+  scope: { paths: string[]; domains: string[]; tags: string[] };
+  evidence: Array<{
+    kind: "code";
+    repo: string;
+    file: string;
+    line_start: number;
+    line_end: number;
+  }>;
+} {
+  return {
+    kind: "workflow",
+    text: "Describe one repo-specific workflow, rule, pitfall, decision, fact, or glossary term.",
+    source_type: "inferred_from_code",
+    scope: {
+      paths: ["src/**"],
+      domains: ["example"],
+      tags: ["first-record"]
+    },
+    evidence: [
       {
-        kind: "workflow",
-        text: "Describe one repo-specific workflow, rule, pitfall, decision, fact, or glossary term.",
-        source_type: "inferred_from_code",
-        scope: {
-          paths: ["src/**"],
-          domains: ["example"],
-          tags: ["first-record"]
-        },
-        evidence: [
-          {
-            kind: "code",
-            repo: "github.com/my-org/my-repo",
-            file: "src/index.ts",
-            line_start: 1,
-            line_end: 20
-          }
-        ]
-      },
-      null,
-      2
-    )
-  );
+        kind: "code",
+        repo: "github.com/my-org/my-repo",
+        file: "src/index.ts",
+        line_start: 1,
+        line_end: 20
+      }
+    ]
+  };
+}
+
+function firstRecord(): void {
+  console.log(JSON.stringify(buildFirstRecordTemplate(), null, 2));
 }
 
 async function explain(args: ParsedArgs): Promise<void> {
