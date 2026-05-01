@@ -12,6 +12,7 @@ import type {
 import { listBoundRecords, type BoundListRecordsServices } from "../../src/core/list/records.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { Binding } from "../../src/schemas/types.js";
+import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
   const directory = mkdtempSync(join(tmpdir(), "teamctx-list-"));
@@ -170,10 +171,8 @@ function record(
     tags: ["preview-cli"]
   }
 ): NormalizedRecord {
-  return {
+  return fixtureNormalizedRecord({
     id,
-    schema_version: 1,
-    normalizer_version: "0.1.0",
     kind,
     state,
     text: `${id} context preview text`,
@@ -186,19 +185,9 @@ function record(
         file: "src/cli/index.ts"
       }
     ],
-    provenance: {
-      recorded_by: "codex",
-      session_id: "session-1",
-      observed_at: "2026-04-22T10:00:00.000Z"
-    },
-    confidence_level: "medium",
-    confidence_score: 0.65,
     valid_from:
-      id === "workflow-cli-second" ? "2026-04-22T10:01:00.000Z" : "2026-04-22T10:02:00.000Z",
-    last_verified_at: "2026-04-22T11:00:00.000Z",
-    supersedes: [],
-    conflicts_with: []
-  };
+      id === "workflow-cli-second" ? "2026-04-22T10:01:00.000Z" : "2026-04-22T10:02:00.000Z"
+  });
 }
 
 function servicesForLocal(root: string): BoundListRecordsServices {

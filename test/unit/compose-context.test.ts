@@ -26,6 +26,7 @@ import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { RawObservation } from "../../src/schemas/observation.js";
 import type { Binding } from "../../src/schemas/types.js";
 import { fixtureObservation } from "../fixtures/observation.js";
+import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
   const directory = mkdtempSync(join(tmpdir(), "teamctx-compose-"));
@@ -923,33 +924,13 @@ function record(
     tags: ["request-lifecycle"]
   }
 ): NormalizedRecord {
-  return {
+  return fixtureNormalizedRecord({
     id,
-    schema_version: 1,
-    normalizer_version: "0.1.0",
     kind,
     state,
     text: `${id} text`,
-    scope,
-    evidence: [
-      {
-        kind: "code",
-        repo: "github.com/team/service",
-        commit: "abc123",
-        file: "src/auth/middleware.ts"
-      }
-    ],
-    provenance: {
-      recorded_by: "codex",
-      session_id: "session-1",
-      observed_at: "2026-04-22T10:00:00.000Z"
-    },
-    confidence_level: "medium",
-    confidence_score: 0.65,
-    last_verified_at: "2026-04-22T11:00:00.000Z",
-    supersedes: [],
-    conflicts_with: []
-  };
+    scope
+  });
 }
 
 function observation(overrides: Partial<RawObservation> = {}): RawObservation {

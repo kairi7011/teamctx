@@ -14,6 +14,7 @@ import {
 import { statusTool, statusToolAsync } from "../../src/mcp/tools/status.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { Binding } from "../../src/schemas/types.js";
+import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 const binding: Binding = {
   repo: "github.com/team/service",
@@ -197,38 +198,16 @@ function remoteServices(store: ContextStoreAdapter): GetContextServices {
 }
 
 function record(): NormalizedRecord {
-  return {
+  return fixtureNormalizedRecord({
     id: "pitfall-auth",
-    schema_version: 1,
-    normalizer_version: "0.1.0",
-    kind: "pitfall",
-    state: "active",
     text: "Auth middleware ordering is easy to break.",
     scope: {
       paths: ["src/auth/**"],
       domains: ["auth"],
       symbols: ["AuthMiddleware"],
       tags: []
-    },
-    evidence: [
-      {
-        kind: "code",
-        repo: "github.com/team/service",
-        commit: "abc123",
-        file: "src/auth/middleware.ts"
-      }
-    ],
-    provenance: {
-      recorded_by: "codex",
-      session_id: "session-1",
-      observed_at: "2026-04-22T10:00:00.000Z"
-    },
-    confidence_level: "medium",
-    confidence_score: 0.65,
-    last_verified_at: "2026-04-22T11:00:00.000Z",
-    supersedes: [],
-    conflicts_with: []
-  };
+    }
+  });
 }
 
 class MemoryContextStore implements ContextStoreAdapter {

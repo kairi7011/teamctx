@@ -7,6 +7,7 @@ import {
   type RankedRecord
 } from "../../src/core/context/context-ranking.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
+import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 test("approximateTokenCount counts words and punctuation as tokens", () => {
   assert.equal(approximateTokenCount("Use auth middleware, then resolve tenant."), 8);
@@ -30,12 +31,9 @@ function ranked(text: string): RankedRecord {
 }
 
 function record(text: string): NormalizedRecord {
-  return {
+  return fixtureNormalizedRecord({
     id: "record-token-budget",
-    schema_version: 1,
-    normalizer_version: "0.1.0",
     kind: "rule",
-    state: "active",
     text,
     scope: {
       paths: ["src/**"],
@@ -50,14 +48,6 @@ function record(text: string): NormalizedRecord {
         commit: "abc123",
         file: "src/index.ts"
       }
-    ],
-    provenance: {
-      recorded_by: "codex",
-      session_id: "session-1",
-      observed_at: "2026-04-22T10:00:00.000Z"
-    },
-    confidence_level: "medium",
-    supersedes: [],
-    conflicts_with: []
-  };
+    ]
+  });
 }

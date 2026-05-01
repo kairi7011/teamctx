@@ -11,6 +11,7 @@ import {
   serializeTextIndex
 } from "../../src/core/indexes/record-index.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
+import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 test("explainContextQueryFromStore reports indexed normalized shard reads", (context) => {
   const { directory, cleanup } = tempDirectory();
@@ -88,12 +89,9 @@ function record(
   paths: string[],
   domains: string[]
 ): NormalizedRecord {
-  return {
-    schema_version: 1,
-    normalizer_version: "0.1.0",
+  return fixtureNormalizedRecord({
     id,
     kind,
-    state: "active",
     text: `${id} context text`,
     scope: {
       paths,
@@ -114,11 +112,8 @@ function record(
       observed_at: "2026-04-29T00:00:00.000Z",
       recorded_by: "test"
     },
-    confidence_level: "medium",
-    last_verified_at: "2026-04-29T00:00:00.000Z",
-    supersedes: [],
-    conflicts_with: []
-  };
+    last_verified_at: "2026-04-29T00:00:00.000Z"
+  });
 }
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
