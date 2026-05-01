@@ -46,5 +46,6 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /teamctx record-verified <json-file> \[--json\]/);
   assert.match(help, /teamctx auth doctor/);
   assert.match(help, /teamctx tools \[--json\]/);
+  assert.match(help, /teamctx capabilities \[--json\]/);
   assert.match(help, /Examples:/);
 });

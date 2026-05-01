@@ -25,6 +25,7 @@ import {
 } from "../core/audit/summary.js";
 import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
+import { describeBindingCapabilities } from "../core/capabilities.js";
 import { explainBoundEpisodeAsync } from "../core/episodes/explain.js";
 import {
   listBoundRecords,
@@ -115,6 +116,7 @@ Usage:
   teamctx doctor
   teamctx auth doctor
   teamctx tools [--json]
+  teamctx capabilities [--json]
 
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
@@ -869,6 +871,35 @@ function tools(args: ParsedArgs): void {
   }
 }
 
+function capabilities(args: ParsedArgs): void {
+  let binding: ReturnType<typeof findBinding> | undefined;
+  let repo: string | undefined;
+
+  try {
+    const root = getRepoRoot();
+    repo = normalizeGitHubRepo(getOriginRemote(root));
+    binding = findBinding(repo);
+  } catch {
+    binding = undefined;
+  }
+
+  const description = describeBindingCapabilities(binding, repo);
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(description, null, 2));
+    return;
+  }
+
+  console.log(`bound: ${description.bound}`);
+  console.log(`store_kind: ${description.store_kind}`);
+  console.log(`normalize_supported: ${description.normalize_supported}`);
+  console.log(`background_jobs: ${description.background_jobs}`);
+  console.log("store:");
+  for (const [key, value] of Object.entries(description.store)) {
+    console.log(`  ${key}: ${value}`);
+  }
+}
+
 export type CliCommandHandler = (args: ParsedArgs) => void | Promise<void>;
 
 export const cliCommands: Record<string, CliCommandHandler> = {
@@ -894,6 +925,7 @@ export const cliCommands: Record<string, CliCommandHandler> = {
   doctor: () => doctor(),
   auth: (args) => runAuthSubcommand(args),
   tools: (args) => tools(args),
+  capabilities: (args) => capabilities(args),
   help: () => printHelp(),
   "--help": () => printHelp(),
   "-h": () => printHelp()

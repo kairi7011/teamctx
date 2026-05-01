@@ -39,6 +39,7 @@ const EXPECTED_PUBLIC_API = [
   "createEmptyPathIndex",
   "createEmptySymbolIndex",
   "createEmptyTextIndex",
+  "describeBindingCapabilities",
   "describeGitHubAuth",
   "emptyComposedContext",
   "explainBoundEpisodeAsync",

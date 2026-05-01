@@ -12,6 +12,7 @@ export * from "./adapters/store/context-store.js";
 export * from "./adapters/store/local-store.js";
 export * from "./core/binding/context-store.js";
 export * from "./core/binding/local-bindings.js";
+export * from "./core/capabilities.js";
 export * from "./core/audit/control.js";
 export * from "./core/context/compose-context.js";
 export * from "./core/context/context-ranking.js";

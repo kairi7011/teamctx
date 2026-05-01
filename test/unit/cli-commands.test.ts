@@ -27,6 +27,7 @@ test("cliCommands registry exposes every documented command", () => {
     "doctor",
     "auth",
     "tools",
+    "capabilities",
     "help",
     "--help",
     "-h"
