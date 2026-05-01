@@ -859,87 +859,53 @@ function tools(args: ParsedArgs): void {
   }
 }
 
+export type CliCommandHandler = (args: ParsedArgs) => void | Promise<void>;
+
+export const cliCommands: Record<string, CliCommandHandler> = {
+  bind: (args) => bind(args),
+  setup: (args) => setup(args),
+  "init-store": (args) => initStore(args),
+  normalize: (args) => normalize(args),
+  compact: (args) => compact(args),
+  context: (args) => context(args),
+  "context-diff": (args) => contextDiff(args),
+  "query-explain": (args) => queryExplain(args),
+  rank: (args) => rank(args),
+  list: (args) => list(args),
+  audit: (args) => audit(args),
+  "record-candidate": (args) => recordObservation(args, "candidate"),
+  "record-verified": (args) => recordObservation(args, "verified"),
+  "first-record": () => firstRecord(),
+  show: (args) => show(args),
+  explain: (args) => explain(args),
+  "explain-episode": (args) => explainEpisode(args),
+  invalidate: (args) => invalidate(args),
+  status: (args) => status(args),
+  doctor: () => doctor(),
+  auth: (args) => runAuthSubcommand(args),
+  tools: (args) => tools(args),
+  help: () => printHelp(),
+  "--help": () => printHelp(),
+  "-h": () => printHelp()
+};
+
+function runAuthSubcommand(args: ParsedArgs): Promise<void> {
+  if (args.positional[0] !== "doctor") {
+    throw new CliError(CLI_EXIT.USAGE, "Unknown auth command. Usage: teamctx auth doctor");
+  }
+
+  return authDoctor();
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const handler = cliCommands[args.command];
 
-  switch (args.command) {
-    case "bind":
-      bind(args);
-      return;
-    case "setup":
-      await setup(args);
-      return;
-    case "init-store":
-      await initStore(args);
-      return;
-    case "normalize":
-      await normalize(args);
-      return;
-    case "compact":
-      await compact(args);
-      return;
-    case "context":
-      await context(args);
-      return;
-    case "context-diff":
-      await contextDiff(args);
-      return;
-    case "query-explain":
-      await queryExplain(args);
-      return;
-    case "rank":
-      await rank(args);
-      return;
-    case "list":
-      await list(args);
-      return;
-    case "audit":
-      await audit(args);
-      return;
-    case "record-candidate":
-      await recordObservation(args, "candidate");
-      return;
-    case "record-verified":
-      await recordObservation(args, "verified");
-      return;
-    case "first-record":
-      firstRecord();
-      return;
-    case "show":
-      await show(args);
-      return;
-    case "explain":
-      await explain(args);
-      return;
-    case "explain-episode":
-      await explainEpisode(args);
-      return;
-    case "invalidate":
-      await invalidate(args);
-      return;
-    case "status":
-      await status(args);
-      return;
-    case "doctor":
-      await doctor();
-      return;
-    case "auth":
-      if (args.positional[0] !== "doctor") {
-        throw new CliError(CLI_EXIT.USAGE, "Unknown auth command. Usage: teamctx auth doctor");
-      }
-      await authDoctor();
-      return;
-    case "tools":
-      tools(args);
-      return;
-    case "help":
-    case "--help":
-    case "-h":
-      printHelp();
-      return;
-    default:
-      throw new CliError(CLI_EXIT.USAGE, `Unknown command: ${args.command}`);
+  if (!handler) {
+    throw new CliError(CLI_EXIT.USAGE, `Unknown command: ${args.command}`);
   }
+
+  await handler(args);
 }
 
 if (isDirectCliRun()) {
