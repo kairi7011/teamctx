@@ -1,3 +1,9 @@
+// Public library surface for `teamctx`. The CLI and MCP server do not depend
+// on this barrel; it is intended for consumers that want to embed teamctx
+// modules directly. The exported name set is asserted by
+// `test/unit/public-api.test.ts` so that adding or removing an export is an
+// intentional, reviewed change.
+
 export * from "./adapters/git/local-git.js";
 export * from "./adapters/git/repo-url.js";
 export * from "./adapters/github/github-client.js";
