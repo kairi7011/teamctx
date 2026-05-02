@@ -126,6 +126,11 @@ teamctx explain workflow-example
 teamctx invalidate workflow-example --reason "obsolete" --json
 ```
 
+Use `show` when you want a human-readable view of one record. Use `explain`
+when you need the full JSON evidence, provenance, state, and audit trail. Use
+`invalidate` when a record is obsolete or unsafe to keep in default context; the
+record is archived with an audit entry instead of being deleted silently.
+
 Trace ranking and context placement:
 
 ```bash
@@ -164,6 +169,11 @@ teamctx compact
 teamctx compact --dry-run
 teamctx compact --json
 ```
+
+Use `compact --dry-run` before maintenance to inspect which raw candidate
+events, audit entries, and archived records would move. Compaction keeps active
+normalized records in place and moves expired retention targets under the
+configured archive path.
 
 Context text budgets are approximate token budgets. Configure them in `project.yaml`:
 
