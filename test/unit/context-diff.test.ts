@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { diffContextPayloads } from "../../src/core/context/context-diff.js";
 import type { EnabledContextPayload } from "../../src/schemas/context-payload.js";
+import {
+  fixtureDisabledContextPayload,
+  fixtureEnabledContextPayload
+} from "../fixtures/context-payload.js";
 
 test("diffContextPayloads reports scoped and diagnostic changes", () => {
   const left = payload({
@@ -45,7 +49,7 @@ test("diffContextPayloads reports scoped and diagnostic changes", () => {
 
 test("diffContextPayloads reports disabled sides without comparing context", () => {
   const diff = diffContextPayloads(
-    { enabled: false, reason: "No teamctx binding found for this git root." },
+    fixtureDisabledContextPayload(),
     payload({ hash: "sha256:right", scopedIds: ["rule-auth"] }),
     {},
     { target_files: ["src/auth.ts"] }
@@ -73,19 +77,12 @@ function payload(input: {
   contested?: string[];
   budgetRejected?: string[];
 }): EnabledContextPayload {
+  const base = fixtureEnabledContextPayload();
   return {
-    enabled: true,
-    identity: {
-      repo: "github.com/team/service",
-      branch: "main",
-      head_commit: "abc123",
-      context_store: "github.com/team/context/contexts/service",
-      store_head: null,
-      normalizer_version: "0.1.0",
-      context_payload_hash: input.hash
-    },
+    ...base,
+    identity: { ...base.identity, context_payload_hash: input.hash },
     normalized_context: {
-      global: "",
+      ...base.normalized_context,
       scoped: input.scopedIds.map((id) => ({
         id,
         kind: "rule",
@@ -117,12 +114,6 @@ function payload(input: {
         exclusion_reason: "budget_overflow:workflow"
       })),
       index_warnings: []
-    },
-    write_policy: {
-      record_observation_candidate: "allowed",
-      record_observation_verified: "allowed_with_evidence",
-      invalidate: "human_only",
-      docs_evidence: "allowed_with_doc_role"
     }
   };
 }
