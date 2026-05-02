@@ -43,6 +43,91 @@ adapter implements `appendJsonl` as:
 The default retry limit is 3 attempts. If the limit is reached, the conflict is
 returned to the caller.
 
+## Advisory Lease Design
+
+Optimistic file revisions protect individual writes, but they do not coordinate
+multi-file operations such as `teamctx normalize`. A later implementation can
+add an optional advisory lease for remote stores before starting those
+operations.
+
+The lease should be stored inside the configured context store path:
+
+```text
+locks/normalize.json
+```
+
+The file should be ordinary JSON so users can inspect and recover it without a
+special binary format:
+
+```json
+{
+  "format_version": 1,
+  "operation": "normalize",
+  "lease_id": "lease-...",
+  "owner": {
+    "tool": "teamctx",
+    "hostname": "devbox",
+    "pid": 12345
+  },
+  "created_at": "2026-05-02T00:00:00.000Z",
+  "expires_at": "2026-05-02T00:05:00.000Z",
+  "store_revision": "abc123"
+}
+```
+
+### Acquire
+
+To acquire the lease, the caller reads `locks/normalize.json`.
+
+- If the file is missing, create it with `expectedRevision: null`.
+- If the file exists and `expires_at` is in the future, stop before writing and
+  report the current owner and expiry time.
+- If the file exists but is expired, replace it with `expectedRevision` set to
+  the file revision that was just read.
+
+If GitHub rejects the create or replace request because another writer won the
+race, the caller rereads the lease and reports the current owner. The acquire
+path should not spin indefinitely.
+
+### Renew and Release
+
+Long-running operations may renew the lease by replacing the same file with the
+same `lease_id` and a later `expires_at`, again using the last read file
+revision as `expectedRevision`.
+
+On success or failure, the owner should release the lease by deleting or
+replacing `locks/normalize.json` only when the file still contains its
+`lease_id`. If release fails, the lease expires naturally and `status` can show
+it as stale.
+
+### Recovery
+
+An expired lease is advisory, not proof that the previous writer failed. The
+next writer may take over only after reporting the expired owner and replacing
+the lease through an expected-revision write. A future `teamctx status` check
+should surface:
+
+- no active normalize lease
+- active lease with owner and expiry
+- expired lease with recovery guidance
+
+Manual recovery should remain possible by deleting the lock file through normal
+Git/GitHub tools, but that should not be the first-line workflow.
+
+### Guarantees and Limits
+
+The lease is a coordination hint, not a transaction boundary:
+
+- It reduces concurrent normalize runs when all writers honor it.
+- It does not prevent a legacy client or manual edit from writing without the
+  lease.
+- It does not make the multi-file normalize sequence atomic.
+- It does not replace per-file `expectedRevision` checks or append retries.
+
+The lease design should be reused for later background jobs, with operation
+names such as `compact`, `index-refresh`, or job-specific ids when concurrent
+different operations become safe.
+
 ## Failure Cases
 
 Concurrent writers can still observe failures:
@@ -139,8 +224,8 @@ planned writes before applying them.
   same starting state and may race each other on shared files. Optimistic
   retry resolves single-file conflicts, but two runs that both succeed can
   still leave the audit log with interleaved entries from different
-  `run_id` values. Advisory leases (see roadmap `SC-07` / `SC-08`) are
-  intentionally out of scope here.
+  `run_id` values. The advisory lease design above is the intended next
+  coordination layer; it is not implemented by the current normalize command.
 - A partially appended `audit/changes.jsonl` line cannot currently be
   detected and removed automatically. JSONL readers skip blank lines, so a
   truncated final line will fail validation on the next read; manual
