@@ -114,6 +114,9 @@ test("statusTool returns the enabled binding summary", () => {
       contested_items: [],
       dropped_items: [],
       stale_items: [],
+      normalize_lease: {
+        state: "none"
+      },
       index_warnings: [],
       recovery_suggestions: []
     }

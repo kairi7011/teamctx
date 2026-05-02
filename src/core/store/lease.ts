@@ -23,6 +23,10 @@ export type StoreLeaseHandle = {
   release: () => Promise<void>;
 };
 
+export type NormalizeLeaseStatus =
+  | { state: "none" }
+  | { state: "active" | "expired"; lease: StoreLease };
+
 export class StoreLeaseActiveError extends Error {
   readonly lease: StoreLease;
 
@@ -89,6 +93,39 @@ export async function acquireNormalizeLease(options: {
   };
 }
 
+export async function readNormalizeLeaseStatus(options: {
+  store: ContextStoreAdapter;
+  now?: () => Date;
+}): Promise<NormalizeLeaseStatus> {
+  const file = await options.store.readText(NORMALIZE_LEASE_PATH);
+
+  if (!file) {
+    return { state: "none" };
+  }
+
+  const now = options.now ?? (() => new Date());
+  const lease = parseLeaseFile(file);
+
+  return Date.parse(lease.expires_at) > now().getTime()
+    ? { state: "active", lease }
+    : { state: "expired", lease };
+}
+
+export function readNormalizeLeaseStatusFromContent(
+  content: string | undefined,
+  now: () => Date
+): NormalizeLeaseStatus {
+  if (content === undefined) {
+    return { state: "none" };
+  }
+
+  const lease = parseLeaseContent(content);
+
+  return Date.parse(lease.expires_at) > now().getTime()
+    ? { state: "active", lease }
+    : { state: "expired", lease };
+}
+
 async function releaseNormalizeLease(store: ContextStoreAdapter, lease: StoreLease): Promise<void> {
   const current = await store.readText(NORMALIZE_LEASE_PATH);
 
@@ -109,7 +146,11 @@ async function releaseNormalizeLease(store: ContextStoreAdapter, lease: StoreLea
 }
 
 function parseLeaseFile(file: ContextStoreFile): StoreLease {
-  const value = JSON.parse(file.content) as unknown;
+  return parseLeaseContent(file.content);
+}
+
+function parseLeaseContent(content: string): StoreLease {
+  const value = JSON.parse(content) as unknown;
 
   if (!isRecord(value)) {
     throw new Error("normalize lease file must be an object");

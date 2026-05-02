@@ -89,6 +89,7 @@ test("summarizeContextStore returns local status buckets and last normalize resu
     "conflicting same-scope assertion detected"
   );
   assert.equal(summary.contested_items[0]?.evidence[0]?.kind, "code");
+  assert.deepEqual(summary.normalize_lease, { state: "none" });
   assert.deepEqual(summary.index_warnings, []);
   assert.deepEqual(summary.recovery_suggestions, []);
 });
@@ -113,6 +114,38 @@ test("summarizeContextStore reports stale index recovery warnings", (context) =>
   assert.deepEqual(summary.recovery_suggestions, [
     "Run `teamctx normalize` to refresh normalized records and indexes."
   ]);
+});
+
+test("summarizeContextStore reports expired normalize lease recovery", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeNormalizeLease(storeRoot, "2026-04-22T11:05:00.000Z");
+
+  const summary = summarizeContextStore({
+    storeRoot,
+    now: () => new Date("2026-04-22T11:10:00.000Z")
+  });
+
+  assert.equal(summary.normalize_lease.state, "expired");
+  assert.match(summary.recovery_suggestions[0] ?? "", /normalize lease is expired/);
+});
+
+test("summarizeContextStore reports active normalize lease without recovery", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeNormalizeLease(storeRoot, "2026-04-22T11:15:00.000Z");
+
+  const summary = summarizeContextStore({
+    storeRoot,
+    now: () => new Date("2026-04-22T11:10:00.000Z")
+  });
+
+  assert.equal(summary.normalize_lease.state, "active");
+  assert.deepEqual(summary.recovery_suggestions, []);
 });
 
 test("getBoundStatus and statusTool include local store summaries", (context) => {
@@ -183,6 +216,32 @@ function writeIndexGeneratedAt(storeRoot: string, file: string, generatedAt: str
   writeFileSync(
     join(directory, file),
     `${JSON.stringify({ generated_at: generatedAt }, null, 2)}\n`,
+    "utf8"
+  );
+}
+
+function writeNormalizeLease(storeRoot: string, expiresAt: string): void {
+  const directory = join(storeRoot, "locks");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, "normalize.json"),
+    `${JSON.stringify(
+      {
+        format_version: 1,
+        operation: "normalize",
+        lease_id: "lease-test",
+        owner: {
+          tool: "teamctx",
+          hostname: "test-host",
+          pid: 123
+        },
+        created_at: "2026-04-22T11:00:00.000Z",
+        expires_at: expiresAt,
+        store_revision: null
+      },
+      null,
+      2
+    )}\n`,
     "utf8"
   );
 }

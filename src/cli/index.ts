@@ -637,6 +637,12 @@ async function status(args: ParsedArgs): Promise<void> {
         : "never"
     }`
   );
+  if (summary.normalize_lease.state !== "none") {
+    const lease = summary.normalize_lease.lease;
+    console.log(
+      `  normalize_lease: ${summary.normalize_lease.state} owner=${lease.owner.hostname}:${lease.owner.pid} expires=${lease.expires_at}`
+    );
+  }
   printStatusList(
     "recent_promoted",
     summary.recent_promoted_items.map((item) => ({

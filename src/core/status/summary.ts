@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
 import { NORMALIZED_FILE_BY_KIND, type NormalizeStoreResult } from "../normalize/normalize.js";
+import {
+  NORMALIZE_LEASE_PATH,
+  readNormalizeLeaseStatus,
+  readNormalizeLeaseStatusFromContent,
+  type NormalizeLeaseStatus
+} from "../store/lease.js";
 import { validateAuditLogEntry, type AuditLogEntry } from "../../schemas/audit.js";
 import type { Evidence } from "../../schemas/evidence.js";
 import {
@@ -17,6 +23,7 @@ import { isRecord } from "../../schemas/validation.js";
 export type StatusSummaryOptions = {
   storeRoot: string;
   recentLimit?: number;
+  now?: () => Date;
 };
 
 export type StatusItemSummary = {
@@ -71,6 +78,7 @@ export type StatusSummary = {
   contested_items: ContestedItemSummary[];
   dropped_items: DroppedItemSummary[];
   stale_items: StatusItemSummary[];
+  normalize_lease: NormalizeLeaseStatus;
   index_warnings: string[];
   recovery_suggestions: string[];
 };
@@ -87,6 +95,7 @@ export function summarizeContextStore(options: StatusSummaryOptions): StatusSumm
     auditEntries,
     lastNormalizeResult: readLastNormalizeResult(options.storeRoot),
     indexWarnings: readIndexWarnings(options.storeRoot),
+    normalizeLease: readLocalNormalizeLeaseStatus(options.storeRoot, options.now),
     recentLimit
   });
 }
@@ -94,6 +103,7 @@ export function summarizeContextStore(options: StatusSummaryOptions): StatusSumm
 export async function summarizeContextStoreAdapter(options: {
   store: ContextStoreAdapter;
   recentLimit?: number;
+  now?: () => Date;
 }): Promise<StatusSummary> {
   const recentLimit = options.recentLimit ?? DEFAULT_RECENT_LIMIT;
   const records = await readNormalizedRecordsFromAdapter(options.store);
@@ -104,8 +114,25 @@ export async function summarizeContextStoreAdapter(options: {
     auditEntries,
     lastNormalizeResult: await readLastNormalizeResultFromAdapter(options.store),
     indexWarnings: await readIndexWarningsFromAdapter(options.store),
+    normalizeLease: await readNormalizeLeaseStatus({
+      store: options.store,
+      ...(options.now !== undefined ? { now: options.now } : {})
+    }),
     recentLimit
   });
+}
+
+function readLocalNormalizeLeaseStatus(
+  storeRoot: string,
+  now: (() => Date) | undefined
+): NormalizeLeaseStatus {
+  const path = join(storeRoot, NORMALIZE_LEASE_PATH);
+
+  if (!existsSync(path)) {
+    return { state: "none" };
+  }
+
+  return readNormalizeLeaseStatusFromContent(readFileSync(path, "utf8"), now ?? (() => new Date()));
 }
 
 function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
@@ -263,6 +290,7 @@ function buildStatusSummary(options: {
   auditEntries: AuditLogEntry[];
   lastNormalizeResult: NormalizeStoreResult | null;
   indexWarnings: string[];
+  normalizeLease: NormalizeLeaseStatus;
   recentLimit: number;
 }): StatusSummary {
   const recordsById = new Map(options.records.map((record) => [record.id, record]));
@@ -298,12 +326,28 @@ function buildStatusSummary(options: {
       .filter((record) => record.state === "stale")
       .map(itemSummary)
       .slice(0, options.recentLimit),
+    normalize_lease: options.normalizeLease,
     index_warnings: options.indexWarnings,
-    recovery_suggestions:
-      options.indexWarnings.length > 0
-        ? ["Run `teamctx normalize` to refresh normalized records and indexes."]
-        : []
+    recovery_suggestions: recoverySuggestions(options.indexWarnings, options.normalizeLease)
   };
+}
+
+function recoverySuggestions(
+  indexWarnings: string[],
+  normalizeLease: NormalizeLeaseStatus
+): string[] {
+  const suggestions =
+    indexWarnings.length > 0
+      ? ["Run `teamctx normalize` to refresh normalized records and indexes."]
+      : [];
+
+  if (normalizeLease.state === "expired") {
+    suggestions.push(
+      "A normalize lease is expired; rerun `teamctx normalize --lease` to take it over, or remove `locks/normalize.json` after confirming no writer is running."
+    );
+  }
+
+  return suggestions;
 }
 
 const INDEX_FILES = [
