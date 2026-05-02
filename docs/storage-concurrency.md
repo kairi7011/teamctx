@@ -128,6 +128,14 @@ The lease design should be reused for later background jobs, with operation
 names such as `compact`, `index-refresh`, or job-specific ids when concurrent
 different operations become safe.
 
+Current implementation status:
+
+- `teamctx normalize --lease` enables the remote normalize lease for one run.
+- MCP callers can pass `use_lease: true` to `teamctx.normalize`.
+- Local same-repository stores do not use the lease path.
+- The default remains lease-free so no-op remote normalize runs can still avoid
+  extra lock acquire / release commits.
+
 ## Failure Cases
 
 Concurrent writers can still observe failures:
@@ -224,8 +232,8 @@ planned writes before applying them.
   same starting state and may race each other on shared files. Optimistic
   retry resolves single-file conflicts, but two runs that both succeed can
   still leave the audit log with interleaved entries from different
-  `run_id` values. The advisory lease design above is the intended next
-  coordination layer; it is not implemented by the current normalize command.
+  `run_id` values. Use `teamctx normalize --lease` for opt-in remote normalize
+  coordination.
 - A partially appended `audit/changes.jsonl` line cannot currently be
   detected and removed automatically. JSONL readers skip blank lines, so a
   truncated final line will fail validation on the next read; manual

@@ -600,6 +600,64 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
   );
 });
 
+test("normalizeBoundStoreAsync can guard remote normalize with an advisory lease", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  mkdirSync(join(directory, "src", "auth"), { recursive: true });
+  writeFileSync(
+    join(directory, "src", "auth", "middleware.ts"),
+    "export class AuthMiddleware {}\n",
+    "utf8"
+  );
+  writeRaw(remoteRoot, observation());
+
+  const services = servicesFor(directory, "github.com/team/context", remoteRoot);
+  const result = await normalizeBoundStoreAsync({
+    services,
+    now: fixedNow,
+    useLease: true
+  });
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(readFileSync(join(remoteRoot, "normalized", "pitfalls.jsonl"), "utf8").includes("Auth"), true);
+  assert.throws(() => readFileSync(join(remoteRoot, "locks", "normalize.json"), "utf8"));
+});
+
+test("normalizeBoundStoreAsync rejects an active remote normalize lease", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  mkdirSync(join(remoteRoot, "locks"), { recursive: true });
+  writeFileSync(
+    join(remoteRoot, "locks", "normalize.json"),
+    `${JSON.stringify({
+      format_version: 1,
+      operation: "normalize",
+      lease_id: "lease-existing",
+      owner: {
+        tool: "teamctx",
+        hostname: "other-host",
+        pid: 123
+      },
+      created_at: "2026-04-22T11:00:00.000Z",
+      expires_at: "2026-04-22T11:05:00.000Z",
+      store_revision: null
+    })}\n`,
+    "utf8"
+  );
+  writeRaw(remoteRoot, observation());
+
+  await assert.rejects(
+    normalizeBoundStoreAsync({
+      services: servicesFor(directory, "github.com/team/context", remoteRoot),
+      now: fixedNow,
+      useLease: true
+    }),
+    /normalize lease is active until 2026-04-22T11:05:00.000Z/
+  );
+});
+
 test("normalizeBoundStoreAsync skips remote writes when content is unchanged", async (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

@@ -61,7 +61,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "teamctx.normalize",
     description: "Normalize raw events into evidence-aware context records.",
-    inputSchema: objectSchema(cwdSchema)
+    inputSchema: objectSchema({ ...cwdSchema, use_lease: { type: "boolean" } })
   },
   {
     name: "teamctx.status",

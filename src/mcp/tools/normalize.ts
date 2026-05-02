@@ -7,9 +7,11 @@ import { isRecord } from "../../schemas/validation.js";
 
 export function normalizeTool(rawInput: unknown, services?: NormalizeServices): unknown {
   const cwd = getOptionalString(rawInput, "cwd");
+  const useLease = getOptionalBoolean(rawInput, "use_lease");
 
   return normalizeBoundStore({
     ...(cwd !== undefined ? { cwd } : {}),
+    ...(useLease !== undefined ? { useLease } : {}),
     ...(services !== undefined ? { services } : {})
   });
 }
@@ -19,9 +21,11 @@ export async function normalizeToolAsync(
   services?: NormalizeServices
 ): Promise<unknown> {
   const cwd = getOptionalString(rawInput, "cwd");
+  const useLease = getOptionalBoolean(rawInput, "use_lease");
 
   return normalizeBoundStoreAsync({
     ...(cwd !== undefined ? { cwd } : {}),
+    ...(useLease !== undefined ? { useLease } : {}),
     ...(services !== undefined ? { services } : {})
   });
 }
@@ -39,6 +43,24 @@ function getOptionalString(rawInput: unknown, key: string): string | undefined {
 
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`normalize ${key} must be a non-empty string`);
+  }
+
+  return value;
+}
+
+function getOptionalBoolean(rawInput: unknown, key: string): boolean | undefined {
+  if (!isRecord(rawInput)) {
+    return undefined;
+  }
+
+  const value = rawInput[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new Error(`normalize ${key} must be a boolean`);
   }
 
   return value;

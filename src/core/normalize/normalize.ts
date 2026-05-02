@@ -39,6 +39,7 @@ import {
 import { sha256Hex } from "../store/hash.js";
 import { jsonlLines } from "../store/jsonl.js";
 import { resolveStoreRoot } from "../store/layout.js";
+import { acquireNormalizeLease } from "../store/lease.js";
 import { calculateConfidence } from "./confidence.js";
 import { dedupeKey, emptyScope, findDuplicateRecordKey } from "./dedupe.js";
 import { applyStateTransitions, createAuditEntry } from "./state-transition.js";
@@ -63,6 +64,7 @@ export type NormalizeOptions = {
   now?: () => Date;
   services?: NormalizeServices;
   dryRun?: boolean;
+  useLease?: boolean;
 };
 
 const NORMALIZER_VERSION = "0.1.0";
@@ -134,7 +136,8 @@ export async function normalizeBoundStoreAsync(
       services.createContextStore?.({ repo, repoRoot: root, binding }) ??
       createContextStoreForBinding({ repo, repoRoot: root, binding }),
     ...(options.now !== undefined ? { now: options.now } : {}),
-    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
+    ...(options.useLease !== undefined ? { useLease: options.useLease } : {})
   });
 }
 
@@ -183,9 +186,35 @@ export async function normalizeContextStore(options: {
   repoRoot?: string;
   now?: () => Date;
   dryRun?: boolean;
+  useLease?: boolean;
 }): Promise<NormalizeStoreResult> {
   const now = options.now ?? (() => new Date());
-  const runAt = now();
+  const lease =
+    options.useLease === true && options.dryRun !== true
+      ? await acquireNormalizeLease({ store: options.store, now })
+      : undefined;
+
+  try {
+    return await normalizeContextStoreWithLease({
+      repo: options.repo,
+      store: options.store,
+      ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
+      now,
+      ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {})
+    });
+  } finally {
+    await lease?.release();
+  }
+}
+
+async function normalizeContextStoreWithLease(options: {
+  repo: string;
+  store: ContextStoreAdapter;
+  repoRoot?: string;
+  now: () => Date;
+  dryRun?: boolean;
+}): Promise<NormalizeStoreResult> {
+  const runAt = options.now();
   const runNow = () => runAt;
   const rawEvents = await readRawEventsFromContextStore(options.store);
   const existing = await readNormalizedRecordFilesFromContextStore(options.store);

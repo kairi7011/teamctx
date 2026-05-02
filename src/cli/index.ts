@@ -97,7 +97,7 @@ Usage:
   teamctx bind <store> [--path <path>]
   teamctx setup <store> [--path <path>] [--json]
   teamctx init-store [--json]
-  teamctx normalize [--dry-run] [--json]
+  teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
   teamctx context-diff <left-json> <right-json>
@@ -218,7 +218,11 @@ async function initStore(args: ParsedArgs): Promise<void> {
 
 async function normalize(args: ParsedArgs): Promise<void> {
   const dryRun = args.flags["dry-run"] === true;
-  const result = await normalizeBoundStoreAsync(dryRun ? { dryRun: true } : {});
+  const useLease = args.flags.lease === true;
+  const result = await normalizeBoundStoreAsync({
+    ...(dryRun ? { dryRun: true } : {}),
+    ...(useLease ? { useLease: true } : {})
+  });
 
   if (args.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
@@ -234,6 +238,9 @@ async function normalize(args: ParsedArgs): Promise<void> {
   console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
   if (dryRun) {
     console.log("  note: no files were written; rerun without --dry-run to apply");
+  }
+  if (useLease && !dryRun) {
+    console.log("  lease: acquired and released");
   }
 }
 
