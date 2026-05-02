@@ -65,6 +65,9 @@ the application code.
 See [Storage and Concurrency](docs/storage-concurrency.md) for GitHub store
 revision and retry behavior.
 
+See [Operations Guide](docs/operations-guide.md) for team cadence, inspection,
+correction, and compaction workflows.
+
 ## GitHub Auth
 
 Remote GitHub stores use the first token available in this order:
