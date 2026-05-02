@@ -621,42 +621,39 @@ async function invalidate(args: ParsedArgs): Promise<void> {
   console.log(`  after_state: ${result.after_state}`);
 }
 
-async function status(args: ParsedArgs): Promise<void> {
-  const result = await getBoundStatusAsync();
-
-  if (args.flags.json === true) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
+export function formatStatusReport(
+  result: Awaited<ReturnType<typeof getBoundStatusAsync>>
+): string {
   if (!result.enabled) {
-    console.log("teamctx disabled");
+    const lines = ["teamctx disabled"];
     if (result.repo !== undefined) {
-      console.log(`  repo: ${result.repo}`);
+      lines.push(`  repo: ${result.repo}`);
     }
-    console.log(`  reason: ${result.reason}`);
-    return;
+    lines.push(`  reason: ${result.reason}`);
+    return lines.join("\n");
   }
 
-  console.log("teamctx enabled");
-  console.log(`  repo: ${result.repo}`);
-  console.log(`  root: ${result.root}`);
-  console.log(`  branch: ${result.branch}`);
-  console.log(`  head: ${result.head_commit}`);
-  console.log(`  store: ${result.context_store}`);
+  const lines = [
+    "teamctx enabled",
+    `  repo: ${result.repo}`,
+    `  root: ${result.root}`,
+    `  branch: ${result.branch}`,
+    `  head: ${result.head_commit}`,
+    `  store: ${result.context_store}`
+  ];
 
   if (!result.summary) {
-    console.log(`  summary: ${result.summary_unavailable_reason ?? "unavailable"}`);
-    return;
+    lines.push(`  summary: ${result.summary_unavailable_reason ?? "unavailable"}`);
+    return lines.join("\n");
   }
 
   const { summary } = result;
   const lastNormalize = summary.last_normalize_result;
 
-  console.log(
+  lines.push(
     `  records: active=${summary.counts.active_records} contested=${summary.counts.contested_records} stale=${summary.counts.stale_records} archived=${summary.counts.archived_records}`
   );
-  console.log(
+  lines.push(
     `  last_normalize: ${
       lastNormalize
         ? `${lastNormalize.normalizedAt} run=${lastNormalize.runId} raw=${lastNormalize.rawEventsRead} promoted=${lastNormalize.recordsWritten} dropped=${lastNormalize.droppedEvents}`
@@ -665,11 +662,12 @@ async function status(args: ParsedArgs): Promise<void> {
   );
   if (summary.normalize_lease.state !== "none") {
     const lease = summary.normalize_lease.lease;
-    console.log(
+    lines.push(
       `  normalize_lease: ${summary.normalize_lease.state} owner=${lease.owner.hostname}:${lease.owner.pid} expires=${lease.expires_at}`
     );
   }
-  printStatusList(
+  appendStatusList(
+    lines,
     "recent_promoted",
     summary.recent_promoted_items.map((item) => ({
       id: item.item_id,
@@ -677,7 +675,8 @@ async function status(args: ParsedArgs): Promise<void> {
     })),
     summary.counts.promoted_records
   );
-  printStatusList(
+  appendStatusList(
+    lines,
     "contested",
     summary.contested_items.map((item) => ({
       id: item.item_id,
@@ -685,7 +684,8 @@ async function status(args: ParsedArgs): Promise<void> {
     })),
     summary.counts.contested_records
   );
-  printStatusList(
+  appendStatusList(
+    lines,
     "dropped",
     summary.dropped_items.map((item) => ({
       id: item.source_event_ids.join(",") || "(unknown event)",
@@ -693,27 +693,41 @@ async function status(args: ParsedArgs): Promise<void> {
     })),
     summary.counts.dropped_events
   );
-  printStatusList(
+  appendStatusList(
+    lines,
     "stale",
     summary.stale_items.map((item) => ({ id: item.item_id, detail: item.text })),
     summary.counts.stale_records
   );
 
   if (summary.index_warnings.length > 0) {
-    console.log("  index_warnings:");
+    lines.push("  index_warnings:");
 
     for (const warning of summary.index_warnings) {
-      console.log(`    - ${warning}`);
+      lines.push(`    - ${warning}`);
     }
   }
 
   if (summary.recovery_suggestions.length > 0) {
-    console.log("  recovery:");
+    lines.push("  recovery:");
 
     for (const suggestion of summary.recovery_suggestions) {
-      console.log(`    - ${suggestion}`);
+      lines.push(`    - ${suggestion}`);
     }
   }
+
+  return lines.join("\n");
+}
+
+async function status(args: ParsedArgs): Promise<void> {
+  const result = await getBoundStatusAsync();
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(formatStatusReport(result));
 }
 
 function contestedStatusDetail(item: {
@@ -735,7 +749,8 @@ function contestedStatusDetail(item: {
   return parts.join(" | ");
 }
 
-function printStatusList(
+function appendStatusList(
+  lines: string[],
   label: string,
   rows: Array<{ id: string; detail: string }>,
   total = rows.length
@@ -743,10 +758,10 @@ function printStatusList(
   const visibleCount =
     rows.length === total ? String(rows.length) : `${rows.length} of ${total} shown`;
 
-  console.log(`  ${label}: ${visibleCount}`);
+  lines.push(`  ${label}: ${visibleCount}`);
 
   for (const row of rows) {
-    console.log(`    - ${row.id}: ${row.detail}`);
+    lines.push(`    - ${row.id}: ${row.detail}`);
   }
 }
 
