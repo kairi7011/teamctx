@@ -229,19 +229,33 @@ async function normalize(args: ParsedArgs): Promise<void> {
     return;
   }
 
-  console.log(dryRun ? "Normalized context store (dry-run):" : "Normalized context store:");
-  console.log(`  run_id: ${result.runId}`);
-  console.log(`  normalized_at: ${result.normalizedAt}`);
-  console.log(`  raw_events_read: ${result.rawEventsRead}`);
-  console.log(`  records_written: ${result.recordsWritten}`);
-  console.log(`  dropped_events: ${result.droppedEvents}`);
-  console.log(`  audit_entries_written: ${result.auditEntriesWritten}`);
-  if (dryRun) {
-    console.log("  note: no files were written; rerun without --dry-run to apply");
+  console.log(formatNormalizeResult(result, { dryRun, useLease }));
+}
+
+export function formatNormalizeResult(
+  result: Awaited<ReturnType<typeof normalizeBoundStoreAsync>>,
+  options: { dryRun?: boolean; useLease?: boolean } = {}
+): string {
+  const lines = [
+    options.dryRun === true
+      ? "Normalized context store (dry-run):"
+      : "Normalized context store:",
+    `  run_id: ${result.runId}`,
+    `  normalized_at: ${result.normalizedAt}`,
+    `  raw_events_read: ${result.rawEventsRead}`,
+    `  records_written: ${result.recordsWritten}`,
+    `  dropped_events: ${result.droppedEvents}`,
+    `  audit_entries_written: ${result.auditEntriesWritten}`
+  ];
+
+  if (options.dryRun === true) {
+    lines.push("  note: no files were written; rerun without --dry-run to apply");
   }
-  if (useLease && !dryRun) {
-    console.log("  lease: acquired and released");
+  if (options.useLease === true && options.dryRun !== true) {
+    lines.push("  lease: acquired and released");
   }
+
+  return lines.join("\n");
 }
 
 async function compact(args: ParsedArgs): Promise<void> {
