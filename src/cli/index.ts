@@ -198,6 +198,25 @@ async function setup(args: ParsedArgs): Promise<void> {
   console.log("  next: teamctx context --target-files <file>");
 }
 
+export function formatInitStoreResult(
+  result: Awaited<ReturnType<typeof initBoundStoreAsync>>
+): string {
+  const lines = [
+    "Initialized context store:",
+    `  store: ${result.store}`,
+    `  local_store: ${result.localStore}`
+  ];
+
+  if (result.root !== undefined) {
+    lines.push(`  root: ${result.root}`);
+  }
+
+  lines.push(`  created_files: ${result.createdFiles.length}`);
+  lines.push(`  existing_files: ${result.existingFiles.length}`);
+
+  return lines.join("\n");
+}
+
 async function initStore(args: ParsedArgs): Promise<void> {
   const result = await initBoundStoreAsync();
 
@@ -206,14 +225,7 @@ async function initStore(args: ParsedArgs): Promise<void> {
     return;
   }
 
-  console.log("Initialized context store:");
-  console.log(`  store: ${result.store}`);
-  console.log(`  local_store: ${result.localStore}`);
-  if (result.root !== undefined) {
-    console.log(`  root: ${result.root}`);
-  }
-  console.log(`  created_files: ${result.createdFiles.length}`);
-  console.log(`  existing_files: ${result.existingFiles.length}`);
+  console.log(formatInitStoreResult(result));
 }
 
 async function normalize(args: ParsedArgs): Promise<void> {
@@ -508,19 +520,29 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
     return;
   }
 
-  console.log(`Recorded ${trust} raw observations:`);
+  console.log(formatRecordObservationsReport(trust, results, observations.length));
+}
+
+export function formatRecordObservationsReport(
+  trust: "candidate" | "verified",
+  results: Array<{ index: number; result: RecordObservationToolResult }>,
+  totalCount: number = results.length
+): string {
+  const lines = [`Recorded ${trust} raw observations:`];
 
   for (const { index, result } of results) {
-    console.log(`  - ${index}: ${result.relative_path}`);
+    lines.push(`  - ${index}: ${result.relative_path}`);
 
     for (const finding of result.findings) {
-      console.log(
+      lines.push(
         `      ${finding.severity}: ${finding.kind} in ${finding.field} ${finding.excerpt}`
       );
     }
   }
 
-  console.log(`  count: ${observations.length}`);
+  lines.push(`  count: ${totalCount}`);
+
+  return lines.join("\n");
 }
 
 export function buildFirstRecordTemplate(): {
@@ -615,10 +637,20 @@ async function invalidate(args: ParsedArgs): Promise<void> {
     return;
   }
 
-  console.log("Invalidated context item:");
-  console.log(`  item_id: ${result.item_id}`);
-  console.log(`  before_state: ${result.before_state}`);
-  console.log(`  after_state: ${result.after_state}`);
+  console.log(formatInvalidateResult(result));
+}
+
+export function formatInvalidateResult(result: {
+  item_id: string;
+  before_state: string;
+  after_state: string;
+}): string {
+  return [
+    "Invalidated context item:",
+    `  item_id: ${result.item_id}`,
+    `  before_state: ${result.before_state}`,
+    `  after_state: ${result.after_state}`
+  ].join("\n");
 }
 
 export function formatStatusReport(
