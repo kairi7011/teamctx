@@ -258,6 +258,29 @@ export function formatNormalizeResult(
   return lines.join("\n");
 }
 
+export function formatCompactResult(
+  result: Awaited<ReturnType<typeof compactBoundStoreAsync>>,
+  options: { dryRun?: boolean } = {}
+): string {
+  const lines = [
+    options.dryRun === true ? "Compacted context store (dry-run):" : "Compacted context store:",
+    `  compacted_at: ${result.compactedAt}`,
+    `  archive_root: ${result.archiveRoot}`,
+    `  raw_candidate_events_archived: ${result.rawCandidateEventsArchived}`,
+    `  raw_events_retained: ${result.rawEventsRetained}`,
+    `  audit_entries_archived: ${result.auditEntriesArchived}`,
+    `  audit_entries_retained: ${result.auditEntriesRetained}`,
+    `  archived_records_archived: ${result.archivedRecordsArchived}`,
+    `  normalized_records_retained: ${result.normalizedRecordsRetained}`
+  ];
+
+  if (options.dryRun === true) {
+    lines.push("  note: no files were archived; rerun without --dry-run to apply");
+  }
+
+  return lines.join("\n");
+}
+
 async function compact(args: ParsedArgs): Promise<void> {
   const dryRun = args.flags["dry-run"] === true;
   const result = await compactBoundStoreAsync(dryRun ? { dryRun: true } : {});
@@ -267,18 +290,7 @@ async function compact(args: ParsedArgs): Promise<void> {
     return;
   }
 
-  console.log(dryRun ? "Compacted context store (dry-run):" : "Compacted context store:");
-  console.log(`  compacted_at: ${result.compactedAt}`);
-  console.log(`  archive_root: ${result.archiveRoot}`);
-  console.log(`  raw_candidate_events_archived: ${result.rawCandidateEventsArchived}`);
-  console.log(`  raw_events_retained: ${result.rawEventsRetained}`);
-  console.log(`  audit_entries_archived: ${result.auditEntriesArchived}`);
-  console.log(`  audit_entries_retained: ${result.auditEntriesRetained}`);
-  console.log(`  archived_records_archived: ${result.archivedRecordsArchived}`);
-  console.log(`  normalized_records_retained: ${result.normalizedRecordsRetained}`);
-  if (dryRun) {
-    console.log("  note: no files were archived; rerun without --dry-run to apply");
-  }
+  console.log(formatCompactResult(result, { dryRun }));
 }
 
 async function context(args: ParsedArgs): Promise<void> {
