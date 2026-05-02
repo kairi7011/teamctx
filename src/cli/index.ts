@@ -57,6 +57,7 @@ import {
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { validateGetContextInput, type GetContextInput } from "../schemas/context-payload.js";
+import type { Binding } from "../schemas/types.js";
 
 export type ParsedArgs = {
   command: string;
@@ -164,6 +165,32 @@ function bindCurrentRepo(args: ParsedArgs): ReturnType<typeof upsertBinding> {
   return upsertBinding(repo, root, contextStore);
 }
 
+export const SETUP_NEXT_STEPS: readonly string[] = [
+  "teamctx record-verified observations.json",
+  "teamctx normalize",
+  "teamctx context --target-files <file>"
+];
+
+export function formatSetupReport(
+  binding: Binding,
+  result: Awaited<ReturnType<typeof initBoundStoreAsync>>
+): string {
+  const lines = [
+    "Set up teamctx:",
+    `  repo: ${binding.repo}`,
+    `  root: ${binding.root}`,
+    `  store: ${binding.contextStore.repo}/${binding.contextStore.path}`,
+    `  created_files: ${result.createdFiles.length}`,
+    `  existing_files: ${result.existingFiles.length}`
+  ];
+
+  for (const step of SETUP_NEXT_STEPS) {
+    lines.push(`  next: ${step}`);
+  }
+
+  return lines.join("\n");
+}
+
 async function setup(args: ParsedArgs): Promise<void> {
   const binding = bindCurrentRepo(args);
   const result = await initBoundStoreAsync();
@@ -174,11 +201,7 @@ async function setup(args: ParsedArgs): Promise<void> {
         {
           binding,
           init_store: result,
-          next: [
-            "teamctx record-verified observations.json",
-            "teamctx normalize",
-            "teamctx context --target-files <file>"
-          ]
+          next: SETUP_NEXT_STEPS
         },
         null,
         2
@@ -187,15 +210,7 @@ async function setup(args: ParsedArgs): Promise<void> {
     return;
   }
 
-  console.log("Set up teamctx:");
-  console.log(`  repo: ${binding.repo}`);
-  console.log(`  root: ${binding.root}`);
-  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
-  console.log(`  created_files: ${result.createdFiles.length}`);
-  console.log(`  existing_files: ${result.existingFiles.length}`);
-  console.log("  next: teamctx record-verified observations.json");
-  console.log("  next: teamctx normalize");
-  console.log("  next: teamctx context --target-files <file>");
+  console.log(formatSetupReport(binding, result));
 }
 
 export function formatInitStoreResult(
