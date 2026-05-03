@@ -213,6 +213,7 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /^teamctx/);
   assert.match(help, /Usage:/);
   assert.match(help, /teamctx setup <store> \[--path <path>\] \[--json\]/);
+  assert.match(help, /teamctx bootstrap \[<store>\] \[--path <path>\] \[--json\]/);
   assert.match(help, /teamctx normalize \[--dry-run\] \[--lease\] \[--json\]/);
   assert.match(help, /teamctx compact \[--dry-run\] \[--json\]/);
   assert.match(help, /teamctx context \[json-file\] \[--target-files <files>\]/);

@@ -25,6 +25,11 @@ import {
 import { normalizeGitHubRepo } from "../adapters/git/repo-url.js";
 import { explainBoundItemAsync, invalidateBoundItemAsync } from "../core/audit/control.js";
 import {
+  buildBootstrapPlan,
+  discoverBootstrapSources,
+  type BootstrapPlan
+} from "../core/bootstrap/bootstrap.js";
+import {
   getBoundAuditSummary,
   parseAuditActions,
   type AuditSummaryInput
@@ -185,6 +190,7 @@ export function formatHelp(): string {
 Usage:
   teamctx bind <store> [--path <path>]
   teamctx setup <store> [--path <path>] [--json]
+  teamctx bootstrap [<store>] [--path <path>] [--json]
   teamctx init-store [--json]
   teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
@@ -210,6 +216,8 @@ Usage:
 Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx setup . --path .teamctx
+  teamctx bootstrap github.com/my-org/ai-context --path contexts/my-service
+  teamctx bootstrap
   teamctx bind . --path .teamctx
   teamctx context --call-reason session_start --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
@@ -260,9 +268,10 @@ function bindCurrentRepo(args: ParsedArgs): ReturnType<typeof upsertBinding> {
 }
 
 export const SETUP_NEXT_STEPS: readonly string[] = [
-  "teamctx record-verified observations.json",
+  "teamctx bootstrap",
+  "teamctx record-verified teamctx-bootstrap-observations.json",
   "teamctx normalize",
-  "teamctx context --target-files <file>"
+  'teamctx context --call-reason session_start --query "<task>"'
 ];
 
 export function formatSetupReport(
@@ -305,6 +314,91 @@ async function setup(args: ParsedArgs): Promise<void> {
   }
 
   console.log(formatSetupReport(binding, result));
+}
+
+async function bootstrap(args: ParsedArgs): Promise<void> {
+  const storeInput = args.positional[0];
+  const binding = storeInput ? bindCurrentRepo(args) : getCurrentBinding();
+  const initResult = await initBoundStoreAsync();
+  const plan = buildBootstrapPlan({
+    repo: binding.repo,
+    root: binding.root,
+    store: `${binding.contextStore.repo}/${binding.contextStore.path}`,
+    localStore: initResult.localStore,
+    sourceFiles: discoverBootstrapSources(binding.root, {
+      excludePaths: [binding.contextStore.path]
+    })
+  });
+
+  if (args.flags.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          binding,
+          init_store: initResult,
+          bootstrap: plan
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log(formatBootstrapPlan(plan, initResult));
+}
+
+function getCurrentBinding(): Binding {
+  const root = getRepoRoot();
+  const repo = normalizeGitHubRepo(getOriginRemote(root));
+  const binding = findBinding(repo);
+
+  if (!binding) {
+    throw new CliError(
+      CLI_EXIT.BINDING,
+      "No teamctx binding found. Run `teamctx bootstrap <store> [--path <path>]` or `teamctx setup <store> [--path <path>]` first."
+    );
+  }
+
+  return binding;
+}
+
+export function formatBootstrapPlan(
+  plan: BootstrapPlan,
+  initResult?: Awaited<ReturnType<typeof initBoundStoreAsync>>
+): string {
+  const lines = [
+    "Bootstrap teamctx initial context:",
+    `  repo: ${plan.repo}`,
+    `  root: ${plan.root}`,
+    `  store: ${plan.store}`,
+    `  local_store: ${plan.local_store}`,
+    `  source_files: ${plan.source_files.length}`,
+    `  recommended_observations: ${plan.recommended_observation_count}`,
+    `  output_file: ${plan.output_file}`
+  ];
+
+  if (initResult !== undefined) {
+    lines.push(`  created_files: ${initResult.createdFiles.length}`);
+    lines.push(`  existing_files: ${initResult.existingFiles.length}`);
+  }
+
+  if (plan.source_files.length > 0) {
+    lines.push("Source files to inspect:");
+    for (const source of plan.source_files) {
+      lines.push(`  - ${source.path} (${source.reason})`);
+    }
+  } else {
+    lines.push("Source files to inspect:");
+    lines.push("  - none detected; inspect the repository manually");
+  }
+
+  lines.push("Agent prompt:");
+  for (const line of plan.agent_prompt.split("\n")) {
+    lines.push(line.length > 0 ? `  ${line}` : "");
+  }
+
+  return lines.join("\n");
 }
 
 export function formatInitStoreResult(
@@ -1227,6 +1321,7 @@ export type CliCommandHandler = (args: ParsedArgs) => void | Promise<void>;
 export const cliCommands: Record<string, CliCommandHandler> = {
   bind: (args) => bind(args),
   setup: (args) => setup(args),
+  bootstrap: (args) => bootstrap(args),
   "init-store": (args) => initStore(args),
   normalize: (args) => normalize(args),
   compact: (args) => compact(args),

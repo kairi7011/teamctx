@@ -28,12 +28,13 @@ Set up the current repository with a local context store:
 
 ```bash
 teamctx setup . --path .teamctx
+teamctx bootstrap
 ```
 
 Or bind to a separate GitHub context store:
 
 ```bash
-teamctx setup github.com/my-org/ai-context --path contexts/my-service
+teamctx bootstrap github.com/my-org/ai-context --path contexts/my-service
 ```
 
 You can also run setup one step at a time:
@@ -41,7 +42,13 @@ You can also run setup one step at a time:
 ```bash
 teamctx bind . --path .teamctx
 teamctx init-store
+teamctx bootstrap
 ```
+
+`bootstrap` initializes the store if needed, detects likely project source files
+such as README, agent instructions, docs, package metadata, and CI config, then
+prints an agent prompt for creating the first reviewed observation batch. It does
+not automatically save broad summaries as verified knowledge.
 
 ## Context Store
 
@@ -142,6 +149,8 @@ Set up a repository:
 ```bash
 teamctx setup . --path .teamctx
 teamctx setup . --path .teamctx --json
+teamctx bootstrap . --path .teamctx
+teamctx bootstrap --json
 ```
 
 Check the current binding:
@@ -187,6 +196,7 @@ teamctx audit --item workflow-example --query "evidence minimum"
 Record one or more verified observations from a JSON file:
 
 ```bash
+teamctx bootstrap
 teamctx first-record > observations.json
 teamctx record-verified observations.json
 teamctx record-verified observations.json --json

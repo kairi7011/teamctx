@@ -7,6 +7,7 @@ test("cliCommands registry exposes every documented command", () => {
   const required = [
     "bind",
     "setup",
+    "bootstrap",
     "init-store",
     "normalize",
     "compact",

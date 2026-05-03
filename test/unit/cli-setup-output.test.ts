@@ -31,9 +31,10 @@ test("formatSetupReport renders binding, init counts, and next steps", () => {
       "  store: github.com/team/context/contexts/service",
       "  created_files: 2",
       "  existing_files: 1",
-      "  next: teamctx record-verified observations.json",
+      "  next: teamctx bootstrap",
+      "  next: teamctx record-verified teamctx-bootstrap-observations.json",
       "  next: teamctx normalize",
-      "  next: teamctx context --target-files <file>"
+      '  next: teamctx context --call-reason session_start --query "<task>"'
     ].join("\n")
   );
 });
@@ -58,9 +59,10 @@ test("SETUP_NEXT_STEPS exposes the documented post-setup commands", () => {
   assert.deepEqual(
     [...SETUP_NEXT_STEPS],
     [
-      "teamctx record-verified observations.json",
+      "teamctx bootstrap",
+      "teamctx record-verified teamctx-bootstrap-observations.json",
       "teamctx normalize",
-      "teamctx context --target-files <file>"
+      'teamctx context --call-reason session_start --query "<task>"'
     ]
   );
 });

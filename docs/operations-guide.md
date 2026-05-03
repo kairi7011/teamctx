@@ -19,6 +19,32 @@ and audit entry is safe to publish.
 See [Security Guide](security.md) for token permissions, store visibility, and
 sensitive-content handling.
 
+## Initial Bootstrap
+
+After binding a store, bootstrap the first context batch:
+
+```bash
+teamctx bootstrap
+```
+
+Or use bootstrap as the first command for a new remote store:
+
+```bash
+teamctx bootstrap github.com/my-org/ai-context --path contexts/my-service
+```
+
+Bootstrap initializes the store if needed, detects likely source files for the
+first context pass, and prints an agent prompt for creating
+`teamctx-bootstrap-observations.json`. It does not auto-save broad summaries as
+verified knowledge. Review the generated observations, then record and normalize
+them:
+
+```bash
+teamctx record-verified teamctx-bootstrap-observations.json
+teamctx normalize --dry-run
+teamctx normalize
+```
+
 ## Recording Cadence
 
 Record knowledge when it changes how future work should be done:
