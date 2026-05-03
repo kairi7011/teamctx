@@ -1,5 +1,6 @@
 import type { EnabledContextPayload } from "../../schemas/context-payload.js";
 import { isRecord } from "../../schemas/validation.js";
+import { CoreError } from "../errors.js";
 
 export const WRITE_POLICY: EnabledContextPayload["write_policy"] = {
   record_observation_candidate: "allowed",
@@ -10,7 +11,8 @@ export const WRITE_POLICY: EnabledContextPayload["write_policy"] = {
 
 export function assertHumanInvalidateConfirmation(rawInput: unknown, toolName: string): void {
   if (!isRecord(rawInput) || rawInput.human_confirmed !== true) {
-    throw new Error(
+    throw new CoreError(
+      "validation",
       `${toolName} requires human_confirmed: true because write_policy.invalidate is human_only`
     );
   }

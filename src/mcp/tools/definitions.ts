@@ -86,7 +86,7 @@ export const toolDefinitions: ToolDefinition[] = [
         ...cwdSchema,
         item_id: { type: "string" },
         reason: { type: "string" },
-        human_confirmed: { type: "boolean" }
+        human_confirmed: { const: true }
       },
       ["item_id", "human_confirmed"]
     )

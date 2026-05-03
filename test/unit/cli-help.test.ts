@@ -52,6 +52,20 @@ test("parseArgs treats command-level help flags as boolean help requests", () =>
   assert.equal(shouldPrintHelp(parseArgs(["normalize", "--dry-run", "-h"])), true);
 });
 
+test("parseArgs treats known boolean flags as value-less before positional args", () => {
+  assert.deepEqual(parseArgs(["context-diff", "--json", "before.json", "after.json"]), {
+    command: "context-diff",
+    positional: ["before.json", "after.json"],
+    flags: { json: true }
+  });
+
+  assert.deepEqual(parseArgs(["context-diff", "before.json", "--json", "after.json"]), {
+    command: "context-diff",
+    positional: ["before.json", "after.json"],
+    flags: { json: true }
+  });
+});
+
 test("formatHelp includes stable command usage", () => {
   const help = formatHelp();
 

@@ -88,6 +88,19 @@ test("getContextTool returns an empty enabled payload with identity fields", () 
   assert.equal(context.write_policy.record_observation_verified, "allowed_with_evidence");
 });
 
+test("getContextTool returns an isolated write policy object", () => {
+  const firstContext = getContextTool({}, boundServices);
+  const secondContext = getContextTool({}, boundServices);
+
+  if (!firstContext.enabled || !secondContext.enabled) {
+    throw new Error("expected enabled context");
+  }
+
+  (firstContext.write_policy as { invalidate: string }).invalidate = "allowed";
+
+  assert.equal(secondContext.write_policy.invalidate, "human_only");
+});
+
 test("invalidate tool schema requires human confirmation", () => {
   const definition = toolDefinitions.find((tool) => tool.name === "teamctx.invalidate");
   assert.ok(definition);
@@ -96,7 +109,7 @@ test("invalidate tool schema requires human confirmation", () => {
   const properties = asRecord(inputSchema.properties);
 
   assert.deepEqual(inputSchema.required, ["item_id", "human_confirmed"]);
-  assert.deepEqual(properties.human_confirmed, { type: "boolean" });
+  assert.deepEqual(properties.human_confirmed, { const: true });
 });
 
 test("statusTool returns the enabled binding summary", () => {

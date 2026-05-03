@@ -190,6 +190,11 @@ function validateEpisodeReference(value: unknown): EpisodeReference {
     scope: value.scope,
     supersedes: []
   });
+  const reason = optionalString(value.reason, "episode reference reason");
+  const selectionReasons = optionalStringArray(
+    value.selection_reasons,
+    "episode reference selection_reasons"
+  );
 
   return {
     schema_version: 1,
@@ -204,7 +209,9 @@ function validateEpisodeReference(value: unknown): EpisodeReference {
     evidence: rawObservation.evidence,
     summary: rawObservation.text,
     trust: rawObservation.trust,
-    source_type: rawObservation.source_type
+    source_type: rawObservation.source_type,
+    ...(reason !== undefined ? { reason } : {}),
+    ...(selectionReasons !== undefined ? { selection_reasons: selectionReasons } : {})
   };
 }
 
@@ -371,4 +378,24 @@ function requiredString(value: unknown, name: string): string {
   }
 
   return value;
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return requiredString(value, name);
+}
+
+function optionalStringArray(value: unknown, name: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isStringArray(value) || value.some((item) => item.length === 0)) {
+    throw new Error(`${name} must be a string array`);
+  }
+
+  return [...value];
 }

@@ -73,6 +73,8 @@ export type ParsedArgs = {
   flags: Record<string, string | boolean>;
 };
 
+const BOOLEAN_FLAGS = new Set(["dry-run", "help", "json", "lease"]);
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
   const positional: string[] = [];
@@ -89,7 +91,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       const key = value.slice(2);
       const next = rest[index + 1];
 
-      if (next && !isFlagToken(next)) {
+      if (BOOLEAN_FLAGS.has(key)) {
+        flags[key] = true;
+      } else if (next && !isFlagToken(next)) {
         flags[key] = next;
         index += 1;
       } else {

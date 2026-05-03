@@ -11,6 +11,7 @@ import {
   invalidateItem,
   type ControlServices
 } from "../../src/core/audit/control.js";
+import { CoreError } from "../../src/core/errors.js";
 import { explainItemTool } from "../../src/mcp/tools/explain-item.js";
 import { invalidateTool } from "../../src/mcp/tools/invalidate.js";
 import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
@@ -107,7 +108,10 @@ test("invalidateTool enforces human-only write policy", (context) => {
         { item_id: "pitfall-auth-order", reason: "automation cleanup" },
         servicesFor(directory)
       ),
-    /requires human_confirmed: true/
+    (error) =>
+      error instanceof CoreError &&
+      error.kind === "validation" &&
+      /requires human_confirmed: true/.test(error.message)
   );
 });
 

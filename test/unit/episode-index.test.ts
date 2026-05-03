@@ -62,6 +62,17 @@ test("validateEpisodeIndex round trips serialized indexes", () => {
   assert.deepEqual(validateEpisodeIndex(JSON.parse(serializeEpisodeIndex(index))), index);
 });
 
+test("validateEpisodeIndex preserves selected episode reason metadata", () => {
+  const index = buildEpisodeIndex([observation()], "2026-04-22T11:00:00.000Z");
+  const episode = index.episodes[0];
+
+  assert.ok(episode);
+  episode.reason = "target file match: src/auth/middleware.ts";
+  episode.selection_reasons = ["target file match: src/auth/middleware.ts", "domain match: auth"];
+
+  assert.deepEqual(validateEpisodeIndex(JSON.parse(serializeEpisodeIndex(index))), index);
+});
+
 function observation(overrides: Partial<RawObservation> = {}): RawObservation {
   return fixtureObservation(overrides);
 }

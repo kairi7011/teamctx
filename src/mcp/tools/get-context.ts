@@ -73,7 +73,7 @@ export function getContextTool(
       : emptyComposedContext();
   const body: Omit<EnabledContextPayload, "enabled" | "identity"> = {
     ...context,
-    write_policy: WRITE_POLICY
+    write_policy: { ...WRITE_POLICY }
   };
   const identityWithoutHash = {
     repo: repoState.repo,
@@ -140,7 +140,7 @@ export async function getContextToolAsync(
   const storeHead = store ? await store.getRevision() : null;
   const body: Omit<EnabledContextPayload, "enabled" | "identity"> = {
     ...context,
-    write_policy: WRITE_POLICY
+    write_policy: { ...WRITE_POLICY }
   };
   const identityWithoutHash = {
     repo: repoState.repo,
