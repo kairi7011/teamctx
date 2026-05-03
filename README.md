@@ -225,6 +225,23 @@ context_budgets:
 
 Older `content_chars` settings are still accepted and converted to approximate tokens.
 
+Project query aliases can be kept in `aliases/query-aliases.json` inside the
+context store. They expand known team wording into deterministic text-index
+tokens without adding embeddings or a database:
+
+```json
+{
+  "schema_version": 1,
+  "aliases": [
+    {
+      "id": "release-handoff",
+      "match": { "patterns": ["ship it"] },
+      "expand": { "token_groups": [["release", "handoff"]] }
+    }
+  ]
+}
+```
+
 Run diagnostics:
 
 ```bash

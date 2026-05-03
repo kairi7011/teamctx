@@ -16,6 +16,7 @@ import {
   readProjectConfigFromContextStore,
   resolveBudgetsFromConfig
 } from "../store/project-config-loader.js";
+import { readQueryAliases, readQueryAliasesFromContextStore } from "../store/query-alias-loader.js";
 import {
   readEpisodeIndex,
   readEpisodeIndexFromContextStore,
@@ -48,6 +49,7 @@ import type {
   EnabledContextPayload,
   GetContextInput
 } from "../../schemas/context-payload.js";
+import type { QueryAlias } from "../indexes/query-tokens.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
@@ -60,6 +62,7 @@ export function composeContextFromStore(
 ): ComposedContext {
   const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
+  const queryAliases = readQueryAliases(storeRoot);
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
@@ -72,7 +75,8 @@ export function composeContextFromStore(
     undefined,
     episodeRead.index,
     [...indexRead.warnings, ...episodeRead.warnings],
-    budgets
+    budgets,
+    queryAliases
   );
 }
 
@@ -82,13 +86,15 @@ export async function composeContextFromContextStore(
 ): Promise<ComposedContext> {
   const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
+  const queryAliases = await readQueryAliasesFromContextStore(store);
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const episodeRead = await readEpisodeIndexFromContextStore(store, lastNormalizeAt);
   const readResult = await readNormalizedRecordsFromContextStore(
     store,
     effectiveInput,
-    indexRead.indexes
+    indexRead.indexes,
+    queryAliases
   );
 
   return composeContextFromRecords(
@@ -98,7 +104,8 @@ export async function composeContextFromContextStore(
     readResult.diagnostics,
     episodeRead.index,
     [...indexRead.warnings, ...episodeRead.warnings],
-    budgets
+    budgets,
+    queryAliases
   );
 }
 
@@ -109,44 +116,51 @@ function composeContextFromRecords(
   diagnostics?: PrecomputedDiagnostics,
   episodeIndex?: EpisodeIndex,
   indexWarnings: string[] = [],
-  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS
+  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS,
+  queryAliases: QueryAlias[] = []
 ): ComposedContext {
   const activeRecords = records.filter(
     (record) => record.state === "active" && matchesTimeInput(record, input)
   );
-  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
+  const scopedRecords = selectScopedRecords(activeRecords, input, indexes, queryAliases);
   const globallyApplicableRecords = activeRecords.filter(isGloballyApplicableRecord);
   const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
-  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems);
+  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems, queryAliases);
   const globalBudget = budgetRecords(
     globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
     input,
-    budgets.globalItems
+    budgets.globalItems,
+    queryAliases
   );
   const ruleBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "rule"),
     input,
-    budgets.rules
+    budgets.rules,
+    queryAliases
   );
   const decisionBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "decision"),
     input,
-    budgets.decisions
+    budgets.decisions,
+    queryAliases
   );
   const pitfallBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "pitfall"),
     input,
-    budgets.pitfalls
+    budgets.pitfalls,
+    queryAliases
   );
   const workflowBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "workflow"),
     input,
-    budgets.workflows
+    budgets.workflows,
+    queryAliases
   );
   const glossaryBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "glossary"),
     input,
-    budgets.glossary
+    budgets.glossary,
+    queryAliases
   );
   const includedIn = budgetIncludedIn([
     { budget: scopedBudget, placement: "scoped" },
@@ -201,51 +215,58 @@ function composeContextFromRecords(
 function selectScopedRecords(
   activeRecords: NormalizedRecord[],
   input: GetContextInput,
-  indexes: RecordIndexSet
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
 ): NormalizedRecord[] {
   const pruneLowSignalMatches = (records: NormalizedRecord[]): NormalizedRecord[] =>
-    pruneLowSignalRichSelectorMatches(records, input);
+    pruneLowSignalRichSelectorMatches(records, input, queryAliases);
 
   if (
-    hasLookupSelectors(input) &&
+    hasLookupSelectors(input, queryAliases) &&
     hasGeneratedIndex(indexes) &&
-    selectorsHaveUsableIndexes(input, indexes)
+    selectorsHaveUsableIndexes(input, indexes, queryAliases)
   ) {
-    const selectedIds = selectIndexedRecordIds(indexes, input);
+    const selectedIds = selectIndexedRecordIds(indexes, input, queryAliases);
 
     return pruneLowSignalMatches(activeRecords.filter((record) => selectedIds.has(record.id)));
   }
 
-  if (!hasLookupSelectors(input) && hasTimeFilters(input)) {
+  if (!hasLookupSelectors(input, queryAliases) && hasTimeFilters(input)) {
     return activeRecords;
   }
 
-  return pruneLowSignalMatches(activeRecords.filter((record) => matchesScopeInput(record, input)));
+  return pruneLowSignalMatches(
+    activeRecords.filter((record) => matchesScopeInput(record, input, queryAliases))
+  );
 }
 
 const LOW_SIGNAL_RICH_SELECTOR_SCORE = 150;
 
 function pruneLowSignalRichSelectorMatches(
   records: NormalizedRecord[],
-  input: GetContextInput
+  input: GetContextInput,
+  queryAliases: QueryAlias[]
 ): NormalizedRecord[] {
-  if (!shouldPruneLowSignalRichSelectorMatches(input)) {
+  if (!shouldPruneLowSignalRichSelectorMatches(input, queryAliases)) {
     return records;
   }
 
   const retainedIds = new Set(
-    rankRecords(records, input)
-      .filter((ranked) => shouldRetainRichSelectorMatch(ranked, input))
+    rankRecords(records, input, queryAliases)
+      .filter((ranked) => shouldRetainRichSelectorMatch(ranked, input, queryAliases))
       .map((ranked) => ranked.record.id)
   );
 
   return records.filter((record) => retainedIds.has(record.id));
 }
 
-function shouldPruneLowSignalRichSelectorMatches(input: GetContextInput): boolean {
+function shouldPruneLowSignalRichSelectorMatches(
+  input: GetContextInput,
+  queryAliases: QueryAlias[]
+): boolean {
   const selectedFileCount = (input.target_files ?? []).length + (input.changed_files ?? []).length;
 
-  if (selectedFileCount === 0 || !hasStrongLookupSelectors(input)) {
+  if (selectedFileCount === 0 || !hasStrongLookupSelectors(input, queryAliases)) {
     return false;
   }
 
@@ -253,24 +274,32 @@ function shouldPruneLowSignalRichSelectorMatches(input: GetContextInput): boolea
     (input.domains ?? []).length > 0 ||
     (input.symbols ?? []).length > 0 ||
     (input.tags ?? []).length > 0 ||
-    hasTextLookupSelector(input.query)
+    hasTextLookupSelector(input.query, queryAliases)
   );
 }
 
-function shouldRetainRichSelectorMatch(ranked: RankedRecord, input: GetContextInput): boolean {
-  if (!matchesRichSelectorIntent(ranked, input)) {
+function shouldRetainRichSelectorMatch(
+  ranked: RankedRecord,
+  input: GetContextInput,
+  queryAliases: QueryAlias[]
+): boolean {
+  if (!matchesRichSelectorIntent(ranked, input, queryAliases)) {
     return false;
   }
 
-  if (hasIntentSelectorInput(input)) {
+  if (hasIntentSelectorInput(input, queryAliases)) {
     return true;
   }
 
   return ranked.score >= LOW_SIGNAL_RICH_SELECTOR_SCORE;
 }
 
-function matchesRichSelectorIntent(ranked: RankedRecord, input: GetContextInput): boolean {
-  const hasIntentSelectors = hasIntentSelectorInput(input);
+function matchesRichSelectorIntent(
+  ranked: RankedRecord,
+  input: GetContextInput,
+  queryAliases: QueryAlias[]
+): boolean {
+  const hasIntentSelectors = hasIntentSelectorInput(input, queryAliases);
 
   if (!hasIntentSelectors) {
     return true;
@@ -279,10 +308,11 @@ function matchesRichSelectorIntent(ranked: RankedRecord, input: GetContextInput)
   return (
     ((input.tags ?? []).length > 0 && hasRankReason(ranked, "tag match:")) ||
     hasSufficientSymbolMatch(ranked, input) ||
-    (hasTextLookupSelector(input.query) && hasRankReason(ranked, "text query match:")) ||
+    (hasTextLookupSelector(input.query, queryAliases) &&
+      hasRankReason(ranked, "text query match:")) ||
     ((input.symbols ?? []).length === 0 &&
       (input.tags ?? []).length === 0 &&
-      hasTextLookupSelector(input.query) &&
+      hasTextLookupSelector(input.query, queryAliases) &&
       ((input.target_files ?? []).length > 0 || (input.changed_files ?? []).length > 0) &&
       (hasRankReason(ranked, "target file match:") || hasRankReason(ranked, "changed file match:")))
   );
@@ -302,11 +332,11 @@ function hasSufficientSymbolMatch(ranked: RankedRecord, input: GetContextInput):
   return matchedCount >= requiredCount;
 }
 
-function hasIntentSelectorInput(input: GetContextInput): boolean {
+function hasIntentSelectorInput(input: GetContextInput, queryAliases: QueryAlias[]): boolean {
   return (
     (input.symbols ?? []).length > 0 ||
     (input.tags ?? []).length > 0 ||
-    hasTextLookupSelector(input.query)
+    hasTextLookupSelector(input.query, queryAliases)
   );
 }
 
@@ -363,10 +393,11 @@ function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
 async function readNormalizedRecordsFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput,
-  indexes: RecordIndexSet
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
 ): Promise<ContextStoreReadResult> {
   const records: NormalizedRecord[] = [];
-  const readPlan = contextStoreReadPlan(input, indexes);
+  const readPlan = contextStoreReadPlan(input, indexes, queryAliases);
 
   for (const file of readPlan.files) {
     const storeFile = await store.readText(`normalized/${file}`);
@@ -543,28 +574,37 @@ type PrecomputedDiagnostics = Pick<
 
 function contextStoreReadPlan(
   input: GetContextInput,
-  indexes: RecordIndexSet
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
 ): { files: readonly string[]; diagnostics?: PrecomputedDiagnostics } {
-  if (!canUseIndexedContextStoreRead(input, indexes)) {
+  if (!canUseIndexedContextStoreRead(input, indexes, queryAliases)) {
     return { files: NORMALIZED_RECORD_FILES };
   }
 
   const diagnostics = diagnosticsFromIndexes(indexes);
-  const files = indexedNormalizedFiles(input, indexes);
+  const files = indexedNormalizedFiles(input, indexes, queryAliases);
 
   return diagnostics === undefined ? { files } : { files, diagnostics };
 }
 
-function canUseIndexedContextStoreRead(input: GetContextInput, indexes: RecordIndexSet): boolean {
+function canUseIndexedContextStoreRead(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): boolean {
   return (
-    hasLookupSelectors(input) &&
+    hasLookupSelectors(input, queryAliases) &&
     typeof indexes.pathIndex?.generated_at === "string" &&
-    selectorsHaveUsableIndexes(input, indexes)
+    selectorsHaveUsableIndexes(input, indexes, queryAliases)
   );
 }
 
-function indexedNormalizedFiles(input: GetContextInput, indexes: RecordIndexSet): string[] {
-  const selectedIds = selectIndexedRecordIds(indexes, input);
+function indexedNormalizedFiles(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): string[] {
+  const selectedIds = selectIndexedRecordIds(indexes, input, queryAliases);
   const files = new Set<string>();
 
   addGlobalNormalizedFiles(files);
@@ -614,12 +654,19 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function selectorsHaveUsableIndexes(input: GetContextInput, indexes: RecordIndexSet): boolean {
+function selectorsHaveUsableIndexes(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): boolean {
   if ((input.symbols ?? []).length > 0 && typeof indexes.symbolIndex?.generated_at !== "string") {
     return false;
   }
 
-  if (input.query !== undefined && typeof indexes.textIndex?.generated_at !== "string") {
+  if (
+    hasTextLookupSelector(input.query, queryAliases) &&
+    typeof indexes.textIndex?.generated_at !== "string"
+  ) {
     return false;
   }
 
@@ -687,11 +734,12 @@ export type RankTrace = {
 export function rankContextFromStore(storeRoot: string, input: GetContextInput = {}): RankTrace {
   const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
+  const queryAliases = readQueryAliases(storeRoot);
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
 
-  return buildRankTrace(records, effectiveInput, indexRead.indexes, budgets);
+  return buildRankTrace(records, effectiveInput, indexRead.indexes, budgets, queryAliases);
 }
 
 export async function rankContextFromContextStore(
@@ -700,6 +748,7 @@ export async function rankContextFromContextStore(
 ): Promise<RankTrace> {
   const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
+  const queryAliases = await readQueryAliasesFromContextStore(store);
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const records: NormalizedRecord[] = [];
@@ -714,53 +763,60 @@ export async function rankContextFromContextStore(
 
   const sortedRecords = records.sort((left, right) => left.id.localeCompare(right.id));
 
-  return buildRankTrace(sortedRecords, effectiveInput, indexRead.indexes, budgets);
+  return buildRankTrace(sortedRecords, effectiveInput, indexRead.indexes, budgets, queryAliases);
 }
 
 function buildRankTrace(
   records: NormalizedRecord[],
   input: GetContextInput,
   indexes: RecordIndexSet = {},
-  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS
+  budgets: ContextBudgets = DEFAULT_CONTEXT_BUDGETS,
+  queryAliases: QueryAlias[] = []
 ): RankTrace {
   const activeRecords = records.filter(
     (record) => record.state === "active" && matchesTimeInput(record, input)
   );
-  const scopedRecords = selectScopedRecords(activeRecords, input, indexes);
+  const scopedRecords = selectScopedRecords(activeRecords, input, indexes, queryAliases);
   const globallyApplicableRecords = activeRecords.filter(isGloballyApplicableRecord);
   const applicableRecords = uniqueRecordsById([...scopedRecords, ...globallyApplicableRecords]);
   const applicableIds = new Set(applicableRecords.map((r) => r.id));
 
-  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems);
+  const scopedBudget = budgetRecords(scopedRecords, input, budgets.scopedItems, queryAliases);
   const globalBudget = budgetRecords(
     globallyApplicableRecords.filter((record) => isGlobalKind(record.kind)),
     input,
-    budgets.globalItems
+    budgets.globalItems,
+    queryAliases
   );
   const ruleBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "rule"),
     input,
-    budgets.rules
+    budgets.rules,
+    queryAliases
   );
   const decisionBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "decision"),
     input,
-    budgets.decisions
+    budgets.decisions,
+    queryAliases
   );
   const pitfallBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "pitfall"),
     input,
-    budgets.pitfalls
+    budgets.pitfalls,
+    queryAliases
   );
   const workflowBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "workflow"),
     input,
-    budgets.workflows
+    budgets.workflows,
+    queryAliases
   );
   const glossaryBudget = budgetRecords(
     applicableRecords.filter((record) => record.kind === "glossary"),
     input,
-    budgets.glossary
+    budgets.glossary,
+    queryAliases
   );
 
   const placements = new Map<string, string>();
@@ -791,7 +847,7 @@ function buildRankTrace(
 
   const entries: RankTraceEntry[] = [];
 
-  for (const entry of rankRecords(activeRecords, input)) {
+  for (const entry of rankRecords(activeRecords, input, queryAliases)) {
     const placement = placements.get(entry.record.id);
     const overflowReason = overflowReasons.get(entry.record.id);
     const traceEntry: RankTraceEntry = {

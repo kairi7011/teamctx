@@ -8,6 +8,8 @@ import {
   selectIndexedRecordIds,
   type RecordIndexSet
 } from "../indexes/record-index.js";
+import { expandQueryTokens, type QueryAlias } from "../indexes/query-tokens.js";
+import { readQueryAliases, readQueryAliasesFromContextStore } from "../store/query-alias-loader.js";
 import {
   resolveContextInputSelectors,
   type InferredContextSelectors
@@ -24,6 +26,10 @@ export type ContextQueryExplain = {
   selectors: ContextQuerySelectorSummary;
   inferred_selectors: InferredContextSelectors;
   effective_selectors: ContextQuerySelectorSummary;
+  query_expansion: {
+    matched_aliases: string[];
+    token_groups: string[][];
+  };
   indexes: {
     path_index: IndexUse;
     symbol_index: IndexUse;
@@ -63,8 +69,9 @@ export function explainContextQueryFromStore(
 ): ContextQueryExplain {
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
+  const queryAliases = readQueryAliases(storeRoot);
 
-  return explainContextQuery(input, indexRead.indexes, indexRead.warnings);
+  return explainContextQuery(input, indexRead.indexes, indexRead.warnings, queryAliases);
 }
 
 export async function explainContextQueryFromContextStore(
@@ -73,19 +80,22 @@ export async function explainContextQueryFromContextStore(
 ): Promise<ContextQueryExplain> {
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
+  const queryAliases = await readQueryAliasesFromContextStore(store);
 
-  return explainContextQuery(input, indexRead.indexes, indexRead.warnings);
+  return explainContextQuery(input, indexRead.indexes, indexRead.warnings, queryAliases);
 }
 
 function explainContextQuery(
   input: GetContextInput,
   indexes: RecordIndexSet,
-  warnings: string[]
+  warnings: string[],
+  queryAliases: QueryAlias[] = []
 ): ContextQueryExplain {
   const resolved = resolveContextInputSelectors(input);
-  const indexed = canUseIndexedRead(resolved.input, indexes);
+  const queryExpansion = expandQueryTokens(resolved.input.query, queryAliases);
+  const indexed = canUseIndexedRead(resolved.input, indexes, queryAliases);
   const selectedRecordIds = indexed
-    ? [...selectIndexedRecordIds(indexes, resolved.input)].sort()
+    ? [...selectIndexedRecordIds(indexes, resolved.input, queryAliases)].sort()
     : [];
   const normalizedFiles = indexed
     ? indexedNormalizedFiles(selectedRecordIds, indexes)
@@ -96,6 +106,10 @@ function explainContextQuery(
     selectors: selectorSummary(input),
     inferred_selectors: resolved.inferred_selectors,
     effective_selectors: selectorSummary(resolved.input),
+    query_expansion: {
+      matched_aliases: queryExpansion.matchedAliasIds,
+      token_groups: queryExpansion.tokenGroups
+    },
     indexes: {
       path_index: indexUse(indexes.pathIndex?.generated_at, indexed),
       symbol_index: indexUse(
@@ -104,7 +118,7 @@ function explainContextQuery(
       ),
       text_index: indexUse(
         indexes.textIndex?.generated_at,
-        indexed && resolved.input.query !== undefined
+        indexed && queryExpansion.tokenGroups.length > 0
       ),
       warnings
     },
@@ -112,7 +126,7 @@ function explainContextQuery(
       mode: indexed ? "indexed_normalized_shards" : "full_normalized_scan",
       reason: indexed
         ? "lookup selectors matched generated indexes"
-        : fullScanReason(resolved.input, indexes),
+        : fullScanReason(resolved.input, indexes, queryAliases),
       normalized_files: normalizedFiles,
       selected_record_ids: selectedRecordIds
     }
@@ -147,20 +161,31 @@ function selectorSummary(input: GetContextInput): ContextQuerySelectorSummary {
   };
 }
 
-function canUseIndexedRead(input: GetContextInput, indexes: RecordIndexSet): boolean {
+function canUseIndexedRead(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): boolean {
   return (
-    hasLookupSelectors(input) &&
+    hasLookupSelectors(input, queryAliases) &&
     typeof indexes.pathIndex?.generated_at === "string" &&
-    selectorsHaveUsableIndexes(input, indexes)
+    selectorsHaveUsableIndexes(input, indexes, queryAliases)
   );
 }
 
-function selectorsHaveUsableIndexes(input: GetContextInput, indexes: RecordIndexSet): boolean {
+function selectorsHaveUsableIndexes(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): boolean {
   if ((input.symbols ?? []).length > 0 && typeof indexes.symbolIndex?.generated_at !== "string") {
     return false;
   }
 
-  if (input.query !== undefined && typeof indexes.textIndex?.generated_at !== "string") {
+  if (
+    expandQueryTokens(input.query, queryAliases).tokenGroups.length > 0 &&
+    typeof indexes.textIndex?.generated_at !== "string"
+  ) {
     return false;
   }
 
@@ -186,8 +211,12 @@ function indexedNormalizedFiles(selectedRecordIds: string[], indexes: RecordInde
   return NORMALIZED_RECORD_FILES.filter((file) => files.has(file));
 }
 
-function fullScanReason(input: GetContextInput, indexes: RecordIndexSet): string {
-  if (!hasLookupSelectors(input)) {
+function fullScanReason(
+  input: GetContextInput,
+  indexes: RecordIndexSet,
+  queryAliases: QueryAlias[]
+): string {
+  if (!hasLookupSelectors(input, queryAliases)) {
     return "no lookup selectors were provided";
   }
 
@@ -199,7 +228,10 @@ function fullScanReason(input: GetContextInput, indexes: RecordIndexSet): string
     return "symbol selectors require a generated symbol index";
   }
 
-  if (input.query !== undefined && typeof indexes.textIndex?.generated_at !== "string") {
+  if (
+    expandQueryTokens(input.query, queryAliases).tokenGroups.length > 0 &&
+    typeof indexes.textIndex?.generated_at !== "string"
+  ) {
     return "query selector requires a generated text index";
   }
 

@@ -1,7 +1,7 @@
 import type { GetContextInput } from "../../schemas/context-payload.js";
 import type { KnowledgeKind, NormalizedRecord } from "../../schemas/normalized-record.js";
 import { matchesPath } from "../indexes/record-index.js";
-import { queryTokenGroups, textTokens } from "../indexes/query-tokens.js";
+import { queryTokenGroups, textTokens, type QueryAlias } from "../indexes/query-tokens.js";
 
 export type ContextBudgets = {
   scopedItems: number;
@@ -73,16 +73,23 @@ const CONFIDENCE_WEIGHT: Record<NormalizedRecord["confidence_level"], number> = 
   low: 4
 };
 
-export function rankRecords(records: NormalizedRecord[], input: GetContextInput): RankedRecord[] {
-  return records.map((record) => rankRecord(record, input)).sort(compareRankedRecords);
+export function rankRecords(
+  records: NormalizedRecord[],
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
+): RankedRecord[] {
+  return records
+    .map((record) => rankRecord(record, input, queryAliases))
+    .sort(compareRankedRecords);
 }
 
 export function budgetRecords(
   records: NormalizedRecord[],
   input: GetContextInput,
-  limit: number
+  limit: number,
+  queryAliases: QueryAlias[] = []
 ): BudgetedRecords {
-  const ranked = rankRecords(records, input);
+  const ranked = rankRecords(records, input, queryAliases);
 
   return {
     selected: ranked.slice(0, limit),
@@ -119,7 +126,11 @@ export function rankedTexts(ranked: RankedRecord[], maxContentTokens: number): s
   return ranked.map((item) => truncateTextByApproxTokens(item.record.text, maxContentTokens));
 }
 
-function rankRecord(record: NormalizedRecord, input: GetContextInput): RankedRecord {
+function rankRecord(
+  record: NormalizedRecord,
+  input: GetContextInput,
+  queryAliases: QueryAlias[]
+): RankedRecord {
   const reasons: string[] = [];
   let score = KIND_WEIGHT[record.kind] + CONFIDENCE_WEIGHT[record.confidence_level];
   const targetFileMatches = matchingPathFiles(record, input.target_files ?? []);
@@ -127,7 +138,7 @@ function rankRecord(record: NormalizedRecord, input: GetContextInput): RankedRec
   const symbolMatches = matchingOverlapValues(record.scope.symbols, input.symbols ?? [], exactKey);
   const domainMatches = matchingOverlapValues(record.scope.domains, input.domains ?? [], textKey);
   const tagMatches = matchingOverlapValues(record.scope.tags, input.tags ?? [], textKey);
-  const queryMatches = matchingQueryTokens(record, input.query);
+  const queryMatches = matchingQueryTokens(record, input.query, queryAliases);
 
   if (targetFileMatches.length > 0) {
     score += 80;
@@ -243,8 +254,12 @@ function exactKey(value: string): string {
   return value.trim();
 }
 
-function matchingQueryTokens(record: NormalizedRecord, query: string | undefined): string[] {
-  const tokenGroups = queryTokenGroups(query);
+function matchingQueryTokens(
+  record: NormalizedRecord,
+  query: string | undefined,
+  queryAliases: QueryAlias[]
+): string[] {
+  const tokenGroups = queryTokenGroups(query, queryAliases);
 
   if (tokenGroups.length === 0) {
     return [];

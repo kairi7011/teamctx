@@ -424,6 +424,42 @@ test("composeContextFromStore retrieves by deterministic vague-query aliases", (
   );
 });
 
+test("composeContextFromStore expands project-owned query aliases", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const target = record("workflow-release-handoff", "workflow", "active", {
+    paths: ["docs/release-checklist.md"],
+    domains: ["release"],
+    symbols: ["releaseHandoff"],
+    tags: ["handoff"]
+  });
+
+  writeRecord(storeRoot, "workflows.jsonl", {
+    ...target,
+    text: "Release handoff uses the package smoke checklist before publishing."
+  });
+  writeIndexes(storeRoot, [target], "2026-04-22T11:00:00.000Z");
+  writeQueryAliases(storeRoot, {
+    schema_version: 1,
+    aliases: [
+      {
+        id: "ship-it-handoff",
+        enabled: true,
+        match: { patterns: ["ship it"] },
+        expand: { token_groups: [["release", "handoff"]] }
+      }
+    ]
+  });
+
+  assert.deepEqual(
+    composeContextFromStore(storeRoot, {
+      query: "ship it"
+    }).normalized_context.scoped.map((entry) => entry.id),
+    ["workflow-release-handoff"]
+  );
+});
+
 test("composeContextFromStore infers selectors from detailed query paths and symbols", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
@@ -1181,6 +1217,12 @@ function writeEpisodeIndex(
     serializeEpisodeIndex(buildEpisodeIndex(observations, generatedAt)),
     "utf8"
   );
+}
+
+function writeQueryAliases(storeRoot: string, content: unknown): void {
+  const directory = join(storeRoot, "aliases");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "query-aliases.json"), `${JSON.stringify(content, null, 2)}\n`);
 }
 
 function writeLastNormalize(storeRoot: string, normalizedAt: string): void {

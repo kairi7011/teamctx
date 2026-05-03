@@ -9,31 +9,53 @@ export function textTokens(value: string): string[] {
   );
 }
 
-export function queryTokenGroups(query: string | undefined): string[][] {
+export type QueryAlias = {
+  id: string;
+  patterns?: string[];
+  allPatternGroups?: string[][];
+  tokenGroups: string[][];
+};
+
+export type QueryExpansion = {
+  tokenGroups: string[][];
+  matchedAliasIds: string[];
+};
+
+export function queryTokenGroups(
+  query: string | undefined,
+  projectAliases: QueryAlias[] = []
+): string[][] {
+  return expandQueryTokens(query, projectAliases).tokenGroups;
+}
+
+export function expandQueryTokens(
+  query: string | undefined,
+  projectAliases: QueryAlias[] = []
+): QueryExpansion {
   const rawQuery = query ?? "";
   const aliasGroups: string[][] = [];
+  const matchedAliasIds: string[] = [];
   const originalTokens = textTokens(rawQuery);
   const normalizedQuery = rawQuery.toLowerCase();
 
-  for (const alias of QUERY_ALIASES) {
+  for (const alias of [...QUERY_ALIASES, ...projectAliases]) {
     if (matchesQueryAlias(alias, normalizedQuery)) {
+      matchedAliasIds.push(alias.id);
       aliasGroups.push(...alias.tokenGroups);
     }
   }
 
   const groups = aliasGroups.length > 0 ? aliasGroups : [originalTokens];
 
-  return uniqueTokenGroups(groups.map((group) => uniqueSorted(group)));
+  return {
+    tokenGroups: uniqueTokenGroups(groups.map((group) => uniqueSorted(group))),
+    matchedAliasIds: uniqueSorted(matchedAliasIds)
+  };
 }
-
-type QueryAlias = {
-  patterns?: string[];
-  allPatternGroups?: string[][];
-  tokenGroups: string[][];
-};
 
 const QUERY_ALIASES: QueryAlias[] = [
   {
+    id: "builtin:context-preview",
     patterns: [
       "\u30b3\u30f3\u30c6\u30ad\u30b9\u30c8\u30d7\u30ec\u30d3\u30e5\u30fc",
       "\u30d7\u30ec\u30d3\u30e5\u30fc",
@@ -45,14 +67,17 @@ const QUERY_ALIASES: QueryAlias[] = [
     ]
   },
   {
+    id: "builtin:budget",
     patterns: ["\u4e88\u7b97", "\u30d0\u30b8\u30a7\u30c3\u30c8", "budget"],
     tokenGroups: [["context", "budgets"], ["context_budgets"], ["budgeting"], ["budget_rejected"]]
   },
   {
+    id: "builtin:diagnostics",
     patterns: ["\u8a3a\u65ad", "diagnostic", "diagnostics"],
     tokenGroups: [["budget_rejected"]]
   },
   {
+    id: "builtin:help",
     patterns: ["\u30d8\u30eb\u30d7", "help"],
     tokenGroups: [
       ["command", "help"],
@@ -60,26 +85,32 @@ const QUERY_ALIASES: QueryAlias[] = [
     ]
   },
   {
+    id: "builtin:safety",
     patterns: ["\u5b89\u5168", "safety"],
     tokenGroups: [["safety"], ["mutating", "command", "safety"]]
   },
   {
+    id: "builtin:commit-reduction",
     patterns: ["\u7121\u99c4\u30b3\u30df\u30c3\u30c8", "commit"],
     tokenGroups: [["commit", "reduction"], ["writeifchanged"]]
   },
   {
+    id: "builtin:github-store",
     patterns: ["github\u30b9\u30c8\u30a2", "github store"],
     tokenGroups: [["commit", "github", "reduction", "store"]]
   },
   {
+    id: "builtin:github-conflict",
     allPatternGroups: [["github"], ["\u7af6\u5408", "conflict", "concurrency"]],
     tokenGroups: [["commit", "github", "reduction", "store"], ["writeifchanged"]]
   },
   {
+    id: "builtin:concurrency",
     patterns: ["\u7af6\u5408", "conflict", "concurrency"],
     tokenGroups: [["optimistic", "concurrency"], ["concurrency"]]
   },
   {
+    id: "builtin:noise",
     patterns: ["\u30ce\u30a4\u30ba", "noise"],
     tokenGroups: [["precision", "fix"]]
   }

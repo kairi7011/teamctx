@@ -2,7 +2,7 @@ import { relative } from "node:path";
 import type { GetContextInput } from "../../schemas/context-payload.js";
 import type { NormalizedRecord } from "../../schemas/normalized-record.js";
 import { isRecord, isStringArray } from "../../schemas/validation.js";
-import { queryTokenGroups, textTokens } from "./query-tokens.js";
+import { queryTokenGroups, textTokens, type QueryAlias } from "./query-tokens.js";
 
 export type PathIndex = {
   schema_version: 1;
@@ -160,34 +160,44 @@ export function validateTextIndex(value: unknown): TextIndex {
   });
 }
 
-export function hasLookupSelectors(input: GetContextInput): boolean {
+export function hasLookupSelectors(
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
+): boolean {
   return (
     selectedFiles(input).length > 0 ||
     (input.domains ?? []).length > 0 ||
     (input.symbols ?? []).length > 0 ||
     (input.tags ?? []).length > 0 ||
-    hasTextLookupSelector(input.query)
+    hasTextLookupSelector(input.query, queryAliases)
   );
 }
 
-export function hasStrongLookupSelectors(input: GetContextInput): boolean {
+export function hasStrongLookupSelectors(
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
+): boolean {
   return (
     selectedFiles(input).length > 0 ||
     (input.symbols ?? []).length > 0 ||
-    hasTextLookupSelector(input.query)
+    hasTextLookupSelector(input.query, queryAliases)
   );
 }
 
-export function hasTextLookupSelector(query: string | undefined): boolean {
-  return queryTokenGroups(query).length > 0;
+export function hasTextLookupSelector(
+  query: string | undefined,
+  queryAliases: QueryAlias[] = []
+): boolean {
+  return queryTokenGroups(query, queryAliases).length > 0;
 }
 
 export function selectIndexedRecordIds(
   indexes: RecordIndexSet,
-  input: GetContextInput
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
 ): Set<string> {
   const selected = new Set<string>();
-  const includeWeakSelectors = !hasStrongLookupSelectors(input);
+  const includeWeakSelectors = !hasStrongLookupSelectors(input, queryAliases);
 
   for (const file of selectedFiles(input)) {
     for (const [pattern, ids] of Object.entries(indexes.pathIndex?.paths ?? {})) {
@@ -211,19 +221,23 @@ export function selectIndexedRecordIds(
     addAll(selected, indexes.symbolIndex?.symbols[normalizeSymbolKey(symbol)] ?? []);
   }
 
-  addAll(selected, selectTextRecordIds(indexes.textIndex, input.query));
+  addAll(selected, selectTextRecordIds(indexes.textIndex, input.query, queryAliases));
 
   return selected;
 }
 
-export function matchesScopeInput(record: NormalizedRecord, input: GetContextInput): boolean {
+export function matchesScopeInput(
+  record: NormalizedRecord,
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
+): boolean {
   const files = selectedFiles(input);
   const strongMatch =
     record.scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file))) ||
     hasOverlap(record.scope.symbols, input.symbols ?? [], normalizeSymbolKey) ||
-    matchesQuery(record, input.query);
+    matchesQuery(record, input.query, queryAliases);
 
-  if (hasStrongLookupSelectors(input)) {
+  if (hasStrongLookupSelectors(input, queryAliases)) {
     return strongMatch;
   }
 
@@ -407,8 +421,12 @@ function globToRegex(pattern: string): string {
   return output;
 }
 
-function selectTextRecordIds(index: TextIndex | undefined, query: string | undefined): string[] {
-  const tokenGroups = queryTokenGroups(query);
+function selectTextRecordIds(
+  index: TextIndex | undefined,
+  query: string | undefined,
+  queryAliases: QueryAlias[]
+): string[] {
+  const tokenGroups = queryTokenGroups(query, queryAliases);
 
   if (!index || tokenGroups.length === 0) {
     return [];
@@ -431,8 +449,12 @@ function selectTextRecordIds(index: TextIndex | undefined, query: string | undef
   return uniqueSorted([...selected]);
 }
 
-function matchesQuery(record: NormalizedRecord, query: string | undefined): boolean {
-  const tokenGroups = queryTokenGroups(query);
+function matchesQuery(
+  record: NormalizedRecord,
+  query: string | undefined,
+  queryAliases: QueryAlias[]
+): boolean {
+  const tokenGroups = queryTokenGroups(query, queryAliases);
 
   if (tokenGroups.length === 0) {
     return false;

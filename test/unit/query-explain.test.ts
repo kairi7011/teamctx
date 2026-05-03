@@ -101,6 +101,31 @@ test("explainContextQueryFromStore reports inferred and effective selectors", (c
   assert.deepEqual(explain.read_plan.selected_record_ids, ["fact-cli-args", "workflow-cli"]);
 });
 
+test("explainContextQueryFromStore reports project query aliases", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const workflow = record("workflow-release-handoff", "workflow", ["docs/release.md"], ["release"]);
+
+  writeIndexes(storeRoot, [workflow], "2026-04-29T00:00:00.000Z");
+  writeQueryAliases(storeRoot, {
+    schema_version: 1,
+    aliases: [
+      {
+        id: "release-handoff",
+        match: { patterns: ["ship it"] },
+        expand: { token_groups: [["release", "handoff"]] }
+      }
+    ]
+  });
+
+  const explain = explainContextQueryFromStore(storeRoot, { query: "ship it" });
+
+  assert.deepEqual(explain.query_expansion.matched_aliases, ["project:release-handoff"]);
+  assert.deepEqual(explain.query_expansion.token_groups, [["handoff", "release"]]);
+  assert.deepEqual(explain.read_plan.selected_record_ids, ["workflow-release-handoff"]);
+});
+
 function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedAt: string): void {
   const indexes = buildRecordIndexes(records, generatedAt);
   const directory = join(storeRoot, "indexes");
@@ -117,6 +142,12 @@ function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedA
     `${JSON.stringify({ normalizedAt: generatedAt })}\n`,
     "utf8"
   );
+}
+
+function writeQueryAliases(storeRoot: string, content: unknown): void {
+  const directory = join(storeRoot, "aliases");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "query-aliases.json"), `${JSON.stringify(content, null, 2)}\n`);
 }
 
 function record(
