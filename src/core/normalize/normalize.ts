@@ -230,6 +230,10 @@ async function normalizeContextStoreWithLease(options: {
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
   const episodeIndex = buildEpisodeIndex(run.episodeObservations, run.result.normalizedAt);
 
+  if (await remoteDerivedStateUnchanged(options.store, run)) {
+    return run.result;
+  }
+
   await writeNormalizedRecordsToContextStore(options.store, run.records, existing.filesByName);
   await writeRecordIndexesToContextStore(options.store, indexes, run.result.normalizedAt);
   await writeEpisodeIndexToContextStore(options.store, episodeIndex, run.result.normalizedAt);
@@ -362,6 +366,10 @@ function preserveExistingState(
   existingRecord: NormalizedRecord
 ): NormalizedRecord {
   if (existingRecord.state === "active") {
+    if (sameActiveRecordPayload(record, existingRecord)) {
+      return existingRecord;
+    }
+
     return record;
   }
 
@@ -377,6 +385,24 @@ function preserveExistingState(
       : {}),
     conflicts_with: existingRecord.conflicts_with
   };
+}
+
+function sameActiveRecordPayload(
+  record: NormalizedRecord,
+  existingRecord: NormalizedRecord
+): boolean {
+  return (
+    JSON.stringify(recordWithoutLastVerifiedAt(record)) ===
+    JSON.stringify(recordWithoutLastVerifiedAt(existingRecord))
+  );
+}
+
+function recordWithoutLastVerifiedAt(
+  record: NormalizedRecord
+): Omit<NormalizedRecord, "last_verified_at"> {
+  const { last_verified_at: _lastVerifiedAt, ...stableRecord } = record;
+
+  return stableRecord;
 }
 
 function normalizeRawEvent(
@@ -570,6 +596,79 @@ async function writeNormalizedRecordsToContextStore(
   }
 }
 
+async function remoteDerivedStateUnchanged(
+  store: ContextStoreAdapter,
+  run: {
+    records: NormalizedRecord[];
+    auditEntries: AuditLogEntry[];
+    episodeObservations: RawObservation[];
+  }
+): Promise<boolean> {
+  if (run.auditEntries.length > 0) {
+    return false;
+  }
+
+  for (const kind of Object.keys(NORMALIZED_FILE_BY_KIND) as KnowledgeKind[]) {
+    const file = NORMALIZED_FILE_BY_KIND[kind];
+    const existingContent = (await store.readText(`normalized/${file}`))?.content ?? "";
+    const nextContent = serializeJsonl(run.records.filter((record) => record.kind === kind));
+
+    if (existingContent !== nextContent) {
+      return false;
+    }
+  }
+
+  const pathIndexFile = await store.readText("indexes/path-index.json");
+  const symbolIndexFile = await store.readText("indexes/symbol-index.json");
+  const textIndexFile = await store.readText("indexes/text-index.json");
+  const episodeIndexFile = await store.readText("indexes/episode-index.json");
+
+  if (!pathIndexFile || !symbolIndexFile || !textIndexFile || !episodeIndexFile) {
+    return false;
+  }
+
+  const pathGeneratedAt = indexGeneratedAt(pathIndexFile.content);
+  const symbolGeneratedAt = indexGeneratedAt(symbolIndexFile.content);
+  const textGeneratedAt = indexGeneratedAt(textIndexFile.content);
+  const episodeGeneratedAt = indexGeneratedAt(episodeIndexFile.content);
+
+  if (
+    pathGeneratedAt === undefined ||
+    pathGeneratedAt === null ||
+    symbolGeneratedAt === undefined ||
+    symbolGeneratedAt === null ||
+    textGeneratedAt === undefined ||
+    textGeneratedAt === null ||
+    episodeGeneratedAt === undefined ||
+    episodeGeneratedAt === null
+  ) {
+    return false;
+  }
+
+  return (
+    pathIndexFile.content ===
+      serializePathIndex(buildRecordIndexes(run.records, pathGeneratedAt).pathIndex) &&
+    symbolIndexFile.content ===
+      serializeSymbolIndex(buildRecordIndexes(run.records, symbolGeneratedAt).symbolIndex) &&
+    textIndexFile.content ===
+      serializeTextIndex(buildRecordIndexes(run.records, textGeneratedAt).textIndex) &&
+    episodeIndexFile.content ===
+      serializeEpisodeIndex(buildEpisodeIndex(run.episodeObservations, episodeGeneratedAt))
+  );
+}
+
+function indexGeneratedAt(content: string): string | null | undefined {
+  try {
+    const parsed = JSON.parse(content) as { generated_at?: unknown };
+
+    return typeof parsed.generated_at === "string" || parsed.generated_at === null
+      ? parsed.generated_at
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function writeRecordIndexesToContextStore(
   store: ContextStoreAdapter,
   indexes: { pathIndex: PathIndex; symbolIndex: SymbolIndex; textIndex: TextIndex },
@@ -627,24 +726,29 @@ async function writeIfChanged(
 ): Promise<void> {
   let currentFile = existingFile;
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    if (currentFile && currentFile.content === nextContent) {
+  if (currentFile && currentFile.content === nextContent) {
+    return;
+  }
+
+  try {
+    await store.writeText(path, nextContent, {
+      message: options.message,
+      expectedRevision: currentFile?.revision ?? null
+    });
+  } catch (error) {
+    if (!isOptimisticWriteConflict(error)) {
+      throw error;
+    }
+
+    currentFile = await store.readText(path);
+
+    if (currentFile?.content === nextContent) {
       return;
     }
 
-    try {
-      await store.writeText(path, nextContent, {
-        message: options.message,
-        expectedRevision: currentFile?.revision ?? null
-      });
-      return;
-    } catch (error) {
-      if (!isOptimisticWriteConflict(error) || attempt === 3) {
-        throw error;
-      }
-
-      currentFile = await store.readText(path);
-    }
+    throw new Error(
+      `Context store changed while writing ${path}; rerun normalize to avoid overwriting newer context.`
+    );
   }
 }
 

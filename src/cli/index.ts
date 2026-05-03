@@ -127,7 +127,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         assignFlag(flags, repeatableValueFlags, key, next);
         index += 1;
       } else {
-        assignFlag(flags, repeatableValueFlags, key, true);
+        throw new CliError(CLI_EXIT.USAGE, `--${key} requires a value`);
       }
     } else if (value) {
       positional.push(value);
@@ -574,16 +574,20 @@ async function rank(args: ParsedArgs): Promise<void> {
 async function list(args: ParsedArgs): Promise<void> {
   const input: ListRecordsInput = {};
 
-  assignDefined(input, "kinds", parseListKinds(parseCsvFlag(args.flags.kind ?? args.flags.kinds)));
+  assignDefined(
+    input,
+    "kinds",
+    parseListKinds(parseCsvFlag(mergedFlag(args.flags.kind, args.flags.kinds)))
+  );
   assignDefined(
     input,
     "states",
-    parseListStates(parseCsvFlag(args.flags.state ?? args.flags.states))
+    parseListStates(parseCsvFlag(mergedFlag(args.flags.state, args.flags.states)))
   );
-  assignDefined(input, "paths", parseCsvFlag(args.flags.path ?? args.flags.paths));
-  assignDefined(input, "domains", parseCsvFlag(args.flags.domain ?? args.flags.domains));
-  assignDefined(input, "symbols", parseCsvFlag(args.flags.symbol ?? args.flags.symbols));
-  assignDefined(input, "tags", parseCsvFlag(args.flags.tag ?? args.flags.tags));
+  assignDefined(input, "paths", parseCsvFlag(mergedFlag(args.flags.path, args.flags.paths)));
+  assignDefined(input, "domains", parseCsvFlag(mergedFlag(args.flags.domain, args.flags.domains)));
+  assignDefined(input, "symbols", parseCsvFlag(mergedFlag(args.flags.symbol, args.flags.symbols)));
+  assignDefined(input, "tags", parseCsvFlag(mergedFlag(args.flags.tag, args.flags.tags)));
 
   if (typeof args.flags.query === "string") {
     input.query = args.flags.query;
@@ -600,13 +604,13 @@ async function audit(args: ParsedArgs): Promise<void> {
   assignDefined(
     input,
     "actions",
-    parseAuditActions(parseCsvFlag(args.flags.action ?? args.flags.actions))
+    parseAuditActions(parseCsvFlag(mergedFlag(args.flags.action, args.flags.actions)))
   );
-  assignDefined(input, "item_ids", parseCsvFlag(args.flags.item ?? args.flags.items));
+  assignDefined(input, "item_ids", parseCsvFlag(mergedFlag(args.flags.item, args.flags.items)));
   assignDefined(
     input,
     "source_event_ids",
-    parseCsvFlag(args.flags["source-event"] ?? args.flags["source-events"])
+    parseCsvFlag(mergedFlag(args.flags["source-event"], args.flags["source-events"]))
   );
 
   if (typeof args.flags.query === "string") {
@@ -618,20 +622,15 @@ async function audit(args: ParsedArgs): Promise<void> {
   console.log(JSON.stringify(await getBoundAuditSummary(input), null, 2));
 }
 
-function contextInput(args: ParsedArgs): GetContextInput {
+export function contextInput(args: ParsedArgs): GetContextInput {
   const [inputPath] = args.positional;
-
-  if (inputPath) {
-    return readContextInputFile(inputPath);
-  }
-
-  const input: GetContextInput = {};
+  const input: GetContextInput = inputPath ? readContextInputFile(inputPath) : {};
 
   assignCsv(input, "target_files", args.flags["target-files"]);
   assignCsv(input, "changed_files", args.flags["changed-files"]);
-  assignCsv(input, "domains", args.flags.domains);
-  assignCsv(input, "symbols", args.flags.symbols);
-  assignCsv(input, "tags", args.flags.tags);
+  assignCsv(input, "domains", mergedFlag(args.flags.domain, args.flags.domains));
+  assignCsv(input, "symbols", mergedFlag(args.flags.symbol, args.flags.symbols));
+  assignCsv(input, "tags", mergedFlag(args.flags.tag, args.flags.tags));
   assignCsv(input, "source_types", args.flags["source-types"]);
   assignCsv(input, "evidence_files", args.flags["evidence-files"]);
   assignString(input, "query", args.flags.query);
@@ -673,6 +672,24 @@ function assignString<T extends keyof GetContextInput>(
   if (typeof value === "string") {
     Object.assign(input, { [key]: value });
   }
+}
+
+function mergedFlag(...values: Array<CliFlagValue | undefined>): CliFlagValue | undefined {
+  const merged: string[] = [];
+
+  for (const value of values) {
+    if (typeof value === "string") {
+      merged.push(value);
+    } else if (Array.isArray(value)) {
+      merged.push(...value);
+    }
+  }
+
+  if (merged.length === 0) {
+    return undefined;
+  }
+
+  return merged.length === 1 ? merged[0] : merged;
 }
 
 async function recordObservation(args: ParsedArgs, trust: "candidate" | "verified"): Promise<void> {

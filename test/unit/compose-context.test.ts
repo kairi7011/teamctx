@@ -745,6 +745,43 @@ test("composeContextFromStore reports budget_rejected with rank scores for overf
   }
 });
 
+test("composeContextFromStore reports global budget overflow diagnostics", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  for (let index = 0; index < 22; index += 1) {
+    writeRecord(
+      storeRoot,
+      "facts.jsonl",
+      record(`fact-global-${String(index).padStart(2, "0")}`, "fact", "active", {
+        paths: [],
+        domains: [],
+        symbols: [],
+        tags: []
+      })
+    );
+  }
+
+  const composed = composeContextFromStore(storeRoot, {});
+
+  assert.equal(composed.normalized_context.global.split("\n").length, 20);
+  assert.ok(composed.diagnostics.dropped_items.includes("budget:fact-global-20"));
+  assert.ok(composed.diagnostics.dropped_items.includes("budget:fact-global-21"));
+  assert.deepEqual(
+    composed.diagnostics.budget_rejected
+      .filter((entry) => entry.exclusion_reason === "budget_overflow:global")
+      .map((entry) => entry.id),
+    ["fact-global-20", "fact-global-21"]
+  );
+
+  const trace = rankContextFromStore(storeRoot, {});
+  assert.equal(
+    trace.entries.find((entry) => entry.id === "fact-global-20")?.exclusion_reason,
+    "budget_overflow:global"
+  );
+});
+
 test("composeContextFromStore caps payload size under large stores at default budgets", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

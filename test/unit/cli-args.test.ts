@@ -44,7 +44,10 @@ test("parseCsvFlag splits and trims string values", () => {
   assert.deepEqual(parseCsvFlag(["a, b", "c", "d, e"]), ["a", "b", "c", "d", "e"]);
   assert.deepEqual(parseCsvFlag(""), []);
   assert.equal(parseCsvFlag(undefined), undefined);
-  assert.equal(parseCsvFlag(true), undefined);
+  assert.throws(
+    () => parseCsvFlag(true, "--domains"),
+    (error: unknown) => isCliError(error, CLI_EXIT.VALIDATION)
+  );
 });
 
 test("assignDefined only sets keys when value is defined", () => {

@@ -44,7 +44,14 @@ export function parseOffsetFlag(
   return parsed;
 }
 
-export function parseCsvFlag(value: CliFlagValue | undefined): string[] | undefined {
+export function parseCsvFlag(
+  value: CliFlagValue | undefined,
+  flagName = "CSV flag"
+): string[] | undefined {
+  if (typeof value === "boolean") {
+    throw new CliError(CLI_EXIT.VALIDATION, `${flagName} requires a value`);
+  }
+
   const rawValues = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
 
   if (rawValues === undefined) {

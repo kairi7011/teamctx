@@ -163,9 +163,10 @@ function composeContextFromRecords(
       stale_items:
         diagnostics?.stale_items ??
         records.filter((record) => record.state === "stale").map((record) => record.id),
-      dropped_items: budgetDroppedIds([scopedBudget]),
+      dropped_items: budgetDroppedIds([scopedBudget, globalBudget]),
       excluded_items: diagnostics?.excluded_items ?? excludedItems(records),
       budget_rejected: budgetRejected([
+        { budget: globalBudget, reason: "budget_overflow:global" },
         { budget: scopedBudget, reason: "budget_overflow:scoped" },
         { budget: ruleBudget, reason: "budget_overflow:rule" },
         { budget: decisionBudget, reason: "budget_overflow:decision" },
@@ -688,6 +689,7 @@ function buildRankTrace(
 
   const overflowReasons = new Map<string, string>();
   for (const [budget, reason] of [
+    [globalBudget, "budget_overflow:global"],
     [scopedBudget, "budget_overflow:scoped"],
     [ruleBudget, "budget_overflow:rule"],
     [decisionBudget, "budget_overflow:decision"],

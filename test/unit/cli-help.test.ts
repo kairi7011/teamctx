@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { formatHelp, parseArgs, shouldPrintHelp } from "../../src/cli/index.js";
+import { contextInput, formatHelp, parseArgs, shouldPrintHelp } from "../../src/cli/index.js";
+import { CliError, CLI_EXIT } from "../../src/cli/cli-error.js";
 
 test("parseArgs defaults to help without arguments", () => {
   assert.deepEqual(parseArgs([]), {
@@ -115,6 +119,66 @@ test("parseArgs treats known boolean flags as value-less before positional args"
     positional: ["before.json", "after.json"],
     flags: { json: true }
   });
+});
+
+test("parseArgs rejects missing values for value flags", () => {
+  assert.throws(
+    () => parseArgs(["context", "--target-files", "--domains", "cli"]),
+    (error: unknown) => error instanceof CliError && error.code === CLI_EXIT.USAGE
+  );
+});
+
+test("contextInput merges aliases and lets CLI flags override json input", (context) => {
+  const directory = mkdtempSync(join(tmpdir(), "teamctx-cli-input-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const inputPath = join(directory, "input.json");
+
+  writeFileSync(
+    inputPath,
+    `${JSON.stringify({
+      domains: ["json-domain"],
+      query: "from file",
+      call_reason: "task_start"
+    })}\n`,
+    "utf8"
+  );
+
+  assert.deepEqual(
+    contextInput(
+      parseArgs([
+        "context",
+        inputPath,
+        "--domain",
+        "cli",
+        "--domains",
+        "mcp,context-preview",
+        "--symbol",
+        "parseArgs",
+        "--symbols",
+        "contextInput",
+        "--tag",
+        "cli",
+        "--tags",
+        "preview",
+        "--query",
+        "from flags",
+        "--call-reason",
+        "session_start",
+        "--previous-context-payload-hash",
+        "abc123",
+        "--force-refresh"
+      ])
+    ),
+    {
+      domains: ["cli", "mcp", "context-preview"],
+      symbols: ["parseArgs", "contextInput"],
+      tags: ["cli", "preview"],
+      query: "from flags",
+      call_reason: "session_start",
+      previous_context_payload_hash: "abc123",
+      force_refresh: true
+    }
+  );
 });
 
 test("formatHelp includes stable command usage", () => {

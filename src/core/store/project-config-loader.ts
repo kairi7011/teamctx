@@ -15,26 +15,31 @@ import {
 const PROJECT_CONFIG_FILE = "project.yaml";
 
 export function readProjectConfig(storeRoot: string): ProjectConfig | undefined {
+  const path = join(storeRoot, PROJECT_CONFIG_FILE);
+
   try {
-    const content = readFileSync(join(storeRoot, PROJECT_CONFIG_FILE), "utf8");
-    return parseProjectConfig(content);
-  } catch {
-    return undefined;
+    const content = readFileSync(path, "utf8");
+
+    return parseProjectConfigFile(content, path);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
 }
 
 export async function readProjectConfigFromContextStore(
   store: ContextStoreAdapter
 ): Promise<ProjectConfig | undefined> {
-  try {
-    const file = await store.readText(PROJECT_CONFIG_FILE);
-    if (!file) {
-      return undefined;
-    }
-    return parseProjectConfig(file.content);
-  } catch {
+  const file = await store.readText(PROJECT_CONFIG_FILE);
+
+  if (!file) {
     return undefined;
   }
+
+  return parseProjectConfigFile(file.content, PROJECT_CONFIG_FILE);
 }
 
 export function resolveBudgetsFromConfig(config: ProjectConfig | undefined): ContextBudgets {
@@ -63,4 +68,23 @@ function toBudgetsOverride(config: ContextBudgetsConfig | undefined): ContextBud
   }
 
   return override;
+}
+
+function parseProjectConfigFile(content: string, path: string): ProjectConfig {
+  try {
+    return parseProjectConfig(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    throw new Error(`Invalid teamctx project config ${path}: ${message}`);
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }

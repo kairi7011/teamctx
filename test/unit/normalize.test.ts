@@ -666,7 +666,7 @@ test("normalizeBoundStoreAsync rejects an active remote normalize lease", async 
   );
 });
 
-test("normalizeBoundStoreAsync skips remote writes when content is unchanged", async (context) => {
+test("normalizeBoundStoreAsync skips remote writes when derived content is unchanged", async (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
   const remoteRoot = join(directory, "remote-store");
@@ -708,16 +708,19 @@ test("normalizeBoundStoreAsync skips remote writes when content is unchanged", a
   counter.writes = 0;
   counter.paths = [];
 
-  await normalizeBoundStoreAsync({ services: services(), now: fixedNow });
+  await normalizeBoundStoreAsync({
+    services: services(),
+    now: () => new Date("2026-04-22T11:05:00.000Z")
+  });
 
   assert.ok(
     writesAfterFirstRun >= 11,
     `first run should write all categories and indexes (got ${writesAfterFirstRun})`
   );
-  assert.deepEqual(
-    counter.paths,
-    ["indexes/last-normalize.json"],
-    `second run should only update last-normalize (got: ${counter.paths.join(", ")})`
+  assert.equal(
+    counter.writes,
+    0,
+    `second run with unchanged derived content should write nothing (got: ${counter.paths.join(", ")})`
   );
 
   counter.writes = 0;
@@ -732,7 +735,7 @@ test("normalizeBoundStoreAsync skips remote writes when content is unchanged", a
   );
 });
 
-test("normalizeBoundStoreAsync retries remote normalized writes after conflicts", async (context) => {
+test("normalizeBoundStoreAsync refuses stale remote normalized writes after conflicts", async (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
   const remoteRoot = join(directory, "remote-store");
@@ -771,19 +774,21 @@ test("normalizeBoundStoreAsync retries remote normalized writes after conflicts"
   };
 
   const base = servicesFor(directory, "github.com/team/context", remoteRoot);
-  await normalizeBoundStoreAsync({
-    services: {
-      ...base,
-      createContextStore: () => buildStore()
-    },
-    now: fixedNow
-  });
+  await assert.rejects(
+    normalizeBoundStoreAsync({
+      services: {
+        ...base,
+        createContextStore: () => buildStore()
+      },
+      now: fixedNow
+    }),
+    /Context store changed while writing normalized\/pitfalls\.jsonl/
+  );
 
-  assert.equal(conflicts.attempts, 2);
-  assert.match(readFileSync(join(remoteRoot, "normalized", "pitfalls.jsonl"), "utf8"), /Auth/);
+  assert.equal(conflicts.attempts, 1);
 });
 
-test("normalizeBoundStoreAsync retries remote index writes after conflicts", async (context) => {
+test("normalizeBoundStoreAsync refuses stale remote index writes after conflicts", async (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
   const remoteRoot = join(directory, "remote-store");
@@ -822,16 +827,97 @@ test("normalizeBoundStoreAsync retries remote index writes after conflicts", asy
   };
 
   const base = servicesFor(directory, "github.com/team/context", remoteRoot);
+  await assert.rejects(
+    normalizeBoundStoreAsync({
+      services: {
+        ...base,
+        createContextStore: () => buildStore()
+      },
+      now: fixedNow
+    }),
+    /Context store changed while writing indexes\/path-index\.json/
+  );
+
+  assert.equal(conflicts.attempts, 1);
+});
+
+test("normalizeBoundStoreAsync does not no-op with uninitialized remote indexes", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+
+  for (const file of [
+    "path-index.json",
+    "symbol-index.json",
+    "text-index.json",
+    "episode-index.json"
+  ]) {
+    mkdirSync(join(remoteRoot, "indexes"), { recursive: true });
+    writeFileSync(
+      join(remoteRoot, "indexes", file),
+      `${JSON.stringify(
+        file === "symbol-index.json"
+          ? { schema_version: 1, generated_at: null, symbols: {} }
+          : file === "text-index.json"
+            ? { schema_version: 1, generated_at: null, tokens: {} }
+            : file === "episode-index.json"
+              ? {
+                  schema_version: 1,
+                  generated_at: null,
+                  episodes: [],
+                  paths: {},
+                  domains: {},
+                  symbols: {},
+                  tags: {},
+                  evidence_files: {},
+                  source_types: {},
+                  trusts: {}
+                }
+              : {
+                  schema_version: 1,
+                  generated_at: null,
+                  paths: {},
+                  domains: {},
+                  tags: {},
+                  kinds: {},
+                  states: {}
+                },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+  }
+
+  const counter = { writes: 0, paths: [] as string[] };
+  const buildStore = (): LocalContextStore => {
+    const inner = new LocalContextStore(remoteRoot);
+    const store = inner as unknown as {
+      writeText: (
+        ...args: Parameters<LocalContextStore["writeText"]>
+      ) => ReturnType<LocalContextStore["writeText"]>;
+    };
+    const original = inner.writeText.bind(inner);
+    store.writeText = async (...args) => {
+      counter.writes += 1;
+      counter.paths.push(args[0]);
+
+      return original(...args);
+    };
+
+    return inner;
+  };
+
   await normalizeBoundStoreAsync({
     services: {
-      ...base,
+      ...servicesFor(directory, "github.com/team/context", remoteRoot),
       createContextStore: () => buildStore()
     },
     now: fixedNow
   });
 
-  assert.equal(conflicts.attempts, 2);
-  assert.match(readFileSync(join(remoteRoot, "indexes", "path-index.json"), "utf8"), /auth/);
+  assert.ok(counter.paths.includes("indexes/path-index.json"));
+  assert.ok(counter.paths.includes("indexes/last-normalize.json"));
 });
 
 function servicesFor(
