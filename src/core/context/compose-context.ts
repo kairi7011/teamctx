@@ -50,6 +50,7 @@ import type {
   GetContextInput
 } from "../../schemas/context-payload.js";
 import type { QueryAlias } from "../indexes/query-tokens.js";
+import { queryWarnings } from "../indexes/query-tokens.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
@@ -207,6 +208,7 @@ function composeContextFromRecords(
         ],
         includedIn
       ),
+      query_warnings: queryWarnings(input.query, queryAliases),
       index_warnings: indexWarnings
     }
   };
@@ -371,6 +373,7 @@ export function emptyComposedContext(): ComposedContext {
       dropped_items: [],
       excluded_items: [],
       budget_rejected: [],
+      query_warnings: [],
       index_warnings: []
     }
   };

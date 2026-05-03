@@ -8,6 +8,7 @@ test("cliCommands registry exposes every documented command", () => {
     "bind",
     "setup",
     "bootstrap",
+    "capture",
     "init-store",
     "normalize",
     "compact",

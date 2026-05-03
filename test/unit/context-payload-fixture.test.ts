@@ -42,6 +42,7 @@ test("fixtureEnabledContextPayload populates every section", () => {
   assert.ok(payload.diagnostics.dropped_items.length > 0);
   assert.ok(payload.diagnostics.excluded_items.length > 0);
   assert.ok(payload.diagnostics.budget_rejected.length > 0);
+  assert.deepEqual(payload.diagnostics.query_warnings, []);
   assert.deepEqual(payload.diagnostics.index_warnings, []);
 
   assert.equal(payload.write_policy.record_observation_candidate, "allowed");

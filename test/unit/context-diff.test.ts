@@ -70,6 +70,23 @@ test("diffContextPayloads reports disabled sides without comparing context", () 
   });
 });
 
+test("diffContextPayloads tolerates older payloads without query warnings", () => {
+  const left = payload({ hash: "sha256:left", scopedIds: ["rule-auth"] });
+  const right = payload({ hash: "sha256:right", scopedIds: ["rule-auth"] });
+  delete (left.diagnostics as { query_warnings?: string[] }).query_warnings;
+
+  const diff = diffContextPayloads(left, right, {}, {});
+
+  assert.equal(diff.enabled, true);
+
+  if (!diff.enabled) {
+    throw new Error("expected enabled diff");
+  }
+
+  assert.deepEqual(diff.diagnostics.query_warnings.added, []);
+  assert.deepEqual(diff.diagnostics.query_warnings.removed, []);
+});
+
 function payload(input: {
   hash: string;
   scopedIds: string[];
@@ -116,6 +133,7 @@ function payload(input: {
         included_in: [],
         fully_excluded: true
       })),
+      query_warnings: [],
       index_warnings: []
     }
   };

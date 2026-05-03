@@ -63,6 +63,7 @@ export type DiagnosticCategory =
   | "dropped_items"
   | "excluded_items"
   | "budget_rejected"
+  | "query_warnings"
   | "index_warnings";
 
 export function diffContextPayloads(
@@ -121,6 +122,10 @@ export function diffContextPayloads(
       ),
       excluded_items: diffCountedValues(excludedItemIds(left), excludedItemIds(right)),
       budget_rejected: diffCountedValues(budgetRejectedIds(left), budgetRejectedIds(right)),
+      query_warnings: diffCountedValues(
+        left.diagnostics.query_warnings ?? [],
+        right.diagnostics.query_warnings ?? []
+      ),
       index_warnings: diffCountedValues(
         left.diagnostics.index_warnings,
         right.diagnostics.index_warnings

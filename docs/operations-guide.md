@@ -74,10 +74,16 @@ Run this after a meaningful batch of records, after merging context-affecting
 changes, or before starting important AI-assisted work:
 
 ```bash
+teamctx capture
 teamctx normalize --dry-run
 teamctx normalize
 teamctx status
 ```
+
+`capture` inspects the recent working tree and commits, then prints an agent
+prompt for creating `teamctx-capture-observations.json`. It is meant for
+session-end or batch-end capture. Record only durable, evidence-backed knowledge;
+skip temporary progress notes.
 
 For remote GitHub stores where multiple writers may normalize at the same time,
 use the advisory lease:

@@ -108,6 +108,7 @@ export type EnabledContextPayload = {
       included_in: string[];
       fully_excluded: boolean;
     }>;
+    query_warnings: string[];
     index_warnings: string[];
   };
   write_policy: {

@@ -164,6 +164,7 @@ export function fixtureEnabledContextPayload(
           fully_excluded: true
         }
       ],
+      query_warnings: [],
       index_warnings: []
     },
     write_policy: {

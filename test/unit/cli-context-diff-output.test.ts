@@ -106,6 +106,7 @@ function payload(input: {
       dropped_items: [],
       excluded_items: [],
       budget_rejected: [],
+      query_warnings: [],
       index_warnings: []
     }
   };

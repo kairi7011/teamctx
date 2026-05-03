@@ -126,6 +126,24 @@ test("explainContextQueryFromStore reports project query aliases", (context) => 
   assert.deepEqual(explain.read_plan.selected_record_ids, ["workflow-release-handoff"]);
 });
 
+test("explainContextQueryFromStore reports broad query warnings", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const contextRecord = record("workflow-context", "workflow", ["src/context.ts"], ["context"]);
+
+  writeIndexes(storeRoot, [contextRecord], "2026-04-29T00:00:00.000Z");
+
+  const explain = explainContextQueryFromStore(storeRoot, { query: "context" });
+
+  assert.deepEqual(explain.query_expansion.token_groups, []);
+  assert.deepEqual(explain.query_expansion.warnings, [
+    'query "context" is too broad for scoped context; add target_files, changed_files, symbols, tags, or a more specific query'
+  ]);
+  assert.equal(explain.read_plan.mode, "full_normalized_scan");
+  assert.equal(explain.read_plan.reason, "no lookup selectors were provided");
+});
+
 function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedAt: string): void {
   const indexes = buildRecordIndexes(records, generatedAt);
   const directory = join(storeRoot, "indexes");

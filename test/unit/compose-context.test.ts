@@ -424,6 +424,28 @@ test("composeContextFromStore retrieves by deterministic vague-query aliases", (
   );
 });
 
+test("composeContextFromStore guards broad single-token queries", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const contextPreview = record("workflow-context-preview", "workflow", "active", {
+    paths: ["src/cli/index.ts"],
+    domains: ["context-preview"],
+    symbols: ["contextInput"],
+    tags: ["preview-cli", "get-context"]
+  });
+
+  writeRecord(storeRoot, "workflows.jsonl", contextPreview);
+  writeIndexes(storeRoot, [contextPreview], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, { query: "context" });
+
+  assert.deepEqual(composed.normalized_context.scoped, []);
+  assert.deepEqual(composed.diagnostics.query_warnings, [
+    'query "context" is too broad for scoped context; add target_files, changed_files, symbols, tags, or a more specific query'
+  ]);
+});
+
 test("composeContextFromStore expands project-owned query aliases", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

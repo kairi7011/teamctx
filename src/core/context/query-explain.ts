@@ -8,7 +8,7 @@ import {
   selectIndexedRecordIds,
   type RecordIndexSet
 } from "../indexes/record-index.js";
-import { expandQueryTokens, type QueryAlias } from "../indexes/query-tokens.js";
+import { expandQueryTokens, queryWarnings, type QueryAlias } from "../indexes/query-tokens.js";
 import { readQueryAliases, readQueryAliasesFromContextStore } from "../store/query-alias-loader.js";
 import {
   resolveContextInputSelectors,
@@ -29,6 +29,7 @@ export type ContextQueryExplain = {
   query_expansion: {
     matched_aliases: string[];
     token_groups: string[][];
+    warnings: string[];
   };
   indexes: {
     path_index: IndexUse;
@@ -108,7 +109,8 @@ function explainContextQuery(
     effective_selectors: selectorSummary(resolved.input),
     query_expansion: {
       matched_aliases: queryExpansion.matchedAliasIds,
-      token_groups: queryExpansion.tokenGroups
+      token_groups: queryExpansion.tokenGroups,
+      warnings: queryWarnings(resolved.input.query, queryAliases)
     },
     indexes: {
       path_index: indexUse(indexes.pathIndex?.generated_at, indexed),

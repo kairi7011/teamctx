@@ -30,6 +30,11 @@ import {
   type BootstrapPlan
 } from "../core/bootstrap/bootstrap.js";
 import {
+  buildCapturePlan,
+  discoverCaptureSources,
+  type CapturePlan
+} from "../core/capture/capture.js";
+import {
   getBoundAuditSummary,
   parseAuditActions,
   type AuditSummaryInput
@@ -191,6 +196,7 @@ Usage:
   teamctx bind <store> [--path <path>]
   teamctx setup <store> [--path <path>] [--json]
   teamctx bootstrap [<store>] [--path <path>] [--json]
+  teamctx capture [--since-ref <ref>] [--json]
   teamctx init-store [--json]
   teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
@@ -218,6 +224,7 @@ Examples:
   teamctx setup . --path .teamctx
   teamctx bootstrap github.com/my-org/ai-context --path contexts/my-service
   teamctx bootstrap
+  teamctx capture
   teamctx bind . --path .teamctx
   teamctx context --call-reason session_start --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
@@ -348,6 +355,43 @@ async function bootstrap(args: ParsedArgs): Promise<void> {
   console.log(formatBootstrapPlan(plan, initResult));
 }
 
+async function capture(args: ParsedArgs): Promise<void> {
+  const binding = getCurrentBinding();
+  const initResult = await initBoundStoreAsync();
+  const sinceRef =
+    typeof args.flags["since-ref"] === "string" ? args.flags["since-ref"] : undefined;
+  const sources = discoverCaptureSources(binding.root, {
+    ...(sinceRef !== undefined ? { sinceRef } : {}),
+    excludePaths: [binding.contextStore.path]
+  });
+  const plan = buildCapturePlan({
+    repo: binding.repo,
+    root: binding.root,
+    store: `${binding.contextStore.repo}/${binding.contextStore.path}`,
+    localStore: initResult.localStore,
+    branch: getCurrentBranch(binding.root),
+    headCommit: getHeadCommit(binding.root),
+    sources
+  });
+
+  if (args.flags.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          binding,
+          init_store: initResult,
+          capture: plan
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log(formatCapturePlan(plan, initResult));
+}
+
 function getCurrentBinding(): Binding {
   const root = getRepoRoot();
   const repo = normalizeGitHubRepo(getOriginRemote(root));
@@ -391,6 +435,40 @@ export function formatBootstrapPlan(
   } else {
     lines.push("Source files to inspect:");
     lines.push("  - none detected; inspect the repository manually");
+  }
+
+  lines.push("Agent prompt:");
+  for (const line of plan.agent_prompt.split("\n")) {
+    lines.push(line.length > 0 ? `  ${line}` : "");
+  }
+
+  return lines.join("\n");
+}
+
+export function formatCapturePlan(
+  plan: CapturePlan,
+  initResult?: Awaited<ReturnType<typeof initBoundStoreAsync>>
+): string {
+  const lines = [
+    "Capture teamctx knowledge from recent work:",
+    `  repo: ${plan.repo}`,
+    `  root: ${plan.root}`,
+    `  store: ${plan.store}`,
+    `  branch: ${plan.branch}`,
+    `  head_commit: ${plan.head_commit}`,
+    `  changed_files: ${plan.sources.changed_files.length}`,
+    `  untracked_files: ${plan.sources.untracked_files.length}`,
+    `  recent_commits: ${plan.sources.recent_commits.length}`,
+    `  recommended_observations: ${plan.recommended_observation_count}`,
+    `  output_file: ${plan.output_file}`
+  ];
+
+  if (plan.sources.since_ref !== undefined) {
+    lines.push(`  since_ref: ${plan.sources.since_ref}`);
+  }
+  if (initResult !== undefined) {
+    lines.push(`  created_files: ${initResult.createdFiles.length}`);
+    lines.push(`  existing_files: ${initResult.existingFiles.length}`);
   }
 
   lines.push("Agent prompt:");
@@ -1322,6 +1400,7 @@ export const cliCommands: Record<string, CliCommandHandler> = {
   bind: (args) => bind(args),
   setup: (args) => setup(args),
   bootstrap: (args) => bootstrap(args),
+  capture: (args) => capture(args),
   "init-store": (args) => initStore(args),
   normalize: (args) => normalize(args),
   compact: (args) => compact(args),

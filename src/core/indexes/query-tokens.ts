@@ -21,6 +21,21 @@ export type QueryExpansion = {
   matchedAliasIds: string[];
 };
 
+export function queryWarnings(
+  query: string | undefined,
+  projectAliases: QueryAlias[] = []
+): string[] {
+  if (!isBroadQueryOnly(query, projectAliases)) {
+    return [];
+  }
+
+  const token = textTokens(query ?? "")[0] ?? "";
+
+  return [
+    `query "${token}" is too broad for scoped context; add target_files, changed_files, symbols, tags, or a more specific query`
+  ];
+}
+
 export function queryTokenGroups(
   query: string | undefined,
   projectAliases: QueryAlias[] = []
@@ -45,12 +60,32 @@ export function expandQueryTokens(
     }
   }
 
+  if (aliasGroups.length === 0 && isBroadTokenOnly(originalTokens)) {
+    return {
+      tokenGroups: [],
+      matchedAliasIds: []
+    };
+  }
+
   const groups = aliasGroups.length > 0 ? aliasGroups : [originalTokens];
 
   return {
     tokenGroups: uniqueTokenGroups(groups.map((group) => uniqueSorted(group))),
     matchedAliasIds: uniqueSorted(matchedAliasIds)
   };
+}
+
+function isBroadQueryOnly(query: string | undefined, projectAliases: QueryAlias[]): boolean {
+  const rawQuery = query ?? "";
+  const normalizedQuery = rawQuery.toLowerCase();
+
+  if (
+    [...QUERY_ALIASES, ...projectAliases].some((alias) => matchesQueryAlias(alias, normalizedQuery))
+  ) {
+    return false;
+  }
+
+  return isBroadTokenOnly(textTokens(rawQuery));
 }
 
 const QUERY_ALIASES: QueryAlias[] = [
@@ -150,9 +185,15 @@ function matchesQueryAlias(alias: QueryAlias, normalizedQuery: string): boolean 
   return anyPatternMatches || allPatternGroupsMatch;
 }
 
+function isBroadTokenOnly(tokens: string[]): boolean {
+  return tokens.length === 1 && BROAD_QUERY_TOKENS.has(tokens[0] ?? "");
+}
+
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
+
+const BROAD_QUERY_TOKENS = new Set(["cli", "code", "context", "github", "normalize"]);
 
 const TEXT_STOP_WORDS = new Set([
   "a",

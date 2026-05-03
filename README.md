@@ -106,6 +106,13 @@ teamctx record-verified observations.json
 teamctx normalize
 ```
 
+Capture durable knowledge after a meaningful work batch:
+
+```bash
+teamctx capture
+teamctx capture --since-ref origin/main
+```
+
 Preview context for a task:
 
 ```bash
@@ -197,6 +204,7 @@ Record one or more verified observations from a JSON file:
 
 ```bash
 teamctx bootstrap
+teamctx capture
 teamctx first-record > observations.json
 teamctx record-verified observations.json
 teamctx record-verified observations.json --json
