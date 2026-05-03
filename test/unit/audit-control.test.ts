@@ -89,10 +89,26 @@ test("explainItemTool and invalidateTool resolve the bound local store", (contex
   assert.equal(explainResult.found, true);
 
   const invalidateResult = invalidateTool(
-    { item_id: "pitfall-auth-order", reason: "manual cleanup" },
+    { item_id: "pitfall-auth-order", reason: "manual cleanup", human_confirmed: true },
     services
   ) as { invalidated: boolean };
   assert.equal(invalidateResult.invalidated, true);
+});
+
+test("invalidateTool enforces human-only write policy", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRecord(storeRoot, record());
+
+  assert.throws(
+    () =>
+      invalidateTool(
+        { item_id: "pitfall-auth-order", reason: "automation cleanup" },
+        servicesFor(directory)
+      ),
+    /requires human_confirmed: true/
+  );
 });
 
 function writeRecord(storeRoot: string, normalizedRecord: NormalizedRecord): void {

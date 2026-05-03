@@ -12,6 +12,7 @@ import {
   composeContextFromStore,
   emptyComposedContext
 } from "../../core/context/compose-context.js";
+import { WRITE_POLICY } from "../../core/policy/write-policy.js";
 import {
   createContextStoreForBinding,
   type ContextStoreFactoryServices
@@ -72,12 +73,7 @@ export function getContextTool(
       : emptyComposedContext();
   const body: Omit<EnabledContextPayload, "enabled" | "identity"> = {
     ...context,
-    write_policy: {
-      record_observation_candidate: "allowed",
-      record_observation_verified: "allowed_with_evidence",
-      invalidate: "human_only",
-      docs_evidence: "allowed_with_doc_role"
-    }
+    write_policy: WRITE_POLICY
   };
   const identityWithoutHash = {
     repo: repoState.repo,
@@ -144,12 +140,7 @@ export async function getContextToolAsync(
   const storeHead = store ? await store.getRevision() : null;
   const body: Omit<EnabledContextPayload, "enabled" | "identity"> = {
     ...context,
-    write_policy: {
-      record_observation_candidate: "allowed",
-      record_observation_verified: "allowed_with_evidence",
-      invalidate: "human_only",
-      docs_evidence: "allowed_with_doc_role"
-    }
+    write_policy: WRITE_POLICY
   };
   const identityWithoutHash = {
     repo: repoState.repo,

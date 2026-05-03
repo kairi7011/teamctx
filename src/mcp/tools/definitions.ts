@@ -82,8 +82,13 @@ export const toolDefinitions: ToolDefinition[] = [
     name: "teamctx.invalidate",
     description: "Archive or invalidate an obsolete context item.",
     inputSchema: objectSchema(
-      { ...cwdSchema, item_id: { type: "string" }, reason: { type: "string" } },
-      ["item_id"]
+      {
+        ...cwdSchema,
+        item_id: { type: "string" },
+        reason: { type: "string" },
+        human_confirmed: { type: "boolean" }
+      },
+      ["item_id", "human_confirmed"]
     )
   }
 ];

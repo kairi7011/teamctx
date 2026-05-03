@@ -3,10 +3,12 @@ import {
   invalidateBoundItemAsync,
   type ControlServices
 } from "../../core/audit/control.js";
+import { assertHumanInvalidateConfirmation } from "../../core/policy/write-policy.js";
 import { parseItemInput } from "./explain-item.js";
 
 export function invalidateTool(rawInput: unknown, services?: ControlServices): unknown {
   const input = parseItemInput(rawInput, "invalidate");
+  assertHumanInvalidateConfirmation(rawInput, "invalidate");
 
   return invalidateBoundItem({
     itemId: input.itemId,
@@ -21,6 +23,7 @@ export async function invalidateToolAsync(
   services?: ControlServices
 ): Promise<unknown> {
   const input = parseItemInput(rawInput, "invalidate");
+  assertHumanInvalidateConfirmation(rawInput, "invalidate");
 
   return invalidateBoundItemAsync({
     itemId: input.itemId,

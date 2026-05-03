@@ -12,6 +12,7 @@ import {
   type GetContextServices
 } from "../../src/mcp/tools/get-context.js";
 import { statusTool, statusToolAsync } from "../../src/mcp/tools/status.js";
+import { toolDefinitions } from "../../src/mcp/tools/definitions.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
 import type { Binding } from "../../src/schemas/types.js";
 import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
@@ -85,6 +86,17 @@ test("getContextTool returns an empty enabled payload with identity fields", () 
   assert.match(context.identity.context_payload_hash, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(context.normalized_context.active_pitfalls, []);
   assert.equal(context.write_policy.record_observation_verified, "allowed_with_evidence");
+});
+
+test("invalidate tool schema requires human confirmation", () => {
+  const definition = toolDefinitions.find((tool) => tool.name === "teamctx.invalidate");
+  assert.ok(definition);
+
+  const inputSchema = asRecord(definition.inputSchema);
+  const properties = asRecord(inputSchema.properties);
+
+  assert.deepEqual(inputSchema.required, ["item_id", "human_confirmed"]);
+  assert.deepEqual(properties.human_confirmed, { type: "boolean" });
 });
 
 test("statusTool returns the enabled binding summary", () => {
@@ -211,6 +223,13 @@ function record(): NormalizedRecord {
       tags: []
     }
   });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+
+  return value as Record<string, unknown>;
 }
 
 class MemoryContextStore implements ContextStoreAdapter {

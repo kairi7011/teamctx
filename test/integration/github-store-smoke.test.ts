@@ -149,7 +149,8 @@ test("GitHub contents store supports the real MVP context flow", {
     await invalidateToolAsync(
       {
         item_id: scopedItem.id,
-        reason: "github smoke cleanup"
+        reason: "github smoke cleanup",
+        human_confirmed: true
       },
       services
     )
