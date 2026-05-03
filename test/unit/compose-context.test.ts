@@ -469,7 +469,11 @@ test("composeContextFromStore expands project-owned query aliases", (context) =>
         id: "ship-it-handoff",
         enabled: true,
         match: { patterns: ["ship it"] },
-        expand: { token_groups: [["release", "handoff"]] }
+        expand: {
+          token_groups: [["unmatched", "tokens"]],
+          symbols: ["releaseHandoff"],
+          tags: ["handoff"]
+        }
       }
     ]
   });

@@ -1,4 +1,5 @@
 import type { GetContextInput } from "../../schemas/context-payload.js";
+import { queryAliasSelectors, type QueryAlias } from "../indexes/query-tokens.js";
 
 export type InferredContextSelectors = {
   target_files: string[];
@@ -66,25 +67,37 @@ const QUERY_SELECTOR_ALIASES: Array<{
   }
 ];
 
-export function inferSelectorsFromQuery(query: string | undefined): InferredContextSelectors {
+export function inferSelectorsFromQuery(
+  query: string | undefined,
+  queryAliases: QueryAlias[] = []
+): InferredContextSelectors {
   if (query === undefined || query.trim().length === 0) {
     return { ...EMPTY_INFERRED_SELECTORS };
   }
 
   const targetFiles = extractTargetFiles(query);
   const queryWithoutPaths = query.replace(PATH_PATTERN, " ");
-  const aliases = inferAliasSelectors(query);
+  const aliases = mergeAliasSelectors(
+    inferAliasSelectors(query),
+    queryAliasSelectors(query, queryAliases)
+  );
 
   return {
     target_files: targetFiles,
-    symbols: extractSymbols(queryWithoutPaths),
+    symbols: uniqueStable(
+      [...extractSymbols(queryWithoutPaths), ...aliases.symbols],
+      normalizeSymbolKey
+    ),
     domains: aliases.domains,
     tags: aliases.tags
   };
 }
 
-export function resolveContextInputSelectors(input: GetContextInput): ContextSelectorResolution {
-  const inferred = inferSelectorsFromQuery(input.query);
+export function resolveContextInputSelectors(
+  input: GetContextInput,
+  queryAliases: QueryAlias[] = []
+): ContextSelectorResolution {
+  const inferred = inferSelectorsFromQuery(input.query, queryAliases);
   const targetFiles = mergeSelectors(input.target_files, inferred.target_files, normalizePathKey);
   const symbols = mergeSelectors(input.symbols, inferred.symbols, normalizeSymbolKey);
   const domains = mergeSelectors(input.domains, inferred.domains, normalizeTextKey);
@@ -132,6 +145,17 @@ function inferAliasSelectors(query: string): Pick<InferredContextSelectors, "dom
   return {
     domains: uniqueStable(domains, normalizeTextKey),
     tags: uniqueStable(tags, normalizeTextKey)
+  };
+}
+
+function mergeAliasSelectors(
+  first: Pick<InferredContextSelectors, "domains" | "tags">,
+  second: Pick<InferredContextSelectors, "domains" | "tags" | "symbols">
+): Pick<InferredContextSelectors, "domains" | "tags" | "symbols"> {
+  return {
+    domains: uniqueStable([...first.domains, ...second.domains], normalizeTextKey),
+    tags: uniqueStable([...first.tags, ...second.tags], normalizeTextKey),
+    symbols: uniqueStable(second.symbols, normalizeSymbolKey)
   };
 }
 

@@ -62,9 +62,9 @@ export function composeContextFromStore(
   storeRoot: string,
   input: GetContextInput = {}
 ): ComposedContext {
-  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const queryAliases = readQueryAliases(storeRoot);
+  const effectiveInput = resolveContextInputSelectors(input, queryAliases).input;
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
@@ -86,9 +86,9 @@ export async function composeContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
-  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const queryAliases = await readQueryAliasesFromContextStore(store);
+  const effectiveInput = resolveContextInputSelectors(input, queryAliases).input;
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const episodeRead = await readEpisodeIndexFromContextStore(store, lastNormalizeAt);
@@ -312,13 +312,7 @@ function matchesRichSelectorIntent(
   return (
     ((input.tags ?? []).length > 0 && hasRankReason(ranked, "tag match:")) ||
     hasSufficientSymbolMatch(ranked, input) ||
-    (hasTextLookupSelector(input.query, queryAliases) &&
-      hasRankReason(ranked, "text query match:")) ||
-    ((input.symbols ?? []).length === 0 &&
-      (input.tags ?? []).length === 0 &&
-      hasTextLookupSelector(input.query, queryAliases) &&
-      ((input.target_files ?? []).length > 0 || (input.changed_files ?? []).length > 0) &&
-      (hasRankReason(ranked, "target file match:") || hasRankReason(ranked, "changed file match:")))
+    (hasTextLookupSelector(input.query, queryAliases) && hasRankReason(ranked, "text query match:"))
   );
 }
 
@@ -738,9 +732,9 @@ export type RankTrace = {
 };
 
 export function rankContextFromStore(storeRoot: string, input: GetContextInput = {}): RankTrace {
-  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const queryAliases = readQueryAliases(storeRoot);
+  const effectiveInput = resolveContextInputSelectors(input, queryAliases).input;
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
@@ -752,9 +746,9 @@ export async function rankContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<RankTrace> {
-  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const queryAliases = await readQueryAliasesFromContextStore(store);
+  const effectiveInput = resolveContextInputSelectors(input, queryAliases).input;
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const records: NormalizedRecord[] = [];

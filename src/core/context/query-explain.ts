@@ -94,7 +94,7 @@ function explainContextQuery(
   warnings: string[],
   queryAliases: QueryAlias[] = []
 ): ContextQueryExplain {
-  const resolved = resolveContextInputSelectors(input);
+  const resolved = resolveContextInputSelectors(input, queryAliases);
   const queryExpansion = expandQueryTokens(resolved.input.query, queryAliases);
   const indexed = canUseIndexedRead(resolved.input, indexes, queryAliases);
   const selectedRecordIds = indexed

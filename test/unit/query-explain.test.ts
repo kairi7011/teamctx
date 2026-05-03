@@ -114,7 +114,7 @@ test("explainContextQueryFromStore reports project query aliases", (context) => 
       {
         id: "release-handoff",
         match: { patterns: ["ship it"] },
-        expand: { token_groups: [["release", "handoff"]] }
+        expand: { token_groups: [["release", "handoff"]], domains: ["release"] }
       }
     ]
   });
@@ -123,6 +123,8 @@ test("explainContextQueryFromStore reports project query aliases", (context) => 
 
   assert.deepEqual(explain.query_expansion.matched_aliases, ["project:release-handoff"]);
   assert.deepEqual(explain.query_expansion.token_groups, [["handoff", "release"]]);
+  assert.deepEqual(explain.inferred_selectors.domains, ["release"]);
+  assert.deepEqual(explain.effective_selectors.domains, ["release"]);
   assert.deepEqual(explain.read_plan.selected_record_ids, ["workflow-release-handoff"]);
 });
 

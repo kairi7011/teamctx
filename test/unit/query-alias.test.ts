@@ -75,7 +75,12 @@ test("readQueryAliases loads local and remote project aliases", async (context) 
         {
           id: "release-handoff",
           match: { patterns: ["ship it"] },
-          expand: { token_groups: [["release", "handoff"]] }
+          expand: {
+            token_groups: [["release", "handoff"]],
+            domains: ["release"],
+            tags: ["handoff"],
+            symbols: ["releaseHandoff"]
+          }
         }
       ]
     },
@@ -90,7 +95,10 @@ test("readQueryAliases loads local and remote project aliases", async (context) 
     {
       id: "project:release-handoff",
       patterns: ["ship it"],
-      tokenGroups: [["handoff", "release"]]
+      tokenGroups: [["handoff", "release"]],
+      domains: ["release"],
+      tags: ["handoff"],
+      symbols: ["releaseHandoff"]
     }
   ]);
 
@@ -102,7 +110,10 @@ test("readQueryAliases loads local and remote project aliases", async (context) 
     {
       id: "project:release-handoff",
       patterns: ["ship it"],
-      tokenGroups: [["handoff", "release"]]
+      tokenGroups: [["handoff", "release"]],
+      domains: ["release"],
+      tags: ["handoff"],
+      symbols: ["releaseHandoff"]
     }
   ]);
 });

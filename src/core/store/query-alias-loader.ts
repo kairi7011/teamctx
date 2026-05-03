@@ -49,6 +49,15 @@ export function queryAliasesFromConfig(config: QueryAliasConfig): QueryAlias[] {
       if (alias.match.all_pattern_groups !== undefined) {
         runtimeAlias.allPatternGroups = alias.match.all_pattern_groups;
       }
+      if (alias.expand.domains !== undefined) {
+        runtimeAlias.domains = alias.expand.domains;
+      }
+      if (alias.expand.tags !== undefined) {
+        runtimeAlias.tags = alias.expand.tags;
+      }
+      if (alias.expand.symbols !== undefined) {
+        runtimeAlias.symbols = alias.expand.symbols;
+      }
 
       return runtimeAlias;
     });

@@ -14,6 +14,9 @@ export type QueryAlias = {
   patterns?: string[];
   allPatternGroups?: string[][];
   tokenGroups: string[][];
+  domains?: string[];
+  tags?: string[];
+  symbols?: string[];
 };
 
 export type QueryExpansion = {
@@ -113,7 +116,10 @@ const QUERY_ALIASES: QueryAlias[] = [
   },
   {
     id: "builtin:help",
-    patterns: ["\u30d8\u30eb\u30d7", "help"],
+    allPatternGroups: [
+      ["\u30d8\u30eb\u30d7", "help", "-h", "--help"],
+      ["command", "flag", "handler", "mutating", "normalize", "output", "prints", "side effect"]
+    ],
     tokenGroups: [
       ["command", "help"],
       ["mutating", "command", "safety"]
@@ -183,6 +189,32 @@ function matchesQueryAlias(alias: QueryAlias, normalizedQuery: string): boolean 
     ) ?? false;
 
   return anyPatternMatches || allPatternGroupsMatch;
+}
+
+export function queryAliasSelectors(
+  query: string | undefined,
+  projectAliases: QueryAlias[] = []
+): { domains: string[]; tags: string[]; symbols: string[] } {
+  const normalizedQuery = (query ?? "").toLowerCase();
+  const domains: string[] = [];
+  const tags: string[] = [];
+  const symbols: string[] = [];
+
+  for (const alias of projectAliases) {
+    if (!matchesQueryAlias(alias, normalizedQuery)) {
+      continue;
+    }
+
+    domains.push(...(alias.domains ?? []));
+    tags.push(...(alias.tags ?? []));
+    symbols.push(...(alias.symbols ?? []));
+  }
+
+  return {
+    domains: uniqueSorted(domains),
+    tags: uniqueSorted(tags),
+    symbols: uniqueSorted(symbols)
+  };
 }
 
 function isBroadTokenOnly(tokens: string[]): boolean {
