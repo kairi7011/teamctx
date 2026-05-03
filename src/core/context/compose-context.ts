@@ -31,6 +31,8 @@ import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
 import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import {
   hasLookupSelectors,
+  hasStrongLookupSelectors,
+  hasTextLookupSelector,
   matchesScopeInput,
   selectIndexedRecordIds,
   type RecordIndexSet
@@ -181,6 +183,9 @@ function selectScopedRecords(
   input: GetContextInput,
   indexes: RecordIndexSet
 ): NormalizedRecord[] {
+  const pruneLowSignalMatches = (records: NormalizedRecord[]): NormalizedRecord[] =>
+    pruneLowSignalRichSelectorMatches(records, input);
+
   if (
     hasLookupSelectors(input) &&
     hasGeneratedIndex(indexes) &&
@@ -188,14 +193,86 @@ function selectScopedRecords(
   ) {
     const selectedIds = selectIndexedRecordIds(indexes, input);
 
-    return activeRecords.filter((record) => selectedIds.has(record.id));
+    return pruneLowSignalMatches(activeRecords.filter((record) => selectedIds.has(record.id)));
   }
 
   if (!hasLookupSelectors(input) && hasTimeFilters(input)) {
     return activeRecords;
   }
 
-  return activeRecords.filter((record) => matchesScopeInput(record, input));
+  return pruneLowSignalMatches(activeRecords.filter((record) => matchesScopeInput(record, input)));
+}
+
+const LOW_SIGNAL_RICH_SELECTOR_SCORE = 150;
+
+function pruneLowSignalRichSelectorMatches(
+  records: NormalizedRecord[],
+  input: GetContextInput
+): NormalizedRecord[] {
+  if (!shouldPruneLowSignalRichSelectorMatches(input)) {
+    return records;
+  }
+
+  const retainedIds = new Set(
+    rankRecords(records, input)
+      .filter((ranked) => shouldRetainRichSelectorMatch(ranked, input))
+      .map((ranked) => ranked.record.id)
+  );
+
+  return records.filter((record) => retainedIds.has(record.id));
+}
+
+function shouldPruneLowSignalRichSelectorMatches(input: GetContextInput): boolean {
+  const selectedFileCount = (input.target_files ?? []).length + (input.changed_files ?? []).length;
+
+  if (selectedFileCount === 0 || !hasStrongLookupSelectors(input)) {
+    return false;
+  }
+
+  return (
+    (input.domains ?? []).length > 0 ||
+    (input.symbols ?? []).length > 0 ||
+    (input.tags ?? []).length > 0 ||
+    hasTextLookupSelector(input.query)
+  );
+}
+
+function shouldRetainRichSelectorMatch(ranked: RankedRecord, input: GetContextInput): boolean {
+  if (!matchesRichSelectorIntent(ranked, input)) {
+    return false;
+  }
+
+  if (hasIntentSelectorInput(input)) {
+    return true;
+  }
+
+  return ranked.score >= LOW_SIGNAL_RICH_SELECTOR_SCORE;
+}
+
+function matchesRichSelectorIntent(ranked: RankedRecord, input: GetContextInput): boolean {
+  const hasIntentSelectors = hasIntentSelectorInput(input);
+
+  if (!hasIntentSelectors) {
+    return true;
+  }
+
+  return (
+    ((input.tags ?? []).length > 0 && hasRankReason(ranked, "tag match:")) ||
+    ((input.symbols ?? []).length > 0 && hasRankReason(ranked, "symbol match:")) ||
+    (hasTextLookupSelector(input.query) && hasRankReason(ranked, "text query match:"))
+  );
+}
+
+function hasIntentSelectorInput(input: GetContextInput): boolean {
+  return (
+    (input.symbols ?? []).length > 0 ||
+    (input.tags ?? []).length > 0 ||
+    hasTextLookupSelector(input.query)
+  );
+}
+
+function hasRankReason(ranked: RankedRecord, prefix: string): boolean {
+  return ranked.reasons.some((reason) => reason.startsWith(prefix));
 }
 
 function hasGeneratedIndex(indexes: RecordIndexSet): boolean {

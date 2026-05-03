@@ -6,6 +6,12 @@ This project uses small release notes grouped by version. Dates use ISO format.
 
 ## Unreleased
 
+- Tighten scoped context retrieval so broad `domains` and `tags` narrow or boost
+  results only when stronger selectors are absent; when target files, changed
+  files, symbols, or text query are present, those stronger selectors constrain
+  the candidate set. Rich file-scoped requests also prune low-signal target-only
+  matches and require tag, symbol, or query intent matches to reduce first-call
+  context noise.
 - Fix CLI selector parsing so repeated CSV-style flags such as `--target-files`,
   `--domains`, `--symbols`, and `--tags` accumulate instead of silently keeping
   only the last value.

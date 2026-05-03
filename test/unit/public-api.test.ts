@@ -66,6 +66,8 @@ const EXPECTED_PUBLIC_API = [
   "getRepoRoot",
   "git",
   "hasLookupSelectors",
+  "hasStrongLookupSelectors",
+  "hasTextLookupSelector",
   "initBoundStoreAsync",
   "initContextStoreLayout",
   "initStoreLayout",

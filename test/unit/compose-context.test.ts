@@ -165,15 +165,120 @@ test("composeContextFromStore retrieves by domain symbol and tag indexes", (cont
   writeRecord(storeRoot, "workflows.jsonl", tagRecord);
   writeIndexes(storeRoot, [domainRecord, symbolRecord, tagRecord], "2026-04-22T11:00:00.000Z");
 
-  const composed = composeContextFromStore(storeRoot, {
+  const weakSelectorComposed = composeContextFromStore(storeRoot, {
+    domains: ["AUTH"],
+    tags: ["request-lifecycle"]
+  });
+
+  assert.deepEqual(
+    weakSelectorComposed.normalized_context.scoped.map((entry) => entry.content),
+    ["decision-domain text", "workflow-tag text"]
+  );
+
+  const strongSelectorComposed = composeContextFromStore(storeRoot, {
     domains: ["AUTH"],
     symbols: ["AuthMiddleware"],
     tags: ["request-lifecycle"]
   });
 
   assert.deepEqual(
-    composed.normalized_context.scoped.map((entry) => entry.content),
-    ["pitfall-symbol text", "decision-domain text", "workflow-tag text"]
+    strongSelectorComposed.normalized_context.scoped.map((entry) => entry.content),
+    ["pitfall-symbol text"]
+  );
+});
+
+test("composeContextFromStore does not let weak selectors broaden target-file retrieval", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const pathRecord = record("pitfall-auth", "pitfall", "active");
+  const targetOnlyRecord = record("fact-target-only", "fact", "active", {
+    paths: ["src/auth/**"],
+    domains: [],
+    symbols: [],
+    tags: []
+  });
+  const symbolOnlyRecord = record("fact-symbol-only", "fact", "active", {
+    paths: ["src/auth/**"],
+    domains: ["auth"],
+    symbols: ["AuthMiddleware"],
+    tags: []
+  });
+  const taggedFactRecord = record("fact-tagged", "fact", "active", {
+    paths: ["src/auth/**"],
+    domains: [],
+    symbols: [],
+    tags: ["request-lifecycle"]
+  });
+  const domainOnlyRecord = record("decision-auth-domain", "decision", "active", {
+    paths: [],
+    domains: ["auth"],
+    symbols: [],
+    tags: []
+  });
+  const tagOnlyRecord = record("workflow-lifecycle", "workflow", "active", {
+    paths: [],
+    domains: [],
+    symbols: [],
+    tags: ["request-lifecycle"]
+  });
+
+  writeRecord(storeRoot, "pitfalls.jsonl", pathRecord);
+  writeRecord(storeRoot, "facts.jsonl", targetOnlyRecord);
+  writeRecord(storeRoot, "facts.jsonl", symbolOnlyRecord);
+  writeRecord(storeRoot, "facts.jsonl", taggedFactRecord);
+  writeRecord(storeRoot, "decisions.jsonl", domainOnlyRecord);
+  writeRecord(storeRoot, "workflows.jsonl", tagOnlyRecord);
+  writeIndexes(
+    storeRoot,
+    [
+      pathRecord,
+      targetOnlyRecord,
+      symbolOnlyRecord,
+      taggedFactRecord,
+      domainOnlyRecord,
+      tagOnlyRecord
+    ],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"],
+    domains: ["auth"],
+    symbols: ["AuthMiddleware"],
+    tags: ["request-lifecycle"]
+  });
+
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => entry.id),
+    ["pitfall-auth", "fact-symbol-only", "fact-tagged"]
+  );
+  assert.deepEqual(composed.normalized_context.recent_decisions, []);
+  assert.deepEqual(composed.normalized_context.applicable_workflows, []);
+});
+
+test("composeContextFromStore ignores untokenizable query text for rich selector pruning", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const pathRecord = record("fact-target-file", "fact", "active", {
+    paths: ["src/auth/**"],
+    domains: [],
+    symbols: [],
+    tags: []
+  });
+
+  writeRecord(storeRoot, "facts.jsonl", pathRecord);
+  writeIndexes(storeRoot, [pathRecord], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"],
+    query: "the and of"
+  });
+
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => entry.id),
+    ["fact-target-file"]
   );
 });
 

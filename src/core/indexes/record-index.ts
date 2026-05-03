@@ -165,8 +165,20 @@ export function hasLookupSelectors(input: GetContextInput): boolean {
     (input.domains ?? []).length > 0 ||
     (input.symbols ?? []).length > 0 ||
     (input.tags ?? []).length > 0 ||
-    queryTokens(input.query).length > 0
+    hasTextLookupSelector(input.query)
   );
+}
+
+export function hasStrongLookupSelectors(input: GetContextInput): boolean {
+  return (
+    selectedFiles(input).length > 0 ||
+    (input.symbols ?? []).length > 0 ||
+    hasTextLookupSelector(input.query)
+  );
+}
+
+export function hasTextLookupSelector(query: string | undefined): boolean {
+  return queryTokens(query).length > 0;
 }
 
 export function selectIndexedRecordIds(
@@ -174,6 +186,7 @@ export function selectIndexedRecordIds(
   input: GetContextInput
 ): Set<string> {
   const selected = new Set<string>();
+  const includeWeakSelectors = !hasStrongLookupSelectors(input);
 
   for (const file of selectedFiles(input)) {
     for (const [pattern, ids] of Object.entries(indexes.pathIndex?.paths ?? {})) {
@@ -183,16 +196,18 @@ export function selectIndexedRecordIds(
     }
   }
 
-  for (const domain of input.domains ?? []) {
-    addAll(selected, indexes.pathIndex?.domains[normalizeTextKey(domain)] ?? []);
+  if (includeWeakSelectors) {
+    for (const domain of input.domains ?? []) {
+      addAll(selected, indexes.pathIndex?.domains[normalizeTextKey(domain)] ?? []);
+    }
+
+    for (const tag of input.tags ?? []) {
+      addAll(selected, indexes.pathIndex?.tags[normalizeTextKey(tag)] ?? []);
+    }
   }
 
   for (const symbol of input.symbols ?? []) {
     addAll(selected, indexes.symbolIndex?.symbols[normalizeSymbolKey(symbol)] ?? []);
-  }
-
-  for (const tag of input.tags ?? []) {
-    addAll(selected, indexes.pathIndex?.tags[normalizeTextKey(tag)] ?? []);
   }
 
   addAll(selected, selectTextRecordIds(indexes.textIndex, input.query));
@@ -202,13 +217,19 @@ export function selectIndexedRecordIds(
 
 export function matchesScopeInput(record: NormalizedRecord, input: GetContextInput): boolean {
   const files = selectedFiles(input);
+  const strongMatch =
+    record.scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file))) ||
+    hasOverlap(record.scope.symbols, input.symbols ?? [], normalizeSymbolKey) ||
+    matchesQuery(record, input.query);
+
+  if (hasStrongLookupSelectors(input)) {
+    return strongMatch;
+  }
 
   return (
-    record.scope.paths.some((pattern) => files.some((file) => matchesPath(pattern, file))) ||
+    strongMatch ||
     hasOverlap(record.scope.domains, input.domains ?? [], normalizeTextKey) ||
-    hasOverlap(record.scope.symbols, input.symbols ?? [], normalizeSymbolKey) ||
-    hasOverlap(record.scope.tags, input.tags ?? [], normalizeTextKey) ||
-    matchesQuery(record, input.query)
+    hasOverlap(record.scope.tags, input.tags ?? [], normalizeTextKey)
   );
 }
 
