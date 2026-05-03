@@ -3,9 +3,16 @@ import { join } from "node:path";
 import { git } from "../../adapters/git/local-git.js";
 import type { NormalizedRecord } from "../../schemas/normalized-record.js";
 
-export function staleReason(record: NormalizedRecord, repoRoot: string): string | undefined {
+export function staleReason(
+  record: NormalizedRecord,
+  repoRoot: string,
+  repo?: string
+): string | undefined {
   const fileEvidence = record.evidence.flatMap((evidence) =>
-    evidence.file === undefined ? [] : [evidence.file]
+    evidence.file === undefined ||
+    (repo !== undefined && evidence.repo !== undefined && evidence.repo !== repo)
+      ? []
+      : [evidence.file]
   );
 
   if (fileEvidence.length === 0) {

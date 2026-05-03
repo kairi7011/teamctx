@@ -100,6 +100,7 @@ export function normalizeBoundStore(options: NormalizeOptions = {}): NormalizeSt
 
   return normalizeStore({
     repo,
+    allowedEvidenceRepos: [repo, binding.contextStore.repo],
     storeRoot: resolveStoreRoot(root, binding.contextStore.path),
     repoRoot: root,
     ...(options.now !== undefined ? { now: options.now } : {}),
@@ -122,6 +123,7 @@ export async function normalizeBoundStoreAsync(
   if (binding.contextStore.repo === repo) {
     return normalizeStore({
       repo,
+      allowedEvidenceRepos: [repo, binding.contextStore.repo],
       storeRoot: resolveStoreRoot(root, binding.contextStore.path),
       repoRoot: root,
       ...(options.now !== undefined ? { now: options.now } : {}),
@@ -131,6 +133,7 @@ export async function normalizeBoundStoreAsync(
 
   return normalizeContextStore({
     repo,
+    allowedEvidenceRepos: [repo, binding.contextStore.repo],
     repoRoot: root,
     store:
       services.createContextStore?.({ repo, repoRoot: root, binding }) ??
@@ -143,6 +146,7 @@ export async function normalizeBoundStoreAsync(
 
 export function normalizeStore(options: {
   repo: string;
+  allowedEvidenceRepos?: string[];
   storeRoot: string;
   repoRoot?: string;
   now?: () => Date;
@@ -155,6 +159,7 @@ export function normalizeStore(options: {
   const existingRecords = readNormalizedRecords(options.storeRoot);
   const run = normalizeRun({
     repo: options.repo,
+    allowedEvidenceRepos: options.allowedEvidenceRepos ?? [options.repo],
     ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
     now: runNow,
     rawEvents,
@@ -179,6 +184,7 @@ export function normalizeStore(options: {
 
 export async function normalizeContextStore(options: {
   repo: string;
+  allowedEvidenceRepos?: string[];
   store: ContextStoreAdapter;
   repoRoot?: string;
   now?: () => Date;
@@ -194,6 +200,7 @@ export async function normalizeContextStore(options: {
   try {
     return await normalizeContextStoreWithLease({
       repo: options.repo,
+      allowedEvidenceRepos: options.allowedEvidenceRepos ?? [options.repo],
       store: options.store,
       ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
       now,
@@ -206,6 +213,7 @@ export async function normalizeContextStore(options: {
 
 async function normalizeContextStoreWithLease(options: {
   repo: string;
+  allowedEvidenceRepos: string[];
   store: ContextStoreAdapter;
   repoRoot?: string;
   now: () => Date;
@@ -217,6 +225,7 @@ async function normalizeContextStoreWithLease(options: {
   const existing = await readNormalizedRecordFilesFromContextStore(options.store);
   const run = normalizeRun({
     repo: options.repo,
+    allowedEvidenceRepos: options.allowedEvidenceRepos,
     ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
     now: runNow,
     rawEvents,
@@ -258,6 +267,7 @@ async function normalizeContextStoreWithLease(options: {
 
 function normalizeRun(options: {
   repo: string;
+  allowedEvidenceRepos: string[];
   repoRoot?: string;
   now: () => Date;
   rawEvents: RawEventFile[];
@@ -280,7 +290,7 @@ function normalizeRun(options: {
   let droppedEvents = 0;
 
   for (const rawEvent of rawEvents) {
-    const normalized = normalizeRawEvent(rawEvent, options.repo, runNow);
+    const normalized = normalizeRawEvent(rawEvent, options.allowedEvidenceRepos, runNow);
 
     if (normalized.record) {
       const existingRecord = existingRecordsById.get(normalized.record.id);
@@ -328,6 +338,7 @@ function normalizeRun(options: {
   const records = applyStateTransitions({
     records: [...recordsByKey.values()],
     existingRecordsById,
+    repo: options.repo,
     ...(options.repoRoot !== undefined ? { repoRoot: options.repoRoot } : {}),
     auditEntries,
     now: runNow,
@@ -343,7 +354,7 @@ function normalizeRun(options: {
   };
   const episodeObservations = safeActiveEpisodeObservations(
     rawEvents,
-    options.repo,
+    options.allowedEvidenceRepos,
     records,
     recordKeysByEventId
   );
@@ -407,7 +418,7 @@ function recordWithoutLastVerifiedAt(
 
 function normalizeRawEvent(
   rawEvent: RawEventFile,
-  repo: string,
+  allowedEvidenceRepos: string[],
   now: () => Date
 ): { record?: NormalizedRecord; reason: string } {
   if (!rawEvent.observation) {
@@ -451,7 +462,9 @@ function normalizeRawEvent(
     conflicts_with: []
   });
 
-  if (!record.evidence.every((evidence) => !evidence.repo || evidence.repo === repo)) {
+  if (
+    !record.evidence.every((evidence) => evidenceRepoIsAllowed(evidence.repo, allowedEvidenceRepos))
+  ) {
     return { reason: "evidence repo does not match bound repo" };
   }
 
@@ -764,7 +777,14 @@ function isOptimisticWriteConflict(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("conflict");
 }
 
-function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawObservation[] {
+function evidenceRepoIsAllowed(repo: string | undefined, allowedEvidenceRepos: string[]): boolean {
+  return repo === undefined || allowedEvidenceRepos.includes(repo);
+}
+
+function safeEpisodeObservations(
+  rawEvents: RawEventFile[],
+  allowedEvidenceRepos: string[]
+): RawObservation[] {
   return rawEvents.flatMap((rawEvent) => {
     if (!rawEvent.observation) {
       return [];
@@ -775,7 +795,9 @@ function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawOb
     }
 
     if (
-      !rawEvent.observation.evidence.every((evidence) => !evidence.repo || evidence.repo === repo)
+      !rawEvent.observation.evidence.every((evidence) =>
+        evidenceRepoIsAllowed(evidence.repo, allowedEvidenceRepos)
+      )
     ) {
       return [];
     }
@@ -786,7 +808,7 @@ function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawOb
 
 function safeActiveEpisodeObservations(
   rawEvents: RawEventFile[],
-  repo: string,
+  allowedEvidenceRepos: string[],
   records: NormalizedRecord[],
   recordKeysByEventId: Map<string, string>
 ): RawObservation[] {
@@ -794,7 +816,7 @@ function safeActiveEpisodeObservations(
     records.filter((record) => record.state === "active").map((record) => dedupeKey(record))
   );
 
-  return safeEpisodeObservations(rawEvents, repo).filter((observation) => {
+  return safeEpisodeObservations(rawEvents, allowedEvidenceRepos).filter((observation) => {
     const recordKey = recordKeysByEventId.get(observation.event_id);
 
     return recordKey !== undefined && activeRecordKeys.has(recordKey);

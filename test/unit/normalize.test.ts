@@ -605,6 +605,51 @@ test("normalizeBoundStoreAsync resolves and writes a remote context store adapte
   );
 });
 
+test("normalizeBoundStoreAsync accepts evidence from the remote context store repo", async (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const remoteRoot = join(directory, "remote-store");
+  writeRaw(
+    remoteRoot,
+    observation({
+      event_id: "context-store-evidence",
+      kind: "workflow",
+      text: "Use the context-store validation runpack when checking adoption value.",
+      source_type: "inferred_from_docs",
+      evidence: [
+        {
+          kind: "docs",
+          repo: "github.com/team/context",
+          commit: "def456",
+          file: "dogfood/validation/runpack.md",
+          lines: [1, 20],
+          doc_role: "other"
+        }
+      ],
+      scope: {
+        paths: ["dogfood/validation/runpack.md"],
+        domains: ["validation"],
+        symbols: ["runpack"],
+        tags: ["context-store-evidence"]
+      }
+    })
+  );
+
+  const result = await normalizeBoundStoreAsync({
+    services: servicesFor(directory, "github.com/team/context", remoteRoot),
+    now: fixedNow
+  });
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(result.droppedEvents, 0);
+  const records = readJsonl(
+    join(remoteRoot, "normalized", "workflows.jsonl")
+  ) as NormalizedRecord[];
+  assert.equal(records[0]?.state, "active");
+  assert.equal(records[0]?.evidence[0]?.repo, "github.com/team/context");
+  assert.deepEqual(readEpisodeSourceEventIds(remoteRoot), ["context-store-evidence"]);
+});
+
 test("normalizeBoundStoreAsync can guard remote normalize with an advisory lease", async (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

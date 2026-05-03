@@ -7,6 +7,7 @@ import { staleReason } from "./stale.js";
 export function applyStateTransitions(options: {
   records: NormalizedRecord[];
   existingRecordsById: Map<string, NormalizedRecord>;
+  repo: string;
   repoRoot?: string;
   auditEntries: AuditLogEntry[];
   now: () => Date;
@@ -50,7 +51,8 @@ export function applyStateTransitions(options: {
 
   if (options.repoRoot !== undefined) {
     for (const record of recordsById.values()) {
-      const reason = record.state === "active" ? staleReason(record, options.repoRoot) : undefined;
+      const reason =
+        record.state === "active" ? staleReason(record, options.repoRoot, options.repo) : undefined;
 
       if (reason !== undefined) {
         recordsById.set(
