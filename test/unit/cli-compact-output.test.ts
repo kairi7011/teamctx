@@ -34,10 +34,7 @@ test("formatCompactResult renders the normal summary", () => {
 test("formatCompactResult renders the dry-run header and note", () => {
   const formatted = formatCompactResult(result, { dryRun: true });
   assert.match(formatted, /^Compacted context store \(dry-run\):/);
-  assert.match(
-    formatted,
-    /note: no files were archived; rerun without --dry-run to apply$/m
-  );
+  assert.match(formatted, /note: no files were archived; rerun without --dry-run to apply$/m);
 });
 
 test("formatCompactResult omits the dry-run note for normal runs", () => {

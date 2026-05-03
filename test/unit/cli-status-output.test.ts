@@ -47,10 +47,7 @@ function enabledStatus(overrides: Partial<BoundStatus> = {}): BoundStatus {
 }
 
 function assertContainsLine(formatted: string, line: string): void {
-  assert.ok(
-    formatted.split("\n").includes(line),
-    `expected line "${line}" in:\n${formatted}`
-  );
+  assert.ok(formatted.split("\n").includes(line), `expected line "${line}" in:\n${formatted}`);
 }
 
 test("formatStatusReport renders disabled status with reason only", () => {

@@ -59,36 +59,33 @@ test("formatInvalidateResult renders item id and state transition", () => {
 });
 
 test("formatRecordObservationsReport renders header, entries, findings, and total count", () => {
-  const formatted = formatRecordObservationsReport(
-    "verified",
-    [
-      {
-        index: 1,
-        result: {
-          recorded: true,
-          path: "C:/store/raw/verified/event-1.json",
-          relative_path: "raw/verified/event-1.json",
-          findings: []
-        }
-      },
-      {
-        index: 2,
-        result: {
-          recorded: true,
-          path: "C:/store/raw/verified/event-2.json",
-          relative_path: "raw/verified/event-2.json",
-          findings: [
-            {
-              severity: "warn",
-              kind: "pii_email",
-              field: "evidence[0].file",
-              excerpt: "user@example.com"
-            }
-          ]
-        }
+  const formatted = formatRecordObservationsReport("verified", [
+    {
+      index: 1,
+      result: {
+        recorded: true,
+        path: "C:/store/raw/verified/event-1.json",
+        relative_path: "raw/verified/event-1.json",
+        findings: []
       }
-    ]
-  );
+    },
+    {
+      index: 2,
+      result: {
+        recorded: true,
+        path: "C:/store/raw/verified/event-2.json",
+        relative_path: "raw/verified/event-2.json",
+        findings: [
+          {
+            severity: "warn",
+            kind: "pii_email",
+            field: "evidence[0].file",
+            excerpt: "user@example.com"
+          }
+        ]
+      }
+    }
+  ]);
 
   const lines = formatted.split("\n");
   assert.equal(lines[0], "Recorded verified raw observations:");

@@ -264,9 +264,7 @@ export function formatNormalizeResult(
   options: { dryRun?: boolean; useLease?: boolean } = {}
 ): string {
   const lines = [
-    options.dryRun === true
-      ? "Normalized context store (dry-run):"
-      : "Normalized context store:",
+    options.dryRun === true ? "Normalized context store (dry-run):" : "Normalized context store:",
     `  run_id: ${result.runId}`,
     `  normalized_at: ${result.normalizedAt}`,
     `  raw_events_read: ${result.rawEventsRead}`,

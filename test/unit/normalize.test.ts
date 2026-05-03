@@ -620,7 +620,10 @@ test("normalizeBoundStoreAsync can guard remote normalize with an advisory lease
   });
 
   assert.equal(result.recordsWritten, 1);
-  assert.equal(readFileSync(join(remoteRoot, "normalized", "pitfalls.jsonl"), "utf8").includes("Auth"), true);
+  assert.equal(
+    readFileSync(join(remoteRoot, "normalized", "pitfalls.jsonl"), "utf8").includes("Auth"),
+    true
+  );
   assert.throws(() => readFileSync(join(remoteRoot, "locks", "normalize.json"), "utf8"));
 });
 

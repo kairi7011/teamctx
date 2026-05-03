@@ -679,10 +679,7 @@ test("composeContextFromStore caps payload size under large stores at default bu
   ];
 
   for (const { key, list, cap } of expectedCategoryCaps) {
-    assert.ok(
-      list.length <= cap,
-      `${key} category (${list.length}) must not exceed budget ${cap}`
-    );
+    assert.ok(list.length <= cap, `${key} category (${list.length}) must not exceed budget ${cap}`);
   }
 
   for (const entry of composed.normalized_context.scoped) {

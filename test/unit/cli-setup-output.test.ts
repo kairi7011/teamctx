@@ -55,9 +55,12 @@ test("formatSetupReport iterates SETUP_NEXT_STEPS in order", () => {
 });
 
 test("SETUP_NEXT_STEPS exposes the documented post-setup commands", () => {
-  assert.deepEqual([...SETUP_NEXT_STEPS], [
-    "teamctx record-verified observations.json",
-    "teamctx normalize",
-    "teamctx context --target-files <file>"
-  ]);
+  assert.deepEqual(
+    [...SETUP_NEXT_STEPS],
+    [
+      "teamctx record-verified observations.json",
+      "teamctx normalize",
+      "teamctx context --target-files <file>"
+    ]
+  );
 });

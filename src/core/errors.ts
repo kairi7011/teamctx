@@ -1,10 +1,4 @@
-export const CORE_ERROR_KINDS = [
-  "binding",
-  "auth",
-  "store",
-  "validation",
-  "internal"
-] as const;
+export const CORE_ERROR_KINDS = ["binding", "auth", "store", "validation", "internal"] as const;
 
 export type CoreErrorKind = (typeof CORE_ERROR_KINDS)[number];
 
@@ -30,10 +24,7 @@ export function itemNotFoundError(itemId: string): CoreError {
 }
 
 export function projectConfigMissingError(): CoreError {
-  return new CoreError(
-    "store",
-    "Context store project.yaml is missing. Run: teamctx init-store"
-  );
+  return new CoreError("store", "Context store project.yaml is missing. Run: teamctx init-store");
 }
 
 export function unsupportedRemoteOperationError(operation: string): CoreError {

@@ -6,9 +6,7 @@ import type {
 } from "../../src/schemas/context-payload.js";
 import type { EpisodeReference } from "../../src/schemas/episode.js";
 
-export function fixtureGetContextInput(
-  overrides: Partial<GetContextInput> = {}
-): GetContextInput {
+export function fixtureGetContextInput(overrides: Partial<GetContextInput> = {}): GetContextInput {
   return {
     target_files: ["src/auth/middleware.ts"],
     domains: ["auth"],
@@ -18,9 +16,7 @@ export function fixtureGetContextInput(
   };
 }
 
-export function fixtureCanonicalDocRef(
-  overrides: Partial<CanonicalDocRef> = {}
-): CanonicalDocRef {
+export function fixtureCanonicalDocRef(overrides: Partial<CanonicalDocRef> = {}): CanonicalDocRef {
   return {
     repo: "github.com/team/context",
     path: "docs/auth.md",
