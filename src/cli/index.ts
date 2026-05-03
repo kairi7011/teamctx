@@ -57,7 +57,7 @@ import {
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
 import { validateGetContextInput, type GetContextInput } from "../schemas/context-payload.js";
-import type { Binding } from "../schemas/types.js";
+import type { Binding, ToolDefinition } from "../schemas/types.js";
 
 export type ParsedArgs = {
   command: string;
@@ -965,9 +965,13 @@ function tools(args: ParsedArgs): void {
     return;
   }
 
-  for (const tool of toolDefinitions) {
-    console.log(`${tool.name}: ${tool.description}`);
-  }
+  console.log(formatToolsReport(toolDefinitions));
+}
+
+export function formatToolsReport(
+  tools: readonly Pick<ToolDefinition, "name" | "description">[]
+): string {
+  return tools.map((tool) => `${tool.name}: ${tool.description}`).join("\n");
 }
 
 function capabilities(args: ParsedArgs): void {
@@ -989,14 +993,25 @@ function capabilities(args: ParsedArgs): void {
     return;
   }
 
-  console.log(`bound: ${description.bound}`);
-  console.log(`store_kind: ${description.store_kind}`);
-  console.log(`normalize_supported: ${description.normalize_supported}`);
-  console.log(`background_jobs: ${description.background_jobs}`);
-  console.log("store:");
+  console.log(formatCapabilitiesReport(description));
+}
+
+export function formatCapabilitiesReport(
+  description: ReturnType<typeof describeBindingCapabilities>
+): string {
+  const lines = [
+    `bound: ${description.bound}`,
+    `store_kind: ${description.store_kind}`,
+    `normalize_supported: ${description.normalize_supported}`,
+    `background_jobs: ${description.background_jobs}`,
+    "store:"
+  ];
+
   for (const [key, value] of Object.entries(description.store)) {
-    console.log(`  ${key}: ${value}`);
+    lines.push(`  ${key}: ${value}`);
   }
+
+  return lines.join("\n");
 }
 
 export type CliCommandHandler = (args: ParsedArgs) => void | Promise<void>;
