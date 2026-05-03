@@ -141,10 +141,16 @@ function printHelp(): void {
 function bind(args: ParsedArgs): void {
   const binding = bindCurrentRepo(args);
 
-  console.log("Bound repository:");
-  console.log(`  repo: ${binding.repo}`);
-  console.log(`  root: ${binding.root}`);
-  console.log(`  store: ${binding.contextStore.repo}/${binding.contextStore.path}`);
+  console.log(formatBindReport(binding));
+}
+
+export function formatBindReport(binding: Binding): string {
+  return [
+    "Bound repository:",
+    `  repo: ${binding.repo}`,
+    `  root: ${binding.root}`,
+    `  store: ${binding.contextStore.repo}/${binding.contextStore.path}`
+  ].join("\n");
 }
 
 function bindCurrentRepo(args: ParsedArgs): ReturnType<typeof upsertBinding> {
