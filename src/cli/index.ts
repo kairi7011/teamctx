@@ -73,7 +73,7 @@ export type ParsedArgs = {
   flags: Record<string, string | boolean>;
 };
 
-const BOOLEAN_FLAGS = new Set(["dry-run", "help", "json", "lease"]);
+const BOOLEAN_FLAGS = new Set(["dry-run", "force-refresh", "help", "json", "lease"]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
@@ -124,7 +124,7 @@ Usage:
   teamctx init-store [--json]
   teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
-  teamctx context [json-file]
+  teamctx context [json-file] [--call-reason <reason>] [--previous-context-payload-hash <hash>] [--force-refresh]
   teamctx context-diff <left-json> <right-json> [--json]
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
@@ -147,7 +147,7 @@ Examples:
   teamctx bind github.com/my-org/ai-context --path contexts/my-service
   teamctx setup . --path .teamctx
   teamctx bind . --path .teamctx
-  teamctx context --target-files src/index.ts --domains cli
+  teamctx context --call-reason session_start --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
   teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
@@ -575,6 +575,12 @@ function contextInput(args: ParsedArgs): GetContextInput {
   assignString(input, "until", args.flags.until);
   assignString(input, "branch", args.flags.branch);
   assignString(input, "head_commit", args.flags["head-commit"]);
+  assignString(input, "call_reason", args.flags["call-reason"]);
+  assignString(input, "previous_context_payload_hash", args.flags["previous-context-payload-hash"]);
+
+  if (args.flags["force-refresh"] === true) {
+    input.force_refresh = true;
+  }
 
   return input;
 }

@@ -78,6 +78,7 @@ export function fixtureEnabledContextPayload(
 ): EnabledContextPayload {
   return {
     enabled: true,
+    context_unchanged: false,
     identity: {
       repo: "github.com/team/service",
       branch: "main",
@@ -87,6 +88,25 @@ export function fixtureEnabledContextPayload(
       normalizer_version: "0.1.0",
       context_payload_hash:
         "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    delivery_policy: {
+      default_policy:
+        "call_at_session_start_then_refresh_only_on_explicit_request_or_context_change",
+      call_reason: "task_start",
+      session_start_required: true,
+      explicit_refresh_allowed: true,
+      force_refresh: false,
+      unchanged_from_previous: false,
+      should_inject: true,
+      reason: "context hash changed or no previous hash was provided; return context.",
+      refresh_triggers: [
+        "new_session_start",
+        "explicit_user_request",
+        "target_files_changed",
+        "changed_files_changed",
+        "branch_or_head_commit_changed",
+        "context_store_head_changed"
+      ]
     },
     normalized_context: {
       global: "",

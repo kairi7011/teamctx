@@ -106,6 +106,35 @@ teamctx context --target-files src/index.ts --domains cli --query "record verifi
 teamctx context context-input.json
 ```
 
+## Context Call Policy
+
+Keep `teamctx` registered with your MCP client, but do not treat registration as
+permission to inject context on every turn.
+
+The intended policy is:
+
+- call `teamctx.get_context` once at the start of a new AI session;
+- after that, refresh only when the user explicitly asks for team context or the
+  working set materially changes;
+- pass `previous_context_payload_hash` on later calls so unchanged context can
+  return a lightweight response instead of reinjecting the same payload;
+- use `force_refresh: true` only for an explicit user request or a deliberate
+  diagnostic check.
+
+For MCP clients, set `call_reason` to `session_start`, `task_start`,
+`context_changed`, or `explicit_user_request`. A matching
+`previous_context_payload_hash` suppresses repeated injection for non-explicit
+refreshes. Session-start and explicit-user-request calls always return full
+context.
+
+CLI preview supports the same policy fields:
+
+```bash
+teamctx context --call-reason session_start --target-files src/index.ts
+teamctx context --call-reason task_start --previous-context-payload-hash sha256:...
+teamctx context --call-reason explicit_user_request --force-refresh
+```
+
 ## Common Commands
 
 Set up a repository:

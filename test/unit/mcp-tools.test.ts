@@ -84,8 +84,74 @@ test("getContextTool returns an empty enabled payload with identity fields", () 
   assert.equal(context.identity.store_head, null);
   assert.equal(context.identity.normalizer_version, "0.1.0");
   assert.match(context.identity.context_payload_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(context.context_unchanged, false);
+  assert.equal(context.delivery_policy.call_reason, "task_start");
+  assert.equal(context.delivery_policy.session_start_required, true);
+  assert.equal(context.delivery_policy.should_inject, true);
   assert.deepEqual(context.normalized_context.active_pitfalls, []);
   assert.equal(context.write_policy.record_observation_verified, "allowed_with_evidence");
+});
+
+test("getContextTool skips reinjecting unchanged non-explicit context", () => {
+  const firstContext = getContextTool({ changed_files: ["src/auth/middleware.ts"] }, boundServices);
+
+  if (!firstContext.enabled) {
+    throw new Error("expected enabled context");
+  }
+
+  const secondContext = getContextTool(
+    {
+      changed_files: ["src/auth/middleware.ts"],
+      call_reason: "task_start",
+      previous_context_payload_hash: firstContext.identity.context_payload_hash
+    },
+    boundServices
+  );
+
+  assert.equal(secondContext.enabled, true);
+
+  if (!secondContext.enabled) {
+    throw new Error("expected enabled context");
+  }
+
+  assert.equal(
+    secondContext.identity.context_payload_hash,
+    firstContext.identity.context_payload_hash
+  );
+  assert.equal(secondContext.context_unchanged, true);
+  assert.equal(secondContext.delivery_policy.unchanged_from_previous, true);
+  assert.equal(secondContext.delivery_policy.should_inject, false);
+  assert.deepEqual(secondContext.normalized_context.scoped, []);
+});
+
+test("getContextTool returns full context for session start and explicit refresh", () => {
+  const firstContext = getContextTool({ changed_files: ["src/auth/middleware.ts"] }, boundServices);
+
+  if (!firstContext.enabled) {
+    throw new Error("expected enabled context");
+  }
+
+  for (const callReason of ["session_start", "explicit_user_request"] as const) {
+    const refreshedContext = getContextTool(
+      {
+        changed_files: ["src/auth/middleware.ts"],
+        call_reason: callReason,
+        previous_context_payload_hash: firstContext.identity.context_payload_hash
+      },
+      boundServices
+    );
+
+    assert.equal(refreshedContext.enabled, true);
+
+    if (!refreshedContext.enabled) {
+      throw new Error("expected enabled context");
+    }
+
+    assert.equal(refreshedContext.context_unchanged, false);
+    assert.equal(refreshedContext.delivery_policy.call_reason, callReason);
+    assert.equal(refreshedContext.delivery_policy.unchanged_from_previous, true);
+    assert.equal(refreshedContext.delivery_policy.should_inject, true);
+  }
 });
 
 test("getContextTool returns an isolated write policy object", () => {
@@ -110,6 +176,21 @@ test("invalidate tool schema requires human confirmation", () => {
 
   assert.deepEqual(inputSchema.required, ["item_id", "human_confirmed"]);
   assert.deepEqual(properties.human_confirmed, { const: true });
+});
+
+test("get_context tool schema advertises call policy inputs", () => {
+  const definition = toolDefinitions.find((tool) => tool.name === "teamctx.get_context");
+  assert.ok(definition);
+
+  const inputSchema = asRecord(definition.inputSchema);
+  const properties = asRecord(inputSchema.properties);
+
+  assert.deepEqual(properties.call_reason, {
+    type: "string",
+    enum: ["session_start", "task_start", "context_changed", "explicit_user_request"]
+  });
+  assert.deepEqual(properties.previous_context_payload_hash, { type: "string" });
+  assert.deepEqual(properties.force_refresh, { type: "boolean" });
 });
 
 test("statusTool returns the enabled binding summary", () => {
@@ -171,6 +252,56 @@ test("getContextToolAsync composes context from a remote context store adapter",
     "Auth middleware ordering is easy to break."
   ]);
   assert.equal(context.normalized_context.scoped.length, 1);
+});
+
+test("getContextToolAsync returns non-empty full context for explicit refreshes", async () => {
+  const store = new MemoryContextStore("remote-head-1");
+  await store.writeText("normalized/pitfalls.jsonl", `${JSON.stringify(record())}\n`, {
+    message: "seed"
+  });
+
+  const firstContext = await getContextToolAsync(
+    { target_files: ["src/auth/middleware.ts"] },
+    remoteServices(store)
+  );
+
+  assert.equal(firstContext.enabled, true);
+
+  if (!firstContext.enabled) {
+    throw new Error("expected enabled context");
+  }
+
+  for (const input of [
+    { call_reason: "session_start" as const },
+    { call_reason: "explicit_user_request" as const },
+    { force_refresh: true }
+  ]) {
+    const refreshedContext = await getContextToolAsync(
+      {
+        target_files: ["src/auth/middleware.ts"],
+        previous_context_payload_hash: firstContext.identity.context_payload_hash,
+        ...input
+      },
+      remoteServices(store)
+    );
+
+    assert.equal(refreshedContext.enabled, true);
+
+    if (!refreshedContext.enabled) {
+      throw new Error("expected enabled context");
+    }
+
+    assert.equal(refreshedContext.context_unchanged, false);
+    assert.equal(refreshedContext.delivery_policy.should_inject, true);
+    assert.equal(
+      refreshedContext.identity.context_payload_hash,
+      firstContext.identity.context_payload_hash
+    );
+    assert.equal(refreshedContext.normalized_context.scoped.length, 1);
+    assert.deepEqual(refreshedContext.normalized_context.active_pitfalls, [
+      "Auth middleware ordering is easy to break."
+    ]);
+  }
 });
 
 test("statusToolAsync summarizes a remote context store adapter", async () => {

@@ -11,6 +11,7 @@ const EXPECTED_PUBLIC_API = [
   "DEFAULT_CONTEXT_BUDGETS",
   "DOC_ROLES",
   "EVIDENCE_KINDS",
+  "GET_CONTEXT_CALL_REASONS",
   "GitHubApiError",
   "GitHubClient",
   "GitHubContentsStore",

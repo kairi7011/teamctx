@@ -2,6 +2,15 @@ import { isRecord, optionalStringArray } from "./validation.js";
 import type { EpisodeReference } from "./episode.js";
 import type { DocRole, LineRange } from "./evidence.js";
 
+export const GET_CONTEXT_CALL_REASONS = [
+  "session_start",
+  "task_start",
+  "context_changed",
+  "explicit_user_request"
+] as const;
+
+export type GetContextCallReason = (typeof GET_CONTEXT_CALL_REASONS)[number];
+
 export type CanonicalDocRef = {
   repo: string;
   path: string;
@@ -28,6 +37,9 @@ export type GetContextInput = {
   evidence_files?: string[];
   branch?: string;
   head_commit?: string;
+  call_reason?: GetContextCallReason;
+  previous_context_payload_hash?: string;
+  force_refresh?: boolean;
 };
 
 export type DisabledContextPayload = {
@@ -37,6 +49,7 @@ export type DisabledContextPayload = {
 
 export type EnabledContextPayload = {
   enabled: true;
+  context_unchanged: boolean;
   identity: {
     repo: string;
     branch: string;
@@ -45,6 +58,18 @@ export type EnabledContextPayload = {
     store_head: string | null;
     normalizer_version: string;
     context_payload_hash: string;
+  };
+  delivery_policy: {
+    default_policy: "call_at_session_start_then_refresh_only_on_explicit_request_or_context_change";
+    call_reason: GetContextCallReason;
+    session_start_required: true;
+    explicit_refresh_allowed: true;
+    force_refresh: boolean;
+    previous_context_payload_hash?: string;
+    unchanged_from_previous: boolean;
+    should_inject: boolean;
+    reason: string;
+    refresh_triggers: string[];
   };
   normalized_context: {
     global: string;
@@ -115,6 +140,12 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   const evidenceFiles = optionalStringArrayWithName(value.evidence_files, "evidence_files");
   const branch = optionalString(value.branch, "branch");
   const headCommit = optionalString(value.head_commit, "head_commit");
+  const callReason = optionalCallReason(value.call_reason);
+  const previousContextPayloadHash = optionalString(
+    value.previous_context_payload_hash,
+    "previous_context_payload_hash"
+  );
+  const forceRefresh = optionalBoolean(value.force_refresh, "force_refresh");
 
   if (cwd !== undefined) {
     input.cwd = cwd;
@@ -155,6 +186,15 @@ export function validateGetContextInput(value: unknown): GetContextInput {
   if (headCommit !== undefined) {
     input.head_commit = headCommit;
   }
+  if (callReason !== undefined) {
+    input.call_reason = callReason;
+  }
+  if (previousContextPayloadHash !== undefined) {
+    input.previous_context_payload_hash = previousContextPayloadHash;
+  }
+  if (forceRefresh !== undefined) {
+    input.force_refresh = forceRefresh;
+  }
 
   return input;
 }
@@ -187,4 +227,32 @@ function optionalTimestamp(value: unknown, name: string): string | undefined {
   }
 
   return timestamp;
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new Error(`get_context ${name} must be a boolean`);
+  }
+
+  return value;
+}
+
+function optionalCallReason(value: unknown): GetContextCallReason | undefined {
+  const callReason = optionalString(value, "call_reason");
+
+  if (callReason === undefined) {
+    return undefined;
+  }
+
+  if (!GET_CONTEXT_CALL_REASONS.includes(callReason as GetContextCallReason)) {
+    throw new Error(
+      `get_context call_reason must be one of ${GET_CONTEXT_CALL_REASONS.join(", ")}`
+    );
+  }
+
+  return callReason as GetContextCallReason;
 }

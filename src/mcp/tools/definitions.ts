@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "../../schemas/types.js";
+import { GET_CONTEXT_CALL_REASONS } from "../../schemas/context-payload.js";
 
 const stringArraySchema = { type: "array", items: { type: "string" } };
 const cwdSchema = { cwd: { type: "string" } };
@@ -31,7 +32,8 @@ function objectSchema(
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: "teamctx.get_context",
-    description: "Return task-specific normalized context for the bound repository.",
+    description:
+      "Return task-specific normalized context for the bound repository. Call at session start; after that refresh only for explicit user request or material task/context changes. Pass previous_context_payload_hash to avoid reinjecting unchanged context.",
     inputSchema: objectSchema({
       ...cwdSchema,
       target_files: stringArraySchema,
@@ -45,7 +47,10 @@ export const toolDefinitions: ToolDefinition[] = [
       source_types: stringArraySchema,
       evidence_files: stringArraySchema,
       branch: { type: "string" },
-      head_commit: { type: "string" }
+      head_commit: { type: "string" },
+      call_reason: { type: "string", enum: [...GET_CONTEXT_CALL_REASONS] },
+      previous_context_payload_hash: { type: "string" },
+      force_refresh: { type: "boolean" }
     })
   },
   {
