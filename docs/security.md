@@ -24,9 +24,14 @@ teamctx setup github.com/my-org/ai-context --path contexts/my-service
 ```
 
 Same-repository stores such as `.teamctx` are fine for local use or small teams
-when the application repository already has the right visibility. If the context
-store is public, `teamctx doctor` warns unless `TEAMCTX_ALLOW_PUBLIC_STORE=1` is
-set.
+when the application repository already has the right visibility.
+
+Visibility diagnostics require GitHub auth. `teamctx doctor` checks separate
+GitHub context-store repositories; `teamctx auth doctor` checks the bound
+context-store repository and is the better check for same-repository stores. If
+the checked store is public, the diagnostic warns unless
+`TEAMCTX_ALLOW_PUBLIC_STORE=1` is set. Tokenless runs report visibility as
+unknown.
 
 ## GitHub Token Permissions
 
