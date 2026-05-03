@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   formatInitStoreResult,
   formatInvalidateResult,
-  formatRecordObservationsReport
+  formatRecordObservationsReport,
+  prepareRecordObservationInputs
 } from "../../src/cli/index.js";
 
 test("formatInitStoreResult renders the standard summary without root", () => {
@@ -117,3 +118,56 @@ test("formatRecordObservationsReport supports candidate trust and a custom total
   assert.equal(lines[1], "  - 1: raw/candidate/event-1.json");
   assert.equal(lines[2], "  count: 5");
 });
+
+test("prepareRecordObservationInputs validates every batch item before writes", () => {
+  assert.throws(
+    () =>
+      prepareRecordObservationInputs(
+        [
+          recordInput(),
+          recordInput({
+            evidence: [
+              {
+                kind: "docs",
+                repo: "github.com/team/service",
+                file: "README.md",
+                lines: [1, 2],
+                doc_role: "invalid"
+              }
+            ]
+          })
+        ],
+        "verified"
+      ),
+    /docs evidence doc_role is invalid/
+  );
+});
+
+test("prepareRecordObservationInputs materializes defaults for stable batch writes", () => {
+  const prepared = prepareRecordObservationInputs([recordInput()], "verified");
+
+  assert.equal(prepared.length, 1);
+  assert.equal(prepared[0]?.index, 1);
+  assert.equal(prepared[0]?.input.observation.trust, "verified");
+  assert.equal(prepared[0]?.input.observation.kind, "fact");
+  assert.equal(typeof prepared[0]?.input.observation.event_id, "string");
+  assert.equal(typeof prepared[0]?.input.observation.session_id, "string");
+});
+
+function recordInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    kind: "fact",
+    text: "Context capture should validate the entire batch before writing.",
+    source_type: "inferred_from_code",
+    evidence: [
+      {
+        kind: "code",
+        repo: "github.com/team/service",
+        commit: "abc123",
+        file: "src/index.ts",
+        lines: [1, 2]
+      }
+    ],
+    ...overrides
+  };
+}

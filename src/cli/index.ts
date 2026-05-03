@@ -75,8 +75,10 @@ import {
 import { resolveStoreRoot } from "../core/store/layout.js";
 import { createContextStoreForBinding } from "../core/store/bound-store.js";
 import {
+  normalizeRecordObservationToolInput,
   recordObservationCandidateToolAsync,
   recordObservationVerifiedToolAsync,
+  type NormalizedRecordObservationToolInput,
   type RecordObservationToolResult
 } from "../mcp/tools/record-observation.js";
 import { toolDefinitions } from "../mcp/tools/definitions.js";
@@ -875,24 +877,19 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
   }
 
   const input = JSON.parse(readFileSync(resolve(inputPath), "utf8")) as unknown;
-  const observations = Array.isArray(input) ? input : [input];
-
-  if (observations.length === 0) {
-    throw new CliError(
-      CLI_EXIT.VALIDATION,
-      "Observation json file must contain an object or a non-empty array."
-    );
-  }
+  const observations = prepareRecordObservationInputs(input, trust);
 
   const results: Array<{ index: number; result: RecordObservationToolResult }> = [];
 
-  for (const [index, observation] of observations.entries()) {
+  for (const observation of observations) {
     const result =
       trust === "verified"
-        ? await recordObservationVerifiedToolAsync(observation)
-        : await recordObservationCandidateToolAsync(observation);
+        ? await recordObservationVerifiedToolAsync(toRecordObservationToolInput(observation.input))
+        : await recordObservationCandidateToolAsync(
+            toRecordObservationToolInput(observation.input)
+          );
 
-    results.push({ index: index + 1, result });
+    results.push({ index: observation.index, result });
   }
 
   if (args.flags.json === true) {
@@ -914,6 +911,34 @@ async function recordObservation(args: ParsedArgs, trust: "candidate" | "verifie
   }
 
   console.log(formatRecordObservationsReport(trust, results, observations.length));
+}
+
+export function prepareRecordObservationInputs(
+  input: unknown,
+  trust: "candidate" | "verified"
+): Array<{ index: number; input: NormalizedRecordObservationToolInput }> {
+  const observations = Array.isArray(input) ? input : [input];
+
+  if (observations.length === 0) {
+    throw new CliError(
+      CLI_EXIT.VALIDATION,
+      "Observation json file must contain an object or a non-empty array."
+    );
+  }
+
+  return observations.map((observation, index) => ({
+    index: index + 1,
+    input: normalizeRecordObservationToolInput(observation, trust)
+  }));
+}
+
+function toRecordObservationToolInput(
+  input: NormalizedRecordObservationToolInput
+): Record<string, unknown> {
+  return {
+    ...input.observation,
+    ...(input.cwd !== undefined ? { cwd: input.cwd } : {})
+  };
 }
 
 export function formatRecordObservationsReport(

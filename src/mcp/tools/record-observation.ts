@@ -4,7 +4,11 @@ import {
   recordRawObservationAsync,
   type RecordObservationServices
 } from "../../core/observation/record.js";
-import { validateRawObservation, type RawObservationTrust } from "../../schemas/observation.js";
+import {
+  validateRawObservation,
+  type RawObservation,
+  type RawObservationTrust
+} from "../../schemas/observation.js";
 import { isNonEmptyString, isRecord } from "../../schemas/validation.js";
 
 export type RecordObservationToolResult = {
@@ -12,6 +16,11 @@ export type RecordObservationToolResult = {
   path: string;
   relative_path: string;
   findings: Array<{ severity: string; kind: string; field: string; excerpt: string }>;
+};
+
+export type NormalizedRecordObservationToolInput = {
+  observation: RawObservation;
+  cwd?: string;
 };
 
 export function recordObservationCandidateTool(
@@ -47,11 +56,10 @@ function recordObservationTool(
   trust: RawObservationTrust,
   services?: RecordObservationServices
 ): RecordObservationToolResult {
-  const input = normalizeRecordInput(rawInput, trust);
-  const cwd = getOptionalString(rawInput, "cwd");
+  const input = normalizeRecordObservationToolInput(rawInput, trust);
   const result = recordRawObservation({
-    observation: input,
-    ...(cwd !== undefined ? { cwd } : {}),
+    observation: input.observation,
+    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
     ...(services !== undefined ? { services } : {})
   });
 
@@ -68,11 +76,10 @@ async function recordObservationToolAsync(
   trust: RawObservationTrust,
   services?: RecordObservationServices
 ): Promise<RecordObservationToolResult> {
-  const input = normalizeRecordInput(rawInput, trust);
-  const cwd = getOptionalString(rawInput, "cwd");
+  const input = normalizeRecordObservationToolInput(rawInput, trust);
   const result = await recordRawObservationAsync({
-    observation: input,
-    ...(cwd !== undefined ? { cwd } : {}),
+    observation: input.observation,
+    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
     ...(services !== undefined ? { services } : {})
   });
 
@@ -84,25 +91,33 @@ async function recordObservationToolAsync(
   };
 }
 
-function normalizeRecordInput(rawInput: unknown, trust: RawObservationTrust) {
+export function normalizeRecordObservationToolInput(
+  rawInput: unknown,
+  trust: RawObservationTrust
+): NormalizedRecordObservationToolInput {
   if (!isRecord(rawInput)) {
     throw new Error("record_observation input must be an object");
   }
 
-  return validateRawObservation({
-    schema_version: 1,
-    event_id: optionalString(rawInput.event_id) ?? randomUUID(),
-    session_id: optionalString(rawInput.session_id) ?? `session-${randomUUID()}`,
-    observed_at: optionalString(rawInput.observed_at) ?? new Date().toISOString(),
-    recorded_by: optionalString(rawInput.recorded_by) ?? "unknown",
-    trust,
-    kind: rawInput.kind,
-    text: rawInput.text,
-    source_type: rawInput.source_type,
-    evidence: rawInput.evidence ?? [],
-    scope: rawInput.scope,
-    supersedes: rawInput.supersedes
-  });
+  const cwd = getOptionalString(rawInput, "cwd");
+
+  return {
+    observation: validateRawObservation({
+      schema_version: 1,
+      event_id: optionalString(rawInput.event_id) ?? randomUUID(),
+      session_id: optionalString(rawInput.session_id) ?? `session-${randomUUID()}`,
+      observed_at: optionalString(rawInput.observed_at) ?? new Date().toISOString(),
+      recorded_by: optionalString(rawInput.recorded_by) ?? "unknown",
+      trust,
+      kind: rawInput.kind,
+      text: rawInput.text,
+      source_type: rawInput.source_type,
+      evidence: rawInput.evidence ?? [],
+      scope: rawInput.scope,
+      supersedes: rawInput.supersedes
+    }),
+    ...(cwd !== undefined ? { cwd } : {})
+  };
 }
 
 function getOptionalString(rawInput: unknown, key: string): string | undefined {

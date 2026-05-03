@@ -93,6 +93,7 @@ const EXPECTED_PUBLIC_API = [
   "normalizeBoundStoreAsync",
   "normalizeContextStore",
   "normalizeGitHubRepo",
+  "normalizeRecordObservationToolInput",
   "normalizeStore",
   "normalizeStoreRepo",
   "normalizeTool",
