@@ -26,6 +26,7 @@ export function selectRelevantEpisodes(
       return episode ? [episode] : [];
     })
     .filter((episode) => matchesEpisodeFilters(episode, input))
+    .filter((episode) => matchesEpisodeSelectorIntent(episode, input))
     .sort(compareEpisodes)
     .slice(0, limit)
     .map((episode) => episodeWithSelectionReasons(episode, input));
@@ -83,6 +84,26 @@ function matchesEpisodeFilters(episode: EpisodeReference, input: GetContextInput
   return matchesEpisodeTimeInput(episode, input);
 }
 
+function matchesEpisodeSelectorIntent(episode: EpisodeReference, input: GetContextInput): boolean {
+  if (!shouldPruneLowSignalEpisodeMatches(input)) {
+    return true;
+  }
+
+  return (
+    ((input.symbols ?? []).length > 0 &&
+      matchingExactValues(episode.scope.symbols, input.symbols ?? []).length > 0) ||
+    ((input.tags ?? []).length > 0 &&
+      matchingTextValues(episode.scope.tags, input.tags ?? []).length > 0)
+  );
+}
+
+function shouldPruneLowSignalEpisodeMatches(input: GetContextInput): boolean {
+  return (
+    selectedFiles(input).length > 0 &&
+    ((input.symbols ?? []).length > 0 || (input.tags ?? []).length > 0)
+  );
+}
+
 function matchesEpisodeEvidenceFile(indexedFile: string, inputFile: string): boolean {
   return matchesPath(indexedFile, inputFile) || matchesPath(inputFile, indexedFile);
 }
@@ -134,9 +155,7 @@ function textSelectionReasons(
 }
 
 function symbolSelectionReasons(episodeSymbols: string[], inputSymbols: string[]): string[] {
-  const values = new Set(episodeSymbols);
-
-  return inputSymbols.filter((value) => values.has(value)).map((value) => `symbol match: ${value}`);
+  return matchingExactValues(episodeSymbols, inputSymbols).map((value) => `symbol match: ${value}`);
 }
 
 function sourceTypeSelectionReasons(episode: EpisodeReference, sourceTypes: string[]): string[] {
@@ -188,6 +207,18 @@ function uniqueReasons(reasons: string[]): string[] {
   }
 
   return unique.length > 0 ? unique : ["episode selector match"];
+}
+
+function matchingExactValues(episodeValues: string[], inputValues: string[]): string[] {
+  const values = new Set(episodeValues.map((value) => value.trim()));
+
+  return inputValues.filter((value) => values.has(value.trim()));
+}
+
+function matchingTextValues(episodeValues: string[], inputValues: string[]): string[] {
+  const values = new Set(episodeValues.map((value) => value.trim().toLowerCase()));
+
+  return inputValues.filter((value) => values.has(value.trim().toLowerCase()));
 }
 
 function matchesEpisodeTimeInput(episode: EpisodeReference, input: GetContextInput): boolean {

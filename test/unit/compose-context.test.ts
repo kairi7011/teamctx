@@ -245,8 +245,8 @@ test("composeContextFromStore does not let weak selectors broaden target-file re
   const composed = composeContextFromStore(storeRoot, {
     target_files: ["src/auth/middleware.ts"],
     domains: ["auth"],
-    symbols: ["AuthMiddleware"],
-    tags: ["request-lifecycle"]
+    symbols: ["AuthMiddleware "],
+    tags: [" request-lifecycle "]
   });
 
   assert.deepEqual(
@@ -573,6 +573,42 @@ test("composeContextFromStore returns relevant episode references from the episo
         selection_reasons: ["target file match: src/auth/middleware.ts"]
       }
     ]
+  );
+});
+
+test("composeContextFromStore prunes low-signal relevant episodes when target files include intent", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  writeEpisodeIndex(
+    storeRoot,
+    [
+      observation(),
+      observation({
+        event_id: "event-2",
+        text: "Adjacent auth CLI note that shares a path but not the requested intent.",
+        scope: {
+          paths: ["src/auth/**"],
+          domains: ["auth"],
+          symbols: ["OtherMiddleware"],
+          tags: ["other-flow"]
+        }
+      })
+    ],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"],
+    domains: ["auth"],
+    symbols: ["AuthMiddleware"],
+    tags: ["request-lifecycle"]
+  });
+
+  assert.deepEqual(
+    composed.relevant_episodes.map((episode) => episode.source_event_ids[0]),
+    ["event-1"]
   );
 });
 
