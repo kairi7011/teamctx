@@ -39,7 +39,15 @@ import { formatShowRecord } from "../core/show/record.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
-import { diffContextPayloads } from "../core/context/context-diff.js";
+import {
+  diffContextPayloads,
+  type ContextCategory,
+  type ContextDiff,
+  type DiagnosticCategory,
+  type DisabledSide,
+  type IdSetDiff,
+  type ValueSetDiff
+} from "../core/context/context-diff.js";
 import {
   explainContextQueryFromContextStore,
   explainContextQueryFromStore
@@ -113,7 +121,7 @@ Usage:
   teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file]
-  teamctx context-diff <left-json> <right-json>
+  teamctx context-diff <left-json> <right-json> [--json]
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
@@ -346,7 +354,7 @@ async function contextDiff(args: ParsedArgs): Promise<void> {
   if (!leftPath || !rightPath) {
     throw new CliError(
       CLI_EXIT.USAGE,
-      "Missing input files. Usage: teamctx context-diff <left-json> <right-json>"
+      "Missing input files. Usage: teamctx context-diff <left-json> <right-json> [--json]"
     );
   }
 
@@ -354,8 +362,99 @@ async function contextDiff(args: ParsedArgs): Promise<void> {
   const rightInput = readContextInputFile(rightPath);
   const left = await getContextToolAsync(leftInput);
   const right = await getContextToolAsync(rightInput);
+  const diff = diffContextPayloads(left, right, leftInput, rightInput);
 
-  console.log(JSON.stringify(diffContextPayloads(left, right, leftInput, rightInput), null, 2));
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(diff, null, 2));
+    return;
+  }
+
+  console.log(formatContextDiff(diff));
+}
+
+export function formatContextDiff(diff: ContextDiff): string {
+  if (!diff.enabled) {
+    return [
+      "Context diff unavailable:",
+      disabledSideLine("left", diff.left),
+      disabledSideLine("right", diff.right)
+    ].join("\n");
+  }
+
+  const lines = [
+    "Context diff:",
+    `  left_hash: ${diff.left.context_payload_hash}`,
+    `  right_hash: ${diff.right.context_payload_hash}`,
+    `  left_store_head: ${diff.left.store_head ?? "<none>"}`,
+    `  right_store_head: ${diff.right.store_head ?? "<none>"}`
+  ];
+
+  appendIdSetDiff(lines, "  scoped", diff.scoped);
+  appendIdSetDiff(lines, "  relevant_episodes", diff.relevant_episodes);
+  appendValueSetDiff(lines, "  canonical_doc_refs", diff.canonical_doc_refs);
+  lines.push("  categories:");
+  for (const category of CONTEXT_CATEGORY_ORDER) {
+    appendValueSetDiff(lines, `    ${category}`, diff.categories[category]);
+  }
+  lines.push("  diagnostics:");
+  for (const category of DIAGNOSTIC_CATEGORY_ORDER) {
+    appendValueSetDiff(lines, `    ${category}`, diff.diagnostics[category]);
+  }
+
+  return lines.join("\n");
+}
+
+const CONTEXT_CATEGORY_ORDER: readonly ContextCategory[] = [
+  "global",
+  "must_follow_rules",
+  "recent_decisions",
+  "active_pitfalls",
+  "applicable_workflows",
+  "glossary_terms"
+];
+
+const DIAGNOSTIC_CATEGORY_ORDER: readonly DiagnosticCategory[] = [
+  "contested_items",
+  "stale_items",
+  "dropped_items",
+  "excluded_items",
+  "budget_rejected",
+  "index_warnings"
+];
+
+function disabledSideLine(label: string, side: DisabledSide): string {
+  if (side.enabled) {
+    return `  ${label}: enabled hash=${side.context_payload_hash}`;
+  }
+
+  return `  ${label}: disabled reason=${side.reason ?? "unknown"}`;
+}
+
+function appendValueSetDiff(lines: string[], label: string, diff: ValueSetDiff): void {
+  lines.push(`${label}: +${diff.added_count} -${diff.removed_count} =${diff.unchanged_count}`);
+  appendDiffValues(lines, label, diff);
+}
+
+function appendIdSetDiff(lines: string[], label: string, diff: IdSetDiff): void {
+  lines.push(`${label}: +${diff.added.length} -${diff.removed.length} =${diff.unchanged.length}`);
+  appendDiffValues(lines, label, diff);
+}
+
+function appendDiffValues(lines: string[], label: string, diff: IdSetDiff): void {
+  const valueIndent = `${" ".repeat(label.search(/\S/) + 2)}`;
+
+  for (const value of diff.added) {
+    lines.push(`${valueIndent}+ ${value}`);
+  }
+  for (const value of diff.removed) {
+    lines.push(`${valueIndent}- ${value}`);
+  }
+  for (const value of diff.unchanged.slice(0, 5)) {
+    lines.push(`${valueIndent}= ${value}`);
+  }
+  if (diff.unchanged.length > 5) {
+    lines.push(`${valueIndent}= ... ${diff.unchanged.length - 5} more unchanged`);
+  }
 }
 
 async function queryExplain(args: ParsedArgs): Promise<void> {
