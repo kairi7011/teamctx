@@ -111,7 +111,19 @@ const QUERY_ALIASES: QueryAlias[] = [
   },
   {
     id: "builtin:diagnostics",
-    patterns: ["\u8a3a\u65ad", "diagnostic", "diagnostics"],
+    allPatternGroups: [
+      ["\u8a3a\u65ad", "diagnostic", "diagnostics"],
+      [
+        "budget",
+        "overflow",
+        "rejected",
+        "dropped",
+        "rank",
+        "rank_score",
+        "rank reasons",
+        "budget_rejected"
+      ]
+    ],
     tokenGroups: [["budget_rejected"]]
   },
   {
