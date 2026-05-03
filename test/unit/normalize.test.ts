@@ -321,6 +321,7 @@ test("normalizeStore marks active records stale when all file evidence is missin
   assert.equal(audit[0]?.run_id, result.runId);
   assert.equal(audit[1]?.run_id, result.runId);
   assert.match(result.runId, /^run-[0-9a-f]{16}$/);
+  assert.deepEqual(readEpisodeSourceEventIds(storeRoot), []);
 });
 
 test("normalizeStore marks active records stale when scoped symbols disappear", (context) => {
@@ -506,6 +507,7 @@ test("normalizeStore marks explicitly superseded records", (context) => {
     "superseded by a newer normalized record"
   );
   assert.equal(records.find((record) => record.id !== oldRecord.id)?.state, "active");
+  assert.deepEqual(readEpisodeSourceEventIds(storeRoot), ["event-2"]);
 });
 
 test("normalizeBoundStore resolves the same-repository binding", (context) => {
@@ -869,4 +871,12 @@ function readJsonl(path: string): Array<Record<string, unknown>> {
   }
 
   return content.split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function readEpisodeSourceEventIds(storeRoot: string): string[] {
+  const episodeIndex = JSON.parse(
+    readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")
+  ) as { episodes: Array<{ source_event_ids: string[] }> };
+
+  return episodeIndex.episodes.flatMap((episode) => episode.source_event_ids);
 }

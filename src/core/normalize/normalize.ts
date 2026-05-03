@@ -167,7 +167,7 @@ export function normalizeStore(options: {
 
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
   const episodeIndex = buildEpisodeIndex(
-    safeEpisodeObservations(rawEvents, options.repo),
+    safeActiveEpisodeObservations(rawEvents, options.repo, run.records),
     run.result.normalizedAt
   );
 
@@ -232,7 +232,7 @@ async function normalizeContextStoreWithLease(options: {
 
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
   const episodeIndex = buildEpisodeIndex(
-    safeEpisodeObservations(rawEvents, options.repo),
+    safeActiveEpisodeObservations(rawEvents, options.repo, run.records),
     run.result.normalizedAt
   );
 
@@ -668,6 +668,20 @@ function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawOb
 
     return [rawEvent.observation];
   });
+}
+
+function safeActiveEpisodeObservations(
+  rawEvents: RawEventFile[],
+  repo: string,
+  records: NormalizedRecord[]
+): RawObservation[] {
+  const activeRecordIds = new Set(
+    records.filter((record) => record.state === "active").map((record) => record.id)
+  );
+
+  return safeEpisodeObservations(rawEvents, repo).filter((observation) =>
+    activeRecordIds.has(recordId(observation))
+  );
 }
 
 function appendAuditEntries(storeRoot: string, entries: AuditLogEntry[]): void {
