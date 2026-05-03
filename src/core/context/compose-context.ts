@@ -141,6 +141,15 @@ function composeContextFromRecords(
     input,
     budgets.glossary
   );
+  const includedIn = budgetIncludedIn([
+    { budget: scopedBudget, placement: "scoped" },
+    { budget: globalBudget, placement: "global" },
+    { budget: ruleBudget, placement: "must_follow_rules" },
+    { budget: decisionBudget, placement: "recent_decisions" },
+    { budget: pitfallBudget, placement: "active_pitfalls" },
+    { budget: workflowBudget, placement: "applicable_workflows" },
+    { budget: glossaryBudget, placement: "glossary_terms" }
+  ]);
 
   return {
     normalized_context: {
@@ -165,15 +174,18 @@ function composeContextFromRecords(
         records.filter((record) => record.state === "stale").map((record) => record.id),
       dropped_items: budgetDroppedIds([scopedBudget, globalBudget]),
       excluded_items: diagnostics?.excluded_items ?? excludedItems(records),
-      budget_rejected: budgetRejected([
-        { budget: globalBudget, reason: "budget_overflow:global" },
-        { budget: scopedBudget, reason: "budget_overflow:scoped" },
-        { budget: ruleBudget, reason: "budget_overflow:rule" },
-        { budget: decisionBudget, reason: "budget_overflow:decision" },
-        { budget: pitfallBudget, reason: "budget_overflow:pitfall" },
-        { budget: workflowBudget, reason: "budget_overflow:workflow" },
-        { budget: glossaryBudget, reason: "budget_overflow:glossary" }
-      ]),
+      budget_rejected: budgetRejected(
+        [
+          { budget: globalBudget, reason: "budget_overflow:global" },
+          { budget: scopedBudget, reason: "budget_overflow:scoped" },
+          { budget: ruleBudget, reason: "budget_overflow:rule" },
+          { budget: decisionBudget, reason: "budget_overflow:decision" },
+          { budget: pitfallBudget, reason: "budget_overflow:pitfall" },
+          { budget: workflowBudget, reason: "budget_overflow:workflow" },
+          { budget: glossaryBudget, reason: "budget_overflow:glossary" }
+        ],
+        includedIn
+      ),
       index_warnings: indexWarnings
     }
   };
@@ -395,37 +407,82 @@ function budgetDroppedIds(budgets: Array<{ overflow: RankedRecord[] }>): string[
   ].sort((left, right) => left.localeCompare(right));
 }
 
-function budgetRejected(budgets: Array<{ budget: BudgetedRecords; reason: string }>): Array<{
+function budgetIncludedIn(
+  budgets: Array<{ budget: BudgetedRecords; placement: string }>
+): Map<string, string[]> {
+  const includedIn = new Map<string, string[]>();
+
+  for (const { budget, placement } of budgets) {
+    for (const ranked of budget.selected) {
+      const current = includedIn.get(ranked.record.id) ?? [];
+      current.push(placement);
+      includedIn.set(ranked.record.id, current);
+    }
+  }
+
+  return includedIn;
+}
+
+function budgetRejected(
+  budgets: Array<{ budget: BudgetedRecords; reason: string }>,
+  includedIn: Map<string, string[]>
+): Array<{
   id: string;
   kind: string;
   rank_score: number;
   rank_reasons: string[];
   exclusion_reason: string;
+  overflow_reasons: string[];
+  included_in: string[];
+  fully_excluded: boolean;
 }> {
-  const seen = new Set<string>();
+  const rejectedById = new Map<
+    string,
+    {
+      ranked: RankedRecord;
+      overflow_reasons: string[];
+    }
+  >();
+
+  for (const { budget, reason } of budgets) {
+    for (const ranked of budget.overflow) {
+      const existing = rejectedById.get(ranked.record.id);
+
+      if (existing) {
+        existing.overflow_reasons.push(reason);
+      } else {
+        rejectedById.set(ranked.record.id, {
+          ranked,
+          overflow_reasons: [reason]
+        });
+      }
+    }
+  }
+
   const rejected: Array<{
     id: string;
     kind: string;
     rank_score: number;
     rank_reasons: string[];
     exclusion_reason: string;
+    overflow_reasons: string[];
+    included_in: string[];
+    fully_excluded: boolean;
   }> = [];
 
-  for (const { budget, reason } of budgets) {
-    for (const ranked of budget.overflow) {
-      if (seen.has(ranked.record.id)) {
-        continue;
-      }
+  for (const { ranked, overflow_reasons } of rejectedById.values()) {
+    const included_in = includedIn.get(ranked.record.id) ?? [];
 
-      seen.add(ranked.record.id);
-      rejected.push({
-        id: ranked.record.id,
-        kind: ranked.record.kind,
-        rank_score: ranked.score,
-        rank_reasons: ranked.reasons,
-        exclusion_reason: reason
-      });
-    }
+    rejected.push({
+      id: ranked.record.id,
+      kind: ranked.record.kind,
+      rank_score: ranked.score,
+      rank_reasons: ranked.reasons,
+      exclusion_reason: overflow_reasons[0] ?? "budget_overflow",
+      overflow_reasons,
+      included_in,
+      fully_excluded: included_in.length === 0
+    });
   }
 
   return rejected.sort(

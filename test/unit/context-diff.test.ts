@@ -111,7 +111,10 @@ function payload(input: {
         kind: "workflow",
         rank_score: 1,
         rank_reasons: ["test"],
-        exclusion_reason: "budget_overflow:workflow"
+        exclusion_reason: "budget_overflow:workflow",
+        overflow_reasons: ["budget_overflow:workflow"],
+        included_in: [],
+        fully_excluded: true
       })),
       index_warnings: []
     }

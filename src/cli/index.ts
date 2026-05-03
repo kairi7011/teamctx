@@ -188,7 +188,7 @@ Usage:
   teamctx init-store [--json]
   teamctx normalize [--dry-run] [--lease] [--json]
   teamctx compact [--dry-run] [--json]
-  teamctx context [json-file] [--call-reason <reason>] [--previous-context-payload-hash <hash>] [--force-refresh]
+  teamctx context [json-file] [--target-files <files>] [--changed-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>] [--call-reason <reason>] [--previous-context-payload-hash <hash>] [--force-refresh]
   teamctx context-diff <left-json> <right-json> [--json]
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]

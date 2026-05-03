@@ -148,6 +148,12 @@ test("contextInput merges aliases and lets CLI flags override json input", (cont
       parseArgs([
         "context",
         inputPath,
+        "--target-files",
+        "src/cli/index.ts",
+        "--target-files",
+        "README.md",
+        "--changed-files",
+        "src/cli/cli-args.ts",
         "--domain",
         "cli",
         "--domains",
@@ -160,8 +166,20 @@ test("contextInput merges aliases and lets CLI flags override json input", (cont
         "cli",
         "--tags",
         "preview",
+        "--source-types",
+        "inferred_from_code,inferred_from_docs",
+        "--evidence-files",
+        "src/cli/index.ts",
         "--query",
         "from flags",
+        "--since",
+        "2026-04-22T00:00:00.000Z",
+        "--until",
+        "2026-04-23T00:00:00.000Z",
+        "--branch",
+        "main",
+        "--head-commit",
+        "abc123",
         "--call-reason",
         "session_start",
         "--previous-context-payload-hash",
@@ -170,10 +188,18 @@ test("contextInput merges aliases and lets CLI flags override json input", (cont
       ])
     ),
     {
+      target_files: ["src/cli/index.ts", "README.md"],
+      changed_files: ["src/cli/cli-args.ts"],
       domains: ["cli", "mcp", "context-preview"],
       symbols: ["parseArgs", "contextInput"],
       tags: ["cli", "preview"],
+      source_types: ["inferred_from_code", "inferred_from_docs"],
+      evidence_files: ["src/cli/index.ts"],
       query: "from flags",
+      since: "2026-04-22T00:00:00.000Z",
+      until: "2026-04-23T00:00:00.000Z",
+      branch: "main",
+      head_commit: "abc123",
       call_reason: "session_start",
       previous_context_payload_hash: "abc123",
       force_refresh: true
@@ -189,6 +215,7 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /teamctx setup <store> \[--path <path>\] \[--json\]/);
   assert.match(help, /teamctx normalize \[--dry-run\] \[--lease\] \[--json\]/);
   assert.match(help, /teamctx compact \[--dry-run\] \[--json\]/);
+  assert.match(help, /teamctx context \[json-file\] \[--target-files <files>\]/);
   assert.match(help, /teamctx context-diff <left-json> <right-json>/);
   assert.match(help, /teamctx query-explain \[json-file\]/);
   assert.match(help, /teamctx record-verified <json-file> \[--json\]/);

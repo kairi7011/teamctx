@@ -158,7 +158,10 @@ export function fixtureEnabledContextPayload(
           kind: "workflow",
           rank_score: 12,
           rank_reasons: ["domain match: auth", "workflow context"],
-          exclusion_reason: "budget_overflow:workflow"
+          exclusion_reason: "budget_overflow:workflow",
+          overflow_reasons: ["budget_overflow:workflow"],
+          included_in: [],
+          fully_excluded: true
         }
       ],
       index_warnings: []

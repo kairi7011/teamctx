@@ -750,6 +750,18 @@ test("composeContextFromStore ranks categories and reports budget overflow", (co
     "budget:pitfall-19",
     "budget:pitfall-20"
   ]);
+  const fullyExcludedOverflow = composed.diagnostics.budget_rejected.find(
+    (entry) => entry.id === "pitfall-20"
+  );
+  assert.ok(fullyExcludedOverflow, "pitfall-20 should be diagnosed as budget overflow");
+  assert.equal(fullyExcludedOverflow.kind, "pitfall");
+  assert.equal(fullyExcludedOverflow.exclusion_reason, "budget_overflow:scoped");
+  assert.deepEqual(fullyExcludedOverflow.overflow_reasons, [
+    "budget_overflow:scoped",
+    "budget_overflow:pitfall"
+  ]);
+  assert.deepEqual(fullyExcludedOverflow.included_in, []);
+  assert.equal(fullyExcludedOverflow.fully_excluded, true);
 });
 
 test("composeContextFromStore honors project.yaml context_budgets overrides", (context) => {
@@ -828,6 +840,9 @@ test("composeContextFromStore reports budget_rejected with rank scores for overf
       entry.exclusion_reason.startsWith("budget_overflow:"),
       "exclusion_reason must start with budget_overflow:"
     );
+    assert.ok(Array.isArray(entry.overflow_reasons), "rejected entry must have overflow_reasons");
+    assert.ok(Array.isArray(entry.included_in), "rejected entry must have included_in");
+    assert.equal(typeof entry.fully_excluded, "boolean", "rejected entry must have fully_excluded");
   }
 
   const rejectedIds = rejected.map((entry) => entry.id);
@@ -836,6 +851,10 @@ test("composeContextFromStore reports budget_rejected with rank scores for overf
     rejectedIds.includes("pitfall-10") || rejectedIds.includes("pitfall-11"),
     "overflow pitfalls should appear in budget_rejected"
   );
+  const categoryOverflowOnly = rejected.find((entry) => entry.id === "pitfall-10");
+  assert.deepEqual(categoryOverflowOnly?.overflow_reasons, ["budget_overflow:pitfall"]);
+  assert.deepEqual(categoryOverflowOnly?.included_in, ["scoped"]);
+  assert.equal(categoryOverflowOnly?.fully_excluded, false);
 
   for (let index = 0; index < rejected.length - 1; index += 1) {
     const current = rejected[index];
@@ -875,6 +894,11 @@ test("composeContextFromStore reports global budget overflow diagnostics", (cont
       .filter((entry) => entry.exclusion_reason === "budget_overflow:global")
       .map((entry) => entry.id),
     ["fact-global-20", "fact-global-21"]
+  );
+  assert.equal(
+    composed.diagnostics.budget_rejected.find((entry) => entry.id === "fact-global-20")
+      ?.fully_excluded,
+    true
   );
 
   const trace = rankContextFromStore(storeRoot, {});

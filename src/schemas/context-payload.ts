@@ -104,6 +104,9 @@ export type EnabledContextPayload = {
       rank_score: number;
       rank_reasons: string[];
       exclusion_reason: string;
+      overflow_reasons: string[];
+      included_in: string[];
+      fully_excluded: boolean;
     }>;
     index_warnings: string[];
   };
