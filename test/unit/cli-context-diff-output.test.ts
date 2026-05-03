@@ -107,7 +107,8 @@ function payload(input: {
       excluded_items: [],
       budget_rejected: [],
       query_warnings: [],
-      index_warnings: []
+      index_warnings: [],
+      baseline_context: base.diagnostics.baseline_context
     }
   };
 }

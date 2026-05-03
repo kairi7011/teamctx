@@ -144,6 +144,25 @@ test("explainContextQueryFromStore reports broad query warnings", (context) => {
   assert.equal(explain.read_plan.reason, "no lookup selectors were provided");
 });
 
+test("explainContextQueryFromStore reports baseline context mode", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  const baselineExplain = explainContextQueryFromStore(storeRoot, {
+    call_reason: "session_start"
+  });
+  assert.equal(baselineExplain.baseline_context.mode, "session_baseline");
+  assert.equal(baselineExplain.baseline_context.eligible, true);
+
+  const scopedExplain = explainContextQueryFromStore(storeRoot, {
+    call_reason: "task_start",
+    target_files: ["src/cli/index.ts"]
+  });
+  assert.equal(scopedExplain.baseline_context.mode, "task_scoped");
+  assert.equal(scopedExplain.baseline_context.eligible, false);
+});
+
 function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedAt: string): void {
   const indexes = buildRecordIndexes(records, generatedAt);
   const directory = join(storeRoot, "indexes");

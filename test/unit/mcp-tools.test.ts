@@ -122,6 +122,7 @@ test("getContextTool skips reinjecting unchanged non-explicit context", () => {
   assert.equal(secondContext.delivery_policy.unchanged_from_previous, true);
   assert.equal(secondContext.delivery_policy.should_inject, false);
   assert.deepEqual(secondContext.normalized_context.scoped, []);
+  assert.equal(secondContext.diagnostics.baseline_context.mode, "task_scoped");
 });
 
 test("getContextTool returns full context for session start and explicit refresh", () => {
@@ -151,6 +152,10 @@ test("getContextTool returns full context for session start and explicit refresh
     assert.equal(refreshedContext.delivery_policy.call_reason, callReason);
     assert.equal(refreshedContext.delivery_policy.unchanged_from_previous, true);
     assert.equal(refreshedContext.delivery_policy.should_inject, true);
+    assert.equal(
+      refreshedContext.diagnostics.baseline_context.mode,
+      callReason === "session_start" ? "task_scoped_with_baseline" : "task_scoped"
+    );
   }
 });
 
@@ -293,6 +298,10 @@ test("getContextToolAsync returns non-empty full context for explicit refreshes"
 
     assert.equal(refreshedContext.context_unchanged, false);
     assert.equal(refreshedContext.delivery_policy.should_inject, true);
+    assert.equal(
+      refreshedContext.diagnostics.baseline_context.mode,
+      input.call_reason === "session_start" ? "task_scoped_with_baseline" : "task_scoped"
+    );
     assert.equal(
       refreshedContext.identity.context_payload_hash,
       firstContext.identity.context_payload_hash

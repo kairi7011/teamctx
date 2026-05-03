@@ -51,6 +51,7 @@ import type {
 } from "../../schemas/context-payload.js";
 import type { QueryAlias } from "../indexes/query-tokens.js";
 import { queryWarnings } from "../indexes/query-tokens.js";
+import { explainBaselineContext } from "./baseline-context.js";
 
 export type ComposedContext = Pick<
   EnabledContextPayload,
@@ -209,7 +210,8 @@ function composeContextFromRecords(
         includedIn
       ),
       query_warnings: queryWarnings(input.query, queryAliases),
-      index_warnings: indexWarnings
+      index_warnings: indexWarnings,
+      baseline_context: explainBaselineContext(input)
     }
   };
 }
@@ -374,7 +376,8 @@ export function emptyComposedContext(): ComposedContext {
       excluded_items: [],
       budget_rejected: [],
       query_warnings: [],
-      index_warnings: []
+      index_warnings: [],
+      baseline_context: explainBaselineContext()
     }
   };
 }

@@ -165,7 +165,15 @@ export function fixtureEnabledContextPayload(
         }
       ],
       query_warnings: [],
-      index_warnings: []
+      index_warnings: [],
+      baseline_context: {
+        mode: "not_session_start",
+        eligible: false,
+        selector_count: 0,
+        budget_tokens: 800,
+        included_sections: [],
+        reasons: ["baseline applies only to session_start calls"]
+      }
     },
     write_policy: {
       record_observation_candidate: "allowed",

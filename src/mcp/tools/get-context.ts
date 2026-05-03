@@ -180,11 +180,13 @@ function enabledPayload(
 ): EnabledContextPayload {
   const contextPayloadHash = hashPayload({
     identity: identityWithoutHash,
-    ...body
+    ...hashablePayloadBody(body)
   });
   const policy = deliveryPolicy(input, contextPayloadHash);
 
   if (!policy.should_inject) {
+    const emptyContext = emptyComposedContext();
+
     return {
       enabled: true,
       context_unchanged: true,
@@ -193,7 +195,11 @@ function enabledPayload(
         context_payload_hash: contextPayloadHash
       },
       delivery_policy: policy,
-      ...emptyComposedContext(),
+      ...emptyContext,
+      diagnostics: {
+        ...emptyContext.diagnostics,
+        baseline_context: body.diagnostics.baseline_context
+      },
       write_policy: { ...WRITE_POLICY }
     };
   }
@@ -207,6 +213,15 @@ function enabledPayload(
     },
     delivery_policy: policy,
     ...body
+  };
+}
+
+function hashablePayloadBody(body: ContextPayloadBody): Record<string, unknown> {
+  const { baseline_context: _baselineContext, ...hashableDiagnostics } = body.diagnostics;
+
+  return {
+    ...body,
+    diagnostics: hashableDiagnostics
   };
 }
 

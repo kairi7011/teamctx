@@ -134,7 +134,8 @@ function payload(input: {
         fully_excluded: true
       })),
       query_warnings: [],
-      index_warnings: []
+      index_warnings: [],
+      baseline_context: base.diagnostics.baseline_context
     }
   };
 }

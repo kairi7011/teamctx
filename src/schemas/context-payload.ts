@@ -42,6 +42,21 @@ export type GetContextInput = {
   force_refresh?: boolean;
 };
 
+export type BaselineContextMode =
+  | "session_baseline"
+  | "task_scoped_with_baseline"
+  | "task_scoped"
+  | "not_session_start";
+
+export type BaselineContextDiagnostics = {
+  mode: BaselineContextMode;
+  eligible: boolean;
+  selector_count: number;
+  budget_tokens: number;
+  included_sections: string[];
+  reasons: string[];
+};
+
 export type DisabledContextPayload = {
   enabled: false;
   reason: string;
@@ -110,6 +125,7 @@ export type EnabledContextPayload = {
     }>;
     query_warnings: string[];
     index_warnings: string[];
+    baseline_context: BaselineContextDiagnostics;
   };
   write_policy: {
     record_observation_candidate: "allowed";

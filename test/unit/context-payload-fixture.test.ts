@@ -44,6 +44,8 @@ test("fixtureEnabledContextPayload populates every section", () => {
   assert.ok(payload.diagnostics.budget_rejected.length > 0);
   assert.deepEqual(payload.diagnostics.query_warnings, []);
   assert.deepEqual(payload.diagnostics.index_warnings, []);
+  assert.equal(payload.diagnostics.baseline_context.mode, "not_session_start");
+  assert.equal(payload.diagnostics.baseline_context.eligible, false);
 
   assert.equal(payload.write_policy.record_observation_candidate, "allowed");
   assert.equal(payload.write_policy.record_observation_verified, "allowed_with_evidence");

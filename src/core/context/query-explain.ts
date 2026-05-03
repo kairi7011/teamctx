@@ -1,5 +1,5 @@
 import type { ContextStoreAdapter } from "../../adapters/store/context-store.js";
-import type { GetContextInput } from "../../schemas/context-payload.js";
+import type { BaselineContextDiagnostics, GetContextInput } from "../../schemas/context-payload.js";
 import type { KnowledgeKind } from "../../schemas/normalized-record.js";
 import { NORMALIZED_FILE_BY_KIND } from "../normalize/normalize.js";
 import { NORMALIZED_RECORD_FILES } from "../store/layout.js";
@@ -14,6 +14,7 @@ import {
   resolveContextInputSelectors,
   type InferredContextSelectors
 } from "./selector-inference.js";
+import { explainBaselineContext } from "./baseline-context.js";
 import {
   readLastNormalizeAt,
   readLastNormalizeAtFromContextStore,
@@ -31,6 +32,7 @@ export type ContextQueryExplain = {
     token_groups: string[][];
     warnings: string[];
   };
+  baseline_context: BaselineContextDiagnostics;
   indexes: {
     path_index: IndexUse;
     symbol_index: IndexUse;
@@ -112,6 +114,7 @@ function explainContextQuery(
       token_groups: queryExpansion.tokenGroups,
       warnings: queryWarnings(resolved.input.query, queryAliases)
     },
+    baseline_context: explainBaselineContext(resolved.input),
     indexes: {
       path_index: indexUse(indexes.pathIndex?.generated_at, indexed),
       symbol_index: indexUse(
