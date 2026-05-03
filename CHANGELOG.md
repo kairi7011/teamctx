@@ -6,6 +6,9 @@ This project uses small release notes grouped by version. Dates use ISO format.
 
 ## Unreleased
 
+- Fix CLI selector parsing so repeated CSV-style flags such as `--target-files`,
+  `--domains`, `--symbols`, and `--tags` accumulate instead of silently keeping
+  only the last value.
 - Add `get_context` call policy metadata so clients call at session start,
   refresh only on explicit or material changes, and suppress unchanged payload
   reinjection with `previous_context_payload_hash`.

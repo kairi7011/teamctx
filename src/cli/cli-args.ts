@@ -1,7 +1,9 @@
 import { CliError, CLI_EXIT } from "./cli-error.js";
 
+export type CliFlagValue = string | boolean | string[];
+
 export function parseLimitFlag(
-  value: string | boolean | undefined,
+  value: CliFlagValue | undefined,
   flagName = "--limit"
 ): number | undefined {
   if (value === undefined) {
@@ -22,7 +24,7 @@ export function parseLimitFlag(
 }
 
 export function parseOffsetFlag(
-  value: string | boolean | undefined,
+  value: CliFlagValue | undefined,
   flagName = "--offset"
 ): number | undefined {
   if (value === undefined) {
@@ -42,15 +44,19 @@ export function parseOffsetFlag(
   return parsed;
 }
 
-export function parseCsvFlag(value: string | boolean | undefined): string[] | undefined {
-  if (typeof value !== "string") {
+export function parseCsvFlag(value: CliFlagValue | undefined): string[] | undefined {
+  const rawValues = typeof value === "string" ? [value] : Array.isArray(value) ? value : undefined;
+
+  if (rawValues === undefined) {
     return undefined;
   }
 
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+  return rawValues.flatMap((rawValue) =>
+    rawValue
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  );
 }
 
 export function assignDefined<T extends object, K extends keyof T>(

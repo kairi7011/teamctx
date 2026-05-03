@@ -33,6 +33,57 @@ test("parseArgs separates positional values and flags", () => {
   );
 });
 
+test("parseArgs accumulates repeatable selector flags", () => {
+  assert.deepEqual(
+    parseArgs([
+      "context",
+      "--target-files",
+      "src/index.ts",
+      "--target-files",
+      "README.md",
+      "--domains",
+      "cli",
+      "--domains",
+      "mcp",
+      "--symbols",
+      "main",
+      "--symbols",
+      "getContextToolAsync",
+      "--tags",
+      "preview-cli",
+      "--tags",
+      "call-policy",
+      "--query",
+      "context preview"
+    ]),
+    {
+      command: "context",
+      positional: [],
+      flags: {
+        "target-files": ["src/index.ts", "README.md"],
+        domains: ["cli", "mcp"],
+        symbols: ["main", "getContextToolAsync"],
+        tags: ["preview-cli", "call-policy"],
+        query: "context preview"
+      }
+    }
+  );
+});
+
+test("parseArgs only treats path as repeatable for list selectors", () => {
+  assert.deepEqual(parseArgs(["setup", ".", "--path", "first", "--path", "second"]), {
+    command: "setup",
+    positional: ["."],
+    flags: { path: "second" }
+  });
+
+  assert.deepEqual(parseArgs(["list", "--path", "src/index.ts", "--path", "README.md"]), {
+    command: "list",
+    positional: [],
+    flags: { path: ["src/index.ts", "README.md"] }
+  });
+});
+
 test("parseArgs treats command-level help flags as boolean help requests", () => {
   assert.deepEqual(parseArgs(["normalize", "--help"]), {
     command: "normalize",

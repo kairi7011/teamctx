@@ -8,7 +8,13 @@ import {
   GitHubClient,
   parseGitHubRepository
 } from "../adapters/github/github-client.js";
-import { assignDefined, parseCsvFlag, parseLimitFlag, parseOffsetFlag } from "./cli-args.js";
+import {
+  assignDefined,
+  type CliFlagValue,
+  parseCsvFlag,
+  parseLimitFlag,
+  parseOffsetFlag
+} from "./cli-args.js";
 import { CliError, CLI_EXIT, mapErrorToExitCode } from "./cli-error.js";
 import {
   getCurrentBranch,
@@ -70,15 +76,39 @@ import type { Binding, ToolDefinition } from "../schemas/types.js";
 export type ParsedArgs = {
   command: string;
   positional: string[];
-  flags: Record<string, string | boolean>;
+  flags: Record<string, CliFlagValue>;
 };
 
 const BOOLEAN_FLAGS = new Set(["dry-run", "force-refresh", "help", "json", "lease"]);
+const REPEATABLE_VALUE_FLAGS = new Set([
+  "action",
+  "actions",
+  "changed-files",
+  "domain",
+  "domains",
+  "evidence-files",
+  "item",
+  "items",
+  "kind",
+  "kinds",
+  "paths",
+  "source-event",
+  "source-events",
+  "source-types",
+  "state",
+  "states",
+  "symbol",
+  "symbols",
+  "tag",
+  "tags",
+  "target-files"
+]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command = "help", ...rest] = argv;
   const positional: string[] = [];
-  const flags: Record<string, string | boolean> = {};
+  const flags: Record<string, CliFlagValue> = {};
+  const repeatableValueFlags = repeatableValueFlagsForCommand(command);
 
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
@@ -92,12 +122,12 @@ export function parseArgs(argv: string[]): ParsedArgs {
       const next = rest[index + 1];
 
       if (BOOLEAN_FLAGS.has(key)) {
-        flags[key] = true;
+        assignFlag(flags, repeatableValueFlags, key, true);
       } else if (next && !isFlagToken(next)) {
-        flags[key] = next;
+        assignFlag(flags, repeatableValueFlags, key, next);
         index += 1;
       } else {
-        flags[key] = true;
+        assignFlag(flags, repeatableValueFlags, key, true);
       }
     } else if (value) {
       positional.push(value);
@@ -105,6 +135,40 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return { command, positional, flags };
+}
+
+function repeatableValueFlagsForCommand(command: string): Set<string> {
+  if (command === "list") {
+    return new Set([...REPEATABLE_VALUE_FLAGS, "path"]);
+  }
+
+  return REPEATABLE_VALUE_FLAGS;
+}
+
+function assignFlag(
+  flags: Record<string, CliFlagValue>,
+  repeatableValueFlags: Set<string>,
+  key: string,
+  value: CliFlagValue
+): void {
+  if (!repeatableValueFlags.has(key) || typeof value !== "string") {
+    flags[key] = value;
+    return;
+  }
+
+  const current = flags[key];
+
+  if (typeof current === "string") {
+    flags[key] = [current, value];
+    return;
+  }
+
+  if (Array.isArray(current)) {
+    current.push(value);
+    return;
+  }
+
+  flags[key] = value;
 }
 
 function isFlagToken(value: string): boolean {
@@ -592,7 +656,7 @@ function readContextInputFile(path: string): GetContextInput {
 function assignCsv<T extends keyof GetContextInput>(
   input: GetContextInput,
   key: T,
-  value: string | boolean | undefined
+  value: CliFlagValue | undefined
 ): void {
   const values = parseCsvFlag(value);
 
@@ -604,7 +668,7 @@ function assignCsv<T extends keyof GetContextInput>(
 function assignString<T extends keyof GetContextInput>(
   input: GetContextInput,
   key: T,
-  value: string | boolean | undefined
+  value: CliFlagValue | undefined
 ): void {
   if (typeof value === "string") {
     Object.assign(input, { [key]: value });
