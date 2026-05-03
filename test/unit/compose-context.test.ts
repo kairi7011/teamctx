@@ -454,14 +454,18 @@ test("composeContextFromStore returns relevant episode references from the episo
       source_event_ids: episode.source_event_ids,
       summary: episode.summary,
       trust: episode.trust,
-      source_type: episode.source_type
+      source_type: episode.source_type,
+      reason: episode.reason,
+      selection_reasons: episode.selection_reasons
     })),
     [
       {
         source_event_ids: ["event-1"],
         summary: "Auth middleware must run before tenant resolution.",
         trust: "verified",
-        source_type: "inferred_from_code"
+        source_type: "inferred_from_code",
+        reason: "target file match: src/auth/middleware.ts",
+        selection_reasons: ["target file match: src/auth/middleware.ts"]
       }
     ]
   );
@@ -503,6 +507,11 @@ test("composeContextFromStore filters relevant episodes by source evidence and t
     composed.relevant_episodes.map((episode) => episode.source_event_ids[0]),
     ["event-1"]
   );
+  assert.deepEqual(composed.relevant_episodes[0]?.selection_reasons, [
+    "source_type match: inferred_from_code",
+    "evidence file match: src/auth/middleware.ts",
+    "time window match: since 2026-04-22T00:00:00.000Z"
+  ]);
 });
 
 test("composeContextFromStore ranks categories and reports budget overflow", (context) => {

@@ -98,6 +98,7 @@ test("fixtureEpisodeReference exposes summary, scope, and source ids", () => {
   assert.ok(episode.source_event_ids.length > 0);
   assert.equal(episode.scope.domains?.[0], "auth");
   assert.equal(episode.evidence[0]?.kind, "code");
+  assert.deepEqual(episode.selection_reasons, ["target file match: src/auth/middleware.ts"]);
 });
 
 test("fixtureGetContextInput defaults to scoped auth selectors", () => {

@@ -13,4 +13,6 @@ export type EpisodeReference = {
   summary: string;
   trust: RawObservationTrust;
   source_type: ObservationSourceType;
+  reason?: string;
+  selection_reasons?: string[];
 };

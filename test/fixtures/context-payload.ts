@@ -57,6 +57,8 @@ export function fixtureEpisodeReference(
     summary: "Auth middleware ordering rollout.",
     trust: "verified",
     source_type: "inferred_from_code",
+    reason: "target file match: src/auth/middleware.ts",
+    selection_reasons: ["target file match: src/auth/middleware.ts"],
     ...overrides
   };
 }
