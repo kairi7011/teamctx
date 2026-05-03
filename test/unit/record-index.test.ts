@@ -60,6 +60,46 @@ test("selectIndexedRecordIds retrieves records by file domain symbol tag and tex
   );
 });
 
+test("selectIndexedRecordIds expands deterministic aliases for vague queries", () => {
+  const contextPreview = record("workflow-context-preview", {
+    paths: ["src/cli/index.ts"],
+    domains: ["context-preview"],
+    symbols: ["contextInput"],
+    tags: ["preview-cli", "get-context"]
+  });
+  const budgetConfig = record("fact-context-budgets", {
+    paths: ["src/core/context/compose-context.ts"],
+    domains: ["context-composition", "budgeting"],
+    symbols: ["ContextBudgets"],
+    tags: ["context_budgets"]
+  });
+  const budgetDiagnostics = record("fact-budget-rejected", {
+    paths: ["src/core/context/compose-context.ts"],
+    domains: ["context-composition", "diagnostics"],
+    symbols: ["budget_rejected"],
+    tags: ["budget_rejected"]
+  });
+  const unrelated = record("workflow-audit", {
+    paths: ["src/core/audit/summary.ts"],
+    domains: ["audit"],
+    symbols: ["audit"],
+    tags: ["audit-cli"]
+  });
+  const indexes = buildRecordIndexes(
+    [contextPreview, budgetConfig, budgetDiagnostics, unrelated],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  assert.deepEqual(
+    [...selectIndexedRecordIds(indexes, { query: "コンテキストプレビューのいつものやつ" })],
+    ["workflow-context-preview"]
+  );
+  assert.deepEqual(
+    [...selectIndexedRecordIds(indexes, { query: "予算周りの診断が変" })],
+    ["fact-budget-rejected", "fact-context-budgets"]
+  );
+});
+
 test("selectIndexedRecordIds treats domains and tags as weak selectors when strong selectors exist", () => {
   const indexes = buildRecordIndexes(
     [
@@ -111,6 +151,7 @@ test("selectIndexedRecordIds treats domains and tags as weak selectors when stro
 
 test("hasTextLookupSelector uses normalized query tokens", () => {
   assert.equal(hasTextLookupSelector("cache tokens"), true);
+  assert.equal(hasTextLookupSelector("予算周りの診断"), true);
   assert.equal(hasTextLookupSelector("the and of"), false);
   assert.equal(hasTextLookupSelector(" , "), false);
   assert.equal(hasTextLookupSelector(undefined), false);

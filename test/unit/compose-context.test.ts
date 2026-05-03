@@ -358,6 +358,52 @@ test("composeContextFromStore retrieves by deterministic full-text query and tim
   );
 });
 
+test("composeContextFromStore retrieves by deterministic vague-query aliases", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const contextPreview = record("workflow-context-preview", "workflow", "active", {
+    paths: ["src/cli/index.ts"],
+    domains: ["context-preview"],
+    symbols: ["contextInput"],
+    tags: ["preview-cli", "get-context"]
+  });
+  const budgetConfig = record("fact-context-budgets", "fact", "active", {
+    paths: ["src/core/context/compose-context.ts"],
+    domains: ["context-composition", "budgeting"],
+    symbols: ["ContextBudgets"],
+    tags: ["context_budgets"]
+  });
+  const budgetDiagnostics = record("fact-budget-rejected", "fact", "active", {
+    paths: ["src/core/context/compose-context.ts"],
+    domains: ["context-composition", "diagnostics"],
+    symbols: ["budget_rejected"],
+    tags: ["budget_rejected"]
+  });
+
+  writeRecord(storeRoot, "workflows.jsonl", contextPreview);
+  writeRecord(storeRoot, "facts.jsonl", budgetConfig);
+  writeRecord(storeRoot, "facts.jsonl", budgetDiagnostics);
+  writeIndexes(
+    storeRoot,
+    [contextPreview, budgetConfig, budgetDiagnostics],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  assert.deepEqual(
+    composeContextFromStore(storeRoot, {
+      query: "コンテキストプレビューのいつものやつ"
+    }).normalized_context.scoped.map((entry) => entry.id),
+    ["workflow-context-preview"]
+  );
+  assert.deepEqual(
+    composeContextFromStore(storeRoot, {
+      query: "予算周りの診断が変"
+    }).normalized_context.scoped.map((entry) => entry.id),
+    ["fact-budget-rejected", "fact-context-budgets"]
+  );
+});
+
 test("composeContextFromContextStore uses indexes to avoid unrelated remote shards", async () => {
   const store = new MemoryContextStore();
   const matchingPitfall = record("pitfall-auth", "pitfall", "active");

@@ -1,6 +1,7 @@
 import type { GetContextInput } from "../../schemas/context-payload.js";
 import type { KnowledgeKind, NormalizedRecord } from "../../schemas/normalized-record.js";
 import { matchesPath } from "../indexes/record-index.js";
+import { queryTokenGroups, textTokens } from "../indexes/query-tokens.js";
 
 export type ContextBudgets = {
   scopedItems: number;
@@ -243,9 +244,9 @@ function exactKey(value: string): string {
 }
 
 function matchingQueryTokens(record: NormalizedRecord, query: string | undefined): string[] {
-  const tokens = textTokens(query ?? "");
+  const tokenGroups = queryTokenGroups(query);
 
-  if (tokens.length === 0) {
+  if (tokenGroups.length === 0) {
     return [];
   }
 
@@ -261,7 +262,7 @@ function matchingQueryTokens(record: NormalizedRecord, query: string | undefined
     )
   );
 
-  return tokens.every((token) => recordTokens.has(token)) ? tokens : [];
+  return tokenGroups.find((tokens) => tokens.every((token) => recordTokens.has(token))) ?? [];
 }
 
 function formatMatchReason(label: string, matches: string[]): string {
@@ -270,42 +271,6 @@ function formatMatchReason(label: string, matches: string[]): string {
 
   return `${label}: ${visibleMatches.join(", ")}${suffix}`;
 }
-
-function textTokens(value: string): string[] {
-  return [
-    ...new Set(
-      value
-        .toLowerCase()
-        .split(/[^a-z0-9_]+/g)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
-        .filter((token) => !TEXT_STOP_WORDS.has(token))
-    )
-  ].sort((left, right) => left.localeCompare(right));
-}
-
-const TEXT_STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "as",
-  "at",
-  "be",
-  "by",
-  "for",
-  "from",
-  "in",
-  "is",
-  "it",
-  "of",
-  "on",
-  "or",
-  "that",
-  "the",
-  "to",
-  "with"
-]);
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort(

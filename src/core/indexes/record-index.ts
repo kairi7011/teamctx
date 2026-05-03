@@ -2,6 +2,7 @@ import { relative } from "node:path";
 import type { GetContextInput } from "../../schemas/context-payload.js";
 import type { NormalizedRecord } from "../../schemas/normalized-record.js";
 import { isRecord, isStringArray } from "../../schemas/validation.js";
+import { queryTokenGroups, textTokens } from "./query-tokens.js";
 
 export type PathIndex = {
   schema_version: 1;
@@ -178,7 +179,7 @@ export function hasStrongLookupSelectors(input: GetContextInput): boolean {
 }
 
 export function hasTextLookupSelector(query: string | undefined): boolean {
-  return queryTokens(query).length > 0;
+  return queryTokenGroups(query).length > 0;
 }
 
 export function selectIndexedRecordIds(
@@ -407,37 +408,43 @@ function globToRegex(pattern: string): string {
 }
 
 function selectTextRecordIds(index: TextIndex | undefined, query: string | undefined): string[] {
-  const tokens = queryTokens(query);
+  const tokenGroups = queryTokenGroups(query);
 
-  if (!index || tokens.length === 0) {
+  if (!index || tokenGroups.length === 0) {
     return [];
   }
 
-  const [firstToken, ...remainingTokens] = tokens;
-  const firstIds = firstToken ? (index.tokens[firstToken] ?? []) : [];
-  let selected = new Set(firstIds);
+  const selected = new Set<string>();
 
-  for (const token of remainingTokens) {
-    selected = intersection(selected, new Set(index.tokens[token] ?? []));
+  for (const tokens of tokenGroups) {
+    const [firstToken, ...remainingTokens] = tokens;
+    const firstIds = firstToken ? (index.tokens[firstToken] ?? []) : [];
+    let groupSelected = new Set(firstIds);
+
+    for (const token of remainingTokens) {
+      groupSelected = intersection(groupSelected, new Set(index.tokens[token] ?? []));
+    }
+
+    addAll(selected, [...groupSelected]);
   }
 
   return uniqueSorted([...selected]);
 }
 
 function matchesQuery(record: NormalizedRecord, query: string | undefined): boolean {
-  const tokens = queryTokens(query);
+  const tokenGroups = queryTokenGroups(query);
 
-  if (tokens.length === 0) {
+  if (tokenGroups.length === 0) {
     return false;
   }
 
   const recordTokens = new Set(recordTextTokens(record));
 
-  return tokens.every((token) => recordTokens.has(token));
+  return tokenGroups.some((tokens) => tokens.every((token) => recordTokens.has(token)));
 }
 
 function recordTextTokens(record: NormalizedRecord): string[] {
-  return fullTextTokens(
+  return textTokens(
     [
       record.text,
       record.kind,
@@ -448,44 +455,6 @@ function recordTextTokens(record: NormalizedRecord): string[] {
   );
 }
 
-function queryTokens(query: string | undefined): string[] {
-  return query === undefined ? [] : fullTextTokens(query);
-}
-
-function fullTextTokens(value: string): string[] {
-  return uniqueSorted(
-    value
-      .toLowerCase()
-      .split(/[^a-z0-9_]+/g)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 2)
-      .filter((token) => !TEXT_STOP_WORDS.has(token))
-  );
-}
-
 function intersection(left: Set<string>, right: Set<string>): Set<string> {
   return new Set([...left].filter((value) => right.has(value)));
 }
-
-const TEXT_STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "as",
-  "at",
-  "be",
-  "by",
-  "for",
-  "from",
-  "in",
-  "is",
-  "it",
-  "of",
-  "on",
-  "or",
-  "that",
-  "the",
-  "to",
-  "with"
-]);
