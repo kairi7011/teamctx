@@ -9,6 +9,10 @@ import {
   type RecordIndexSet
 } from "../indexes/record-index.js";
 import {
+  resolveContextInputSelectors,
+  type InferredContextSelectors
+} from "./selector-inference.js";
+import {
   readLastNormalizeAt,
   readLastNormalizeAtFromContextStore,
   readRecordIndexes,
@@ -17,18 +21,9 @@ import {
 
 export type ContextQueryExplain = {
   input: GetContextInput;
-  selectors: {
-    target_files: string[];
-    changed_files: string[];
-    domains: string[];
-    symbols: string[];
-    tags: string[];
-    query?: string;
-    since?: string;
-    until?: string;
-    source_types: string[];
-    evidence_files: string[];
-  };
+  selectors: ContextQuerySelectorSummary;
+  inferred_selectors: InferredContextSelectors;
+  effective_selectors: ContextQuerySelectorSummary;
   indexes: {
     path_index: IndexUse;
     symbol_index: IndexUse;
@@ -41,6 +36,19 @@ export type ContextQueryExplain = {
     normalized_files: readonly string[];
     selected_record_ids: string[];
   };
+};
+
+export type ContextQuerySelectorSummary = {
+  target_files: string[];
+  changed_files: string[];
+  domains: string[];
+  symbols: string[];
+  tags: string[];
+  query?: string;
+  since?: string;
+  until?: string;
+  source_types: string[];
+  evidence_files: string[];
 };
 
 export type IndexUse = {
@@ -74,8 +82,11 @@ function explainContextQuery(
   indexes: RecordIndexSet,
   warnings: string[]
 ): ContextQueryExplain {
-  const indexed = canUseIndexedRead(input, indexes);
-  const selectedRecordIds = indexed ? [...selectIndexedRecordIds(indexes, input)].sort() : [];
+  const resolved = resolveContextInputSelectors(input);
+  const indexed = canUseIndexedRead(resolved.input, indexes);
+  const selectedRecordIds = indexed
+    ? [...selectIndexedRecordIds(indexes, resolved.input)].sort()
+    : [];
   const normalizedFiles = indexed
     ? indexedNormalizedFiles(selectedRecordIds, indexes)
     : NORMALIZED_RECORD_FILES;
@@ -83,20 +94,25 @@ function explainContextQuery(
   return {
     input,
     selectors: selectorSummary(input),
+    inferred_selectors: resolved.inferred_selectors,
+    effective_selectors: selectorSummary(resolved.input),
     indexes: {
       path_index: indexUse(indexes.pathIndex?.generated_at, indexed),
       symbol_index: indexUse(
         indexes.symbolIndex?.generated_at,
-        indexed && (input.symbols ?? []).length > 0
+        indexed && (resolved.input.symbols ?? []).length > 0
       ),
-      text_index: indexUse(indexes.textIndex?.generated_at, indexed && input.query !== undefined),
+      text_index: indexUse(
+        indexes.textIndex?.generated_at,
+        indexed && resolved.input.query !== undefined
+      ),
       warnings
     },
     read_plan: {
       mode: indexed ? "indexed_normalized_shards" : "full_normalized_scan",
       reason: indexed
         ? "lookup selectors matched generated indexes"
-        : fullScanReason(input, indexes),
+        : fullScanReason(resolved.input, indexes),
       normalized_files: normalizedFiles,
       selected_record_ids: selectedRecordIds
     }
@@ -116,7 +132,7 @@ function indexUse(generatedAt: string | null | undefined, used: boolean): IndexU
   return output;
 }
 
-function selectorSummary(input: GetContextInput): ContextQueryExplain["selectors"] {
+function selectorSummary(input: GetContextInput): ContextQuerySelectorSummary {
   return {
     target_files: input.target_files ?? [],
     changed_files: input.changed_files ?? [],

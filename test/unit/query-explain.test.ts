@@ -65,6 +65,42 @@ test("explainContextQueryFromStore reports full scans when query index is missin
   assert.equal(explain.indexes.path_index.present, false);
 });
 
+test("explainContextQueryFromStore reports inferred and effective selectors", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const workflow = record("workflow-cli", "workflow", ["src/cli/index.ts"], ["context-preview"]);
+  const fact = record("fact-cli-args", "fact", ["src/cli/cli-args.ts"], ["cli"]);
+
+  writeIndexes(storeRoot, [workflow, fact], "2026-04-29T00:00:00.000Z");
+
+  const explain = explainContextQueryFromStore(storeRoot, {
+    domains: ["cli"],
+    query:
+      "Inspect src/cli/index.ts teamctx contextInput and src/cli/cli-args.ts selector flag parsing"
+  });
+
+  assert.deepEqual(explain.selectors.target_files, []);
+  assert.deepEqual(explain.selectors.domains, ["cli"]);
+  assert.deepEqual(explain.inferred_selectors.target_files, [
+    "src/cli/index.ts",
+    "src/cli/cli-args.ts"
+  ]);
+  assert.deepEqual(explain.inferred_selectors.symbols, ["contextInput"]);
+  assert.deepEqual(explain.inferred_selectors.domains, ["context-preview"]);
+  assert.deepEqual(explain.inferred_selectors.tags, [
+    "get-context",
+    "preview-cli",
+    "selector-parsing"
+  ]);
+  assert.deepEqual(explain.effective_selectors.target_files, [
+    "src/cli/index.ts",
+    "src/cli/cli-args.ts"
+  ]);
+  assert.deepEqual(explain.effective_selectors.domains, ["cli", "context-preview"]);
+  assert.deepEqual(explain.read_plan.selected_record_ids, ["fact-cli-args", "workflow-cli"]);
+});
+
 function writeIndexes(storeRoot: string, records: NormalizedRecord[], generatedAt: string): void {
   const indexes = buildRecordIndexes(records, generatedAt);
   const directory = join(storeRoot, "indexes");

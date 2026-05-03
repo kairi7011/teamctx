@@ -37,6 +37,7 @@ import {
   selectIndexedRecordIds,
   type RecordIndexSet
 } from "../indexes/record-index.js";
+import { resolveContextInputSelectors } from "./selector-inference.js";
 import {
   validateNormalizedRecord,
   type KnowledgeKind,
@@ -57,6 +58,7 @@ export function composeContextFromStore(
   storeRoot: string,
   input: GetContextInput = {}
 ): ComposedContext {
+  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
@@ -65,7 +67,7 @@ export function composeContextFromStore(
 
   return composeContextFromRecords(
     records,
-    input,
+    effectiveInput,
     indexRead.indexes,
     undefined,
     episodeRead.index,
@@ -78,15 +80,20 @@ export async function composeContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<ComposedContext> {
+  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
   const episodeRead = await readEpisodeIndexFromContextStore(store, lastNormalizeAt);
-  const readResult = await readNormalizedRecordsFromContextStore(store, input, indexRead.indexes);
+  const readResult = await readNormalizedRecordsFromContextStore(
+    store,
+    effectiveInput,
+    indexRead.indexes
+  );
 
   return composeContextFromRecords(
     readResult.records,
-    input,
+    effectiveInput,
     indexRead.indexes,
     readResult.diagnostics,
     episodeRead.index,
@@ -271,9 +278,28 @@ function matchesRichSelectorIntent(ranked: RankedRecord, input: GetContextInput)
 
   return (
     ((input.tags ?? []).length > 0 && hasRankReason(ranked, "tag match:")) ||
-    ((input.symbols ?? []).length > 0 && hasRankReason(ranked, "symbol match:")) ||
-    (hasTextLookupSelector(input.query) && hasRankReason(ranked, "text query match:"))
+    hasSufficientSymbolMatch(ranked, input) ||
+    (hasTextLookupSelector(input.query) && hasRankReason(ranked, "text query match:")) ||
+    ((input.symbols ?? []).length === 0 &&
+      (input.tags ?? []).length === 0 &&
+      hasTextLookupSelector(input.query) &&
+      ((input.target_files ?? []).length > 0 || (input.changed_files ?? []).length > 0) &&
+      (hasRankReason(ranked, "target file match:") || hasRankReason(ranked, "changed file match:")))
   );
+}
+
+function hasSufficientSymbolMatch(ranked: RankedRecord, input: GetContextInput): boolean {
+  const symbols = input.symbols ?? [];
+
+  if (symbols.length === 0) {
+    return false;
+  }
+
+  const recordSymbols = new Set(ranked.record.scope.symbols.map((symbol) => symbol.trim()));
+  const matchedCount = symbols.filter((symbol) => recordSymbols.has(symbol.trim())).length;
+  const requiredCount = symbols.length > 1 ? 2 : 1;
+
+  return matchedCount >= requiredCount;
 }
 
 function hasIntentSelectorInput(input: GetContextInput): boolean {
@@ -659,18 +685,20 @@ export type RankTrace = {
 };
 
 export function rankContextFromStore(storeRoot: string, input: GetContextInput = {}): RankTrace {
+  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(readProjectConfig(storeRoot));
   const records = readNormalizedRecords(storeRoot);
   const lastNormalizeAt = readLastNormalizeAt(storeRoot);
   const indexRead = readRecordIndexes(storeRoot, lastNormalizeAt);
 
-  return buildRankTrace(records, input, indexRead.indexes, budgets);
+  return buildRankTrace(records, effectiveInput, indexRead.indexes, budgets);
 }
 
 export async function rankContextFromContextStore(
   store: ContextStoreAdapter,
   input: GetContextInput = {}
 ): Promise<RankTrace> {
+  const effectiveInput = resolveContextInputSelectors(input).input;
   const budgets = resolveBudgetsFromConfig(await readProjectConfigFromContextStore(store));
   const lastNormalizeAt = await readLastNormalizeAtFromContextStore(store);
   const indexRead = await readRecordIndexesFromContextStore(store, lastNormalizeAt);
@@ -686,7 +714,7 @@ export async function rankContextFromContextStore(
 
   const sortedRecords = records.sort((left, right) => left.id.localeCompare(right.id));
 
-  return buildRankTrace(sortedRecords, input, indexRead.indexes, budgets);
+  return buildRankTrace(sortedRecords, effectiveInput, indexRead.indexes, budgets);
 }
 
 function buildRankTrace(

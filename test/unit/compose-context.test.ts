@@ -424,6 +424,49 @@ test("composeContextFromStore retrieves by deterministic vague-query aliases", (
   );
 });
 
+test("composeContextFromStore infers selectors from detailed query paths and symbols", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const contextPreview = record("workflow-context-preview", "workflow", "active", {
+    paths: ["src/cli/index.ts"],
+    domains: ["context-preview"],
+    symbols: ["context", "contextInput"],
+    tags: ["preview-cli", "get-context"]
+  });
+  const selectorFlags = record("fact-selector-flags", "fact", "active", {
+    paths: ["src/cli/index.ts", "src/cli/cli-args.ts"],
+    domains: ["cli", "context-preview"],
+    symbols: ["parseArgs", "assignFlag", "parseCsvFlag"],
+    tags: ["repeatable-flags", "selector-parsing", "get-context"]
+  });
+  const adjacentHelp = record("pitfall-cli-help", "pitfall", "active", {
+    paths: ["src/cli/index.ts"],
+    domains: ["cli", "safety"],
+    symbols: ["shouldPrintHelp"],
+    tags: ["command-help"]
+  });
+
+  writeRecord(storeRoot, "workflows.jsonl", contextPreview);
+  writeRecord(storeRoot, "facts.jsonl", selectorFlags);
+  writeRecord(storeRoot, "pitfalls.jsonl", adjacentHelp);
+  writeIndexes(
+    storeRoot,
+    [contextPreview, selectorFlags, adjacentHelp],
+    "2026-04-22T11:00:00.000Z"
+  );
+
+  const composed = composeContextFromStore(storeRoot, {
+    query:
+      "Inspect src/cli/index.ts teamctx context/contextInput and src/cli/cli-args.ts selector flag parsing in parseArgs/assignFlag/parseCsvFlag."
+  });
+
+  assert.deepEqual(
+    composed.normalized_context.scoped.map((entry) => entry.id),
+    ["workflow-context-preview", "fact-selector-flags"]
+  );
+});
+
 test("composeContextFromContextStore uses indexes to avoid unrelated remote shards", async () => {
   const store = new MemoryContextStore();
   const matchingPitfall = record("pitfall-auth", "pitfall", "active");
