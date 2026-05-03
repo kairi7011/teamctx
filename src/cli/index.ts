@@ -73,7 +73,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
 
-    if (value?.startsWith("--")) {
+    if (value === "--help") {
+      flags.help = true;
+    } else if (value === "-h") {
+      flags.h = true;
+    } else if (value?.startsWith("--")) {
       const key = value.slice(2);
       const next = rest[index + 1];
 
@@ -89,6 +93,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return { command, positional, flags };
+}
+
+export function shouldPrintHelp(args: ParsedArgs): boolean {
+  return args.flags.help === true || args.flags.h === true;
 }
 
 export function formatHelp(): string {
@@ -1061,6 +1069,12 @@ function runAuthSubcommand(args: ParsedArgs): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+
+  if (shouldPrintHelp(args)) {
+    printHelp();
+    return;
+  }
+
   const handler = cliCommands[args.command];
 
   if (!handler) {

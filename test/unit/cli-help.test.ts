@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatHelp, parseArgs } from "../../src/cli/index.js";
+import { formatHelp, parseArgs, shouldPrintHelp } from "../../src/cli/index.js";
 
 test("parseArgs defaults to help without arguments", () => {
   assert.deepEqual(parseArgs([]), {
@@ -31,6 +31,16 @@ test("parseArgs separates positional values and flags", () => {
       }
     }
   );
+});
+
+test("parseArgs treats command-level help flags as boolean help requests", () => {
+  assert.deepEqual(parseArgs(["normalize", "--help"]), {
+    command: "normalize",
+    positional: [],
+    flags: { help: true }
+  });
+  assert.equal(shouldPrintHelp(parseArgs(["normalize", "--help"])), true);
+  assert.equal(shouldPrintHelp(parseArgs(["normalize", "-h"])), true);
 });
 
 test("formatHelp includes stable command usage", () => {
