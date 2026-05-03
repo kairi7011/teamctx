@@ -41,6 +41,15 @@ test("parseArgs treats command-level help flags as boolean help requests", () =>
   });
   assert.equal(shouldPrintHelp(parseArgs(["normalize", "--help"])), true);
   assert.equal(shouldPrintHelp(parseArgs(["normalize", "-h"])), true);
+  assert.deepEqual(parseArgs(["normalize", "--dry-run", "-h"]), {
+    command: "normalize",
+    positional: [],
+    flags: {
+      "dry-run": true,
+      h: true
+    }
+  });
+  assert.equal(shouldPrintHelp(parseArgs(["normalize", "--dry-run", "-h"])), true);
 });
 
 test("formatHelp includes stable command usage", () => {

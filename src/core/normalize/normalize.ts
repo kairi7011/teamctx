@@ -166,10 +166,7 @@ export function normalizeStore(options: {
   }
 
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
-  const episodeIndex = buildEpisodeIndex(
-    safeActiveEpisodeObservations(rawEvents, options.repo, run.records),
-    run.result.normalizedAt
-  );
+  const episodeIndex = buildEpisodeIndex(run.episodeObservations, run.result.normalizedAt);
 
   writeNormalizedRecords(options.storeRoot, run.records);
   writeRecordIndexes(options.storeRoot, indexes);
@@ -231,10 +228,7 @@ async function normalizeContextStoreWithLease(options: {
   }
 
   const indexes = buildRecordIndexes(run.records, run.result.normalizedAt);
-  const episodeIndex = buildEpisodeIndex(
-    safeActiveEpisodeObservations(rawEvents, options.repo, run.records),
-    run.result.normalizedAt
-  );
+  const episodeIndex = buildEpisodeIndex(run.episodeObservations, run.result.normalizedAt);
 
   await writeNormalizedRecordsToContextStore(options.store, run.records, existing.filesByName);
   await writeRecordIndexesToContextStore(options.store, indexes, run.result.normalizedAt);
@@ -264,7 +258,12 @@ function normalizeRun(options: {
   now: () => Date;
   rawEvents: RawEventFile[];
   existingRecords: NormalizedRecord[];
-}): { result: NormalizeStoreResult; records: NormalizedRecord[]; auditEntries: AuditLogEntry[] } {
+}): {
+  result: NormalizeStoreResult;
+  records: NormalizedRecord[];
+  auditEntries: AuditLogEntry[];
+  episodeObservations: RawObservation[];
+} {
   const runAt = options.now();
   const runNow = () => runAt;
   const rawEvents = options.rawEvents;
@@ -272,6 +271,7 @@ function normalizeRun(options: {
   const existingRecords = options.existingRecords;
   const existingRecordsById = new Map(existingRecords.map((record) => [record.id, record]));
   const recordsByKey = new Map<string, NormalizedRecord>();
+  const recordKeysByEventId = new Map<string, string>();
   const auditEntries: AuditLogEntry[] = [];
   let droppedEvents = 0;
 
@@ -285,6 +285,10 @@ function normalizeRun(options: {
         : normalized.record;
       const key = findDuplicateRecordKey(recordsByKey, record) ?? dedupeKey(record);
       const sourceEventIds = rawEvent.observation ? [rawEvent.observation.event_id] : [];
+
+      if (rawEvent.observation) {
+        recordKeysByEventId.set(rawEvent.observation.event_id, key);
+      }
 
       if (!recordsByKey.has(key)) {
         recordsByKey.set(key, record);
@@ -333,8 +337,14 @@ function normalizeRun(options: {
     droppedEvents,
     auditEntriesWritten: auditEntries.length
   };
+  const episodeObservations = safeActiveEpisodeObservations(
+    rawEvents,
+    options.repo,
+    records,
+    recordKeysByEventId
+  );
 
-  return { result, records, auditEntries };
+  return { result, records, auditEntries, episodeObservations };
 }
 
 function makeRunId(repo: string, runAt: Date, rawEvents: RawEventFile[]): string {
@@ -673,15 +683,18 @@ function safeEpisodeObservations(rawEvents: RawEventFile[], repo: string): RawOb
 function safeActiveEpisodeObservations(
   rawEvents: RawEventFile[],
   repo: string,
-  records: NormalizedRecord[]
+  records: NormalizedRecord[],
+  recordKeysByEventId: Map<string, string>
 ): RawObservation[] {
-  const activeRecordIds = new Set(
-    records.filter((record) => record.state === "active").map((record) => record.id)
+  const activeRecordKeys = new Set(
+    records.filter((record) => record.state === "active").map((record) => dedupeKey(record))
   );
 
-  return safeEpisodeObservations(rawEvents, repo).filter((observation) =>
-    activeRecordIds.has(recordId(observation))
-  );
+  return safeEpisodeObservations(rawEvents, repo).filter((observation) => {
+    const recordKey = recordKeysByEventId.get(observation.event_id);
+
+    return recordKey !== undefined && activeRecordKeys.has(recordKey);
+  });
 }
 
 function appendAuditEntries(storeRoot: string, entries: AuditLogEntry[]): void {

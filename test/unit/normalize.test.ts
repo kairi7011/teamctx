@@ -210,6 +210,7 @@ test("normalizeStore exact-dedupes matching records", (context) => {
   assert.equal(result.rawEventsRead, 2);
   assert.equal(result.recordsWritten, 1);
   assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
+  assert.deepEqual(readEpisodeSourceEventIds(storeRoot), ["event-1", "event-2"]);
 });
 
 test("normalizeStore near-dedupes punctuation-only text variants", (context) => {
@@ -234,6 +235,7 @@ test("normalizeStore near-dedupes punctuation-only text variants", (context) => 
   assert.equal(result.rawEventsRead, 2);
   assert.equal(result.recordsWritten, 1);
   assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
+  assert.deepEqual(readEpisodeSourceEventIds(storeRoot), ["event-1", "event-2"]);
 });
 
 test("normalizeStore near-dedupes modal wording variants", (context) => {
@@ -258,6 +260,7 @@ test("normalizeStore near-dedupes modal wording variants", (context) => {
   assert.equal(result.rawEventsRead, 2);
   assert.equal(result.recordsWritten, 1);
   assert.equal(readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")).length, 1);
+  assert.deepEqual(readEpisodeSourceEventIds(storeRoot), ["event-1", "event-2"]);
 });
 
 test("normalizeStore preserves archived states across subsequent runs", (context) => {
@@ -878,5 +881,7 @@ function readEpisodeSourceEventIds(storeRoot: string): string[] {
     readFileSync(join(storeRoot, "indexes", "episode-index.json"), "utf8")
   ) as { episodes: Array<{ source_event_ids: string[] }> };
 
-  return episodeIndex.episodes.flatMap((episode) => episode.source_event_ids);
+  return episodeIndex.episodes
+    .flatMap((episode) => episode.source_event_ids)
+    .sort((left, right) => left.localeCompare(right));
 }

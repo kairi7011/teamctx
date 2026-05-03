@@ -81,7 +81,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       const key = value.slice(2);
       const next = rest[index + 1];
 
-      if (next && !next.startsWith("--")) {
+      if (next && !isFlagToken(next)) {
         flags[key] = next;
         index += 1;
       } else {
@@ -93,6 +93,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return { command, positional, flags };
+}
+
+function isFlagToken(value: string): boolean {
+  return value.startsWith("--") || value === "-h";
 }
 
 export function shouldPrintHelp(args: ParsedArgs): boolean {
