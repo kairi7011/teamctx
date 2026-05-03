@@ -141,7 +141,7 @@ const QUERY_ALIASES: QueryAlias[] = [
     id: "builtin:safety",
     allPatternGroups: [
       ["\u5b89\u5168", "safety"],
-      ["command", "cli", "help", "handler", "mutating", "normalize", "record", "writes"]
+      ["command", "cli", "help", "handler", "mutating", "normalize"]
     ],
     tokenGroups: [["safety"], ["mutating", "command", "safety"]]
   },
