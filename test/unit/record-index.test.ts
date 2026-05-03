@@ -79,6 +79,24 @@ test("selectIndexedRecordIds expands deterministic aliases for vague queries", (
     symbols: ["budget_rejected"],
     tags: ["budget_rejected"]
   });
+  const githubConcurrency = record("pitfall-github-concurrency", {
+    paths: ["src/adapters/github/contents-store.ts"],
+    domains: ["github-store"],
+    symbols: ["appendJsonl"],
+    tags: ["optimistic-concurrency"]
+  });
+  const githubCommitReduction = record("pitfall-github-commit-reduction", {
+    paths: ["src/core/normalize/normalize.ts"],
+    domains: ["github-store", "performance"],
+    symbols: ["writeIfChanged"],
+    tags: ["commit-reduction", "remote-store"]
+  });
+  const githubSmoke = record("decision-github-smoke", {
+    paths: ["test/integration/github-store-smoke.test.ts"],
+    domains: ["github-store", "smoke-test"],
+    symbols: [],
+    tags: ["real-github-smoke"]
+  });
   const unrelated = record("workflow-audit", {
     paths: ["src/core/audit/summary.ts"],
     domains: ["audit"],
@@ -86,7 +104,15 @@ test("selectIndexedRecordIds expands deterministic aliases for vague queries", (
     tags: ["audit-cli"]
   });
   const indexes = buildRecordIndexes(
-    [contextPreview, budgetConfig, budgetDiagnostics, unrelated],
+    [
+      contextPreview,
+      budgetConfig,
+      budgetDiagnostics,
+      githubConcurrency,
+      githubCommitReduction,
+      githubSmoke,
+      unrelated
+    ],
     "2026-04-22T11:00:00.000Z"
   );
 
@@ -97,6 +123,14 @@ test("selectIndexedRecordIds expands deterministic aliases for vague queries", (
   assert.deepEqual(
     [...selectIndexedRecordIds(indexes, { query: "予算周りの診断が変" })],
     ["fact-budget-rejected", "fact-context-budgets"]
+  );
+  assert.deepEqual(
+    [
+      ...selectIndexedRecordIds(indexes, {
+        query: "GitHub\u30b9\u30c8\u30a2\u306e\u7af6\u5408\u5468\u308a"
+      })
+    ],
+    ["pitfall-github-commit-reduction", "pitfall-github-concurrency"]
   );
 });
 

@@ -62,6 +62,10 @@ const QUERY_ALIASES: Array<{ patterns: string[]; tokenGroups: string[][] }> = [
     tokenGroups: [["commit", "reduction"], ["writeifchanged"]]
   },
   {
+    patterns: ["github\u30b9\u30c8\u30a2", "github store"],
+    tokenGroups: [["commit", "github", "reduction", "store"]]
+  },
+  {
     patterns: ["\u7af6\u5408", "conflict", "concurrency"],
     tokenGroups: [["optimistic", "concurrency"], ["concurrency"]]
   },

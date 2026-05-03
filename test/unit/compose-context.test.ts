@@ -380,13 +380,27 @@ test("composeContextFromStore retrieves by deterministic vague-query aliases", (
     symbols: ["budget_rejected"],
     tags: ["budget_rejected"]
   });
+  const githubConcurrency = record("pitfall-github-concurrency", "pitfall", "active", {
+    paths: ["src/adapters/github/contents-store.ts"],
+    domains: ["github-store"],
+    symbols: ["appendJsonl"],
+    tags: ["optimistic-concurrency"]
+  });
+  const githubCommitReduction = record("fact-github-commit-reduction", "fact", "active", {
+    paths: ["src/core/normalize/normalize.ts"],
+    domains: ["github-store", "performance"],
+    symbols: ["writeIfChanged"],
+    tags: ["commit-reduction", "remote-store"]
+  });
 
   writeRecord(storeRoot, "workflows.jsonl", contextPreview);
   writeRecord(storeRoot, "facts.jsonl", budgetConfig);
   writeRecord(storeRoot, "facts.jsonl", budgetDiagnostics);
+  writeRecord(storeRoot, "pitfalls.jsonl", githubConcurrency);
+  writeRecord(storeRoot, "facts.jsonl", githubCommitReduction);
   writeIndexes(
     storeRoot,
-    [contextPreview, budgetConfig, budgetDiagnostics],
+    [contextPreview, budgetConfig, budgetDiagnostics, githubConcurrency, githubCommitReduction],
     "2026-04-22T11:00:00.000Z"
   );
 
@@ -401,6 +415,12 @@ test("composeContextFromStore retrieves by deterministic vague-query aliases", (
       query: "予算周りの診断が変"
     }).normalized_context.scoped.map((entry) => entry.id),
     ["fact-budget-rejected", "fact-context-budgets"]
+  );
+  assert.deepEqual(
+    composeContextFromStore(storeRoot, {
+      query: "GitHub\u30b9\u30c8\u30a2\u306e\u7af6\u5408\u5468\u308a"
+    }).normalized_context.scoped.map((entry) => entry.id),
+    ["pitfall-github-concurrency", "fact-github-commit-reduction"]
   );
 });
 
