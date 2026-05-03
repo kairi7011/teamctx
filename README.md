@@ -68,6 +68,9 @@ revision and retry behavior.
 See [Operations Guide](docs/operations-guide.md) for team cadence, inspection,
 correction, and compaction workflows.
 
+See [Security Guide](docs/security.md) for store visibility, GitHub token
+permissions, write policy, and sensitive-content handling.
+
 ## GitHub Auth
 
 Remote GitHub stores use the first token available in this order:
@@ -79,6 +82,11 @@ Remote GitHub stores use the first token available in this order:
 Prefer `TEAMCTX_GITHUB_TOKEN` when you want credentials scoped specifically to `teamctx`.
 The token must be able to read and write the repository that holds the context
 store. Local stores such as `.teamctx` do not need a GitHub token.
+
+For a fine-grained GitHub token, restrict repository access to the context-store
+repository and grant `Contents` read/write plus `Metadata` read. For a classic
+token, use `repo` for private stores or `public_repo` only for intentionally
+public stores.
 
 Use `teamctx doctor` to check which auth source is active.
 Use `teamctx auth doctor` to diagnose GitHub auth without printing token values.

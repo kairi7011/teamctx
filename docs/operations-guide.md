@@ -16,6 +16,9 @@ teamctx setup github.com/my-org/ai-context --path contexts/my-service
 Keep the context store private unless every recorded observation, evidence path,
 and audit entry is safe to publish.
 
+See [Security Guide](security.md) for token permissions, store visibility, and
+sensitive-content handling.
+
 ## Recording Cadence
 
 Record knowledge when it changes how future work should be done:
