@@ -132,6 +132,14 @@ test("selectIndexedRecordIds expands deterministic aliases for vague queries", (
     ],
     ["pitfall-github-commit-reduction", "pitfall-github-concurrency"]
   );
+  assert.deepEqual(
+    [
+      ...selectIndexedRecordIds(indexes, {
+        query: "GitHub\u306e\u7af6\u5408\u3069\u3046\u306b\u304b\u3057\u3066"
+      })
+    ],
+    ["pitfall-github-commit-reduction", "pitfall-github-concurrency"]
+  );
 });
 
 test("selectIndexedRecordIds treats domains and tags as weak selectors when strong selectors exist", () => {

@@ -16,7 +16,7 @@ export function queryTokenGroups(query: string | undefined): string[][] {
   const normalizedQuery = rawQuery.toLowerCase();
 
   for (const alias of QUERY_ALIASES) {
-    if (alias.patterns.some((pattern) => normalizedQuery.includes(pattern))) {
+    if (matchesQueryAlias(alias, normalizedQuery)) {
       aliasGroups.push(...alias.tokenGroups);
     }
   }
@@ -26,7 +26,13 @@ export function queryTokenGroups(query: string | undefined): string[][] {
   return uniqueTokenGroups(groups.map((group) => uniqueSorted(group)));
 }
 
-const QUERY_ALIASES: Array<{ patterns: string[]; tokenGroups: string[][] }> = [
+type QueryAlias = {
+  patterns?: string[];
+  allPatternGroups?: string[][];
+  tokenGroups: string[][];
+};
+
+const QUERY_ALIASES: QueryAlias[] = [
   {
     patterns: [
       "\u30b3\u30f3\u30c6\u30ad\u30b9\u30c8\u30d7\u30ec\u30d3\u30e5\u30fc",
@@ -66,6 +72,10 @@ const QUERY_ALIASES: Array<{ patterns: string[]; tokenGroups: string[][] }> = [
     tokenGroups: [["commit", "github", "reduction", "store"]]
   },
   {
+    allPatternGroups: [["github"], ["\u7af6\u5408", "conflict", "concurrency"]],
+    tokenGroups: [["commit", "github", "reduction", "store"], ["writeifchanged"]]
+  },
+  {
     patterns: ["\u7af6\u5408", "conflict", "concurrency"],
     tokenGroups: [["optimistic", "concurrency"], ["concurrency"]]
   },
@@ -96,6 +106,17 @@ function uniqueTokenGroups(groups: string[][]): string[][] {
   return unique.sort(
     (left, right) => right.length - left.length || left.join(" ").localeCompare(right.join(" "))
   );
+}
+
+function matchesQueryAlias(alias: QueryAlias, normalizedQuery: string): boolean {
+  const anyPatternMatches =
+    alias.patterns?.some((pattern) => normalizedQuery.includes(pattern)) ?? false;
+  const allPatternGroupsMatch =
+    alias.allPatternGroups?.every((group) =>
+      group.some((pattern) => normalizedQuery.includes(pattern))
+    ) ?? false;
+
+  return anyPatternMatches || allPatternGroupsMatch;
 }
 
 function uniqueSorted(values: string[]): string[] {
