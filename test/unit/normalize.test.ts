@@ -614,20 +614,20 @@ test("normalizeBoundStoreAsync accepts evidence from the remote context store re
     observation({
       event_id: "context-store-evidence",
       kind: "workflow",
-      text: "Use the context-store validation runpack when checking adoption value.",
+      text: "Use the context-store validation report when checking adoption value.",
       source_type: "inferred_from_docs",
       evidence: [
         {
           kind: "docs",
           repo: "github.com/team/context",
           commit: "def456",
-          file: "dogfood/validation/runpack.md",
+          file: "docs/context-validation/runpack.md",
           lines: [1, 20],
           doc_role: "other"
         }
       ],
       scope: {
-        paths: ["dogfood/validation/runpack.md"],
+        paths: ["docs/context-validation/runpack.md"],
         domains: ["validation"],
         symbols: ["runpack"],
         tags: ["context-store-evidence"]
