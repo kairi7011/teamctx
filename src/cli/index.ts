@@ -869,6 +869,11 @@ function appendHygieneMaintenancePlan(lines: string[], result: BoundHygieneRepor
       for (const command of item.candidate_write_commands) {
         lines.push(`          - ${command}`);
       }
+      if (item.observation_drafts.length > 0) {
+        lines.push(
+          `        observation_drafts: ${item.observation_drafts.length} incomplete draft(s); fill evidence before record-verified`
+        );
+      }
       if (item.notes.length > 0) {
         lines.push("        notes:");
         for (const note of item.notes) {

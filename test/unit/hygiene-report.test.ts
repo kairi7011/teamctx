@@ -128,7 +128,10 @@ test("summarizeRecordsHygiene builds a review-only maintenance plan", () => {
       (item) =>
         item.action === "merge_or_supersede" &&
         item.record_ids.join(",") === "duplicate-a,duplicate-b" &&
-        item.notes.some((note) => note.includes("supersedes"))
+        item.notes.some((note) => note.includes("supersedes")) &&
+        item.observation_drafts[0]?.supersedes.join(",") === "duplicate-a,duplicate-b" &&
+        item.observation_drafts[0]?.evidence.length === 0 &&
+        item.observation_drafts[0]?.draft_status === "incomplete_requires_evidence_review"
     )
   );
   assert.ok(

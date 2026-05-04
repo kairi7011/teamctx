@@ -108,7 +108,9 @@ the risks grouped into a review-only maintenance loop:
 4. run `teamctx normalize --dry-run` before the final `teamctx normalize`.
 
 The plan is advisory and read-only. It never auto-deletes, auto-merges, or
-auto-expires records.
+auto-expires records. JSON output includes incomplete observation drafts for
+reviewed replacement records; those drafts intentionally keep `evidence` empty
+so they must be completed before `record-verified` will accept them.
 
 ## Inspection and Correction
 

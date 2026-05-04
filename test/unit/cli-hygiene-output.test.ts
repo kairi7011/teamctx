@@ -50,6 +50,7 @@ test("formatHygieneReport renders counts, risks, and suggestions", () => {
         id: "decision-old",
         kind: "decision",
         text: "Use the old branch layout.",
+        scope: { paths: ["src/**"], domains: [], symbols: [], tags: [] },
         scope_summary: "paths=src/**",
         age_days: 120,
         related_ids: [],
@@ -118,6 +119,18 @@ test("formatHygieneReport renders review-only maintenance plans", () => {
             "teamctx normalize --dry-run",
             "teamctx normalize"
           ],
+          observation_drafts: [
+            {
+              draft_status: "incomplete_requires_evidence_review",
+              kind: "rule",
+              text: "TODO: merge duplicate records.",
+              source_type: "inferred_from_docs",
+              scope: { paths: ["src/**"], domains: ["cli"], symbols: [], tags: [] },
+              supersedes: ["rule-a", "rule-b"],
+              evidence: [],
+              instructions: ["Add evidence before running record-verified."]
+            }
+          ],
           notes: ["The merged observation should list the replaced record ids in `supersedes`."]
         }
       ],
@@ -131,5 +144,6 @@ test("formatHygieneReport renders review-only maintenance plans", () => {
   assert.match(output, /merge_or_supersede: rule-a, rule-b/);
   assert.match(output, /candidate_write:/);
   assert.match(output, /teamctx record-verified merged-observation\.json/);
+  assert.match(output, /observation_drafts: 1 incomplete draft/);
   assert.match(output, /read-only and never mutates/);
 });

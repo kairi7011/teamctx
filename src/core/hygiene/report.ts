@@ -41,12 +41,24 @@ export type HygieneRiskItem = {
   id: string;
   kind: KnowledgeKind;
   text: string;
+  scope: NormalizedRecord["scope"];
   scope_summary: string;
   age_days?: number;
   token_count?: number;
   related_ids: string[];
   detail: string;
   suggested_action: string;
+};
+
+export type HygieneObservationDraft = {
+  draft_status: "incomplete_requires_evidence_review";
+  kind: KnowledgeKind;
+  text: string;
+  source_type: "inferred_from_code" | "inferred_from_docs" | "inferred_from_diff";
+  scope: NormalizedRecord["scope"];
+  supersedes: string[];
+  evidence: [];
+  instructions: string[];
 };
 
 export type HygienePlanCategory =
@@ -75,6 +87,7 @@ export type HygieneMaintenancePlanItem = {
   rationale: string;
   review_commands: string[];
   candidate_write_commands: string[];
+  observation_drafts: HygieneObservationDraft[];
   notes: string[];
 };
 
@@ -496,6 +509,7 @@ function riskItem(
     id: record.id,
     kind: record.kind,
     text: record.text,
+    scope: record.scope,
     scope_summary: scopeSummary(record),
     related_ids: detail.relatedIds ?? [],
     detail: detail.detail,
@@ -649,6 +663,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx normalize --dry-run",
           "teamctx normalize"
         ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: If ${risk.id} is still true, write the current evidence-backed replacement statement and supersede the expired record.`,
+            supersedes: [risk.id],
+            instructions: [
+              "Use this draft only when evidence proves the knowledge is still current.",
+              "Leave evidence empty until the replacement has concrete code, test, docs, diff, PR, or issue evidence."
+            ]
+          })
+        ],
         notes: [
           "If the rule is still true, record a fresh verified observation instead of invalidating it."
         ]
@@ -664,6 +688,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx record-verified corrected-observation.json",
           "teamctx normalize --dry-run",
           "teamctx normalize"
+        ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Correct the validity window or current statement for ${risk.id}, then supersede the premature record.`,
+            supersedes: [risk.id],
+            instructions: [
+              "Check whether the future valid_from timestamp is a recording mistake or intentionally future-dated.",
+              "Add evidence before running record-verified."
+            ]
+          })
         ],
         notes: [
           "Use the corrected observation to fix the validity window or explicitly supersede the premature record."
@@ -682,6 +716,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx normalize --dry-run",
           "teamctx normalize"
         ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Restate the currently valid version of ${risk.id}, or discard this draft if the old record should simply be invalidated.`,
+            supersedes: [risk.id],
+            instructions: [
+              "Age alone is not enough to supersede; first re-read the evidence.",
+              "Add fresh evidence and keep scope narrow before recording."
+            ]
+          })
+        ],
         notes: [
           "Age alone is not proof of falsehood; keep the record if the evidence still matches current behavior."
         ]
@@ -698,6 +742,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx normalize --dry-run",
           "teamctx normalize"
         ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Re-record ${risk.id} with concrete evidence if this active record still matters.`,
+            supersedes: [risk.id],
+            instructions: [
+              "Use verified evidence, not manual assertion alone.",
+              "If the record is low impact, keeping it unchanged can be acceptable."
+            ]
+          })
+        ],
         notes: ["Leave low-impact records alone if they are not recurring decision context."]
       };
     case "duplicate_active_text":
@@ -711,6 +765,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx record-verified merged-observation.json",
           "teamctx normalize --dry-run",
           "teamctx normalize"
+        ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Write one merged evidence-backed statement that replaces duplicate records: ${ids.join(", ")}.`,
+            supersedes: ids,
+            instructions: [
+              "Use one draft only if the duplicate records truly say the same durable thing.",
+              "Keep separate records when their scope, evidence, or exceptions differ."
+            ]
+          })
         ],
         notes: [
           "The merged observation should list the replaced record ids in `supersedes`.",
@@ -729,6 +793,16 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx normalize --dry-run",
           "teamctx normalize"
         ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Write a narrower or consolidated statement for this crowded ${risk.kind} scope after comparing records: ${ids.join(", ")}.`,
+            supersedes: ids,
+            instructions: [
+              "Prefer narrowing by path, domain, symbol, or tag when records are related but not identical.",
+              "Only supersede all listed records when the new statement fully replaces them."
+            ]
+          })
+        ],
         notes: [
           "Prefer narrower domains, tags, symbols, or one canonical workflow/rule when the scope is too broad."
         ]
@@ -745,11 +819,40 @@ function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
           "teamctx normalize --dry-run",
           "teamctx normalize"
         ],
+        observation_drafts: [
+          observationDraft(risk, {
+            text: `TODO: Split ${risk.id} into one short evidence-backed statement; create additional drafts if more than one durable fact is needed.`,
+            supersedes: [risk.id],
+            instructions: [
+              "Keep each split record focused enough to survive context truncation.",
+              "Move long explanation into docs evidence instead of normalized record text."
+            ]
+          })
+        ],
         notes: [
           "Move detailed prose into canonical docs and keep normalized records focused on durable decisions."
         ]
       };
   }
+}
+
+function observationDraft(
+  risk: HygieneRiskItem,
+  options: { text: string; supersedes: string[]; instructions: string[] }
+): HygieneObservationDraft {
+  return {
+    draft_status: "incomplete_requires_evidence_review",
+    kind: risk.kind,
+    text: options.text,
+    source_type: "inferred_from_docs",
+    scope: risk.scope,
+    supersedes: options.supersedes,
+    evidence: [],
+    instructions: [
+      ...options.instructions,
+      "`evidence` is intentionally empty so record-verified rejects the draft until reviewed."
+    ]
+  };
 }
 
 function reviewCommands(ids: string[]): string[] {
