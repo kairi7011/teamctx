@@ -37,3 +37,18 @@ test("expandQueryTokens matches project alias patterns case-insensitively", () =
     matchedAliasIds: ["project:database-work"]
   });
 });
+
+test("expandQueryTokens honors explicit context opt-out phrases", () => {
+  const expansion = expandQueryTokens("READMEのtypoだけ直す。設計調査は不要", [
+    {
+      id: "project:steering",
+      patterns: ["設計調査"],
+      tokenGroups: [["steering", "first"]]
+    }
+  ]);
+
+  assert.deepEqual(expansion, {
+    tokenGroups: [],
+    matchedAliasIds: []
+  });
+});

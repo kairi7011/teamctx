@@ -56,6 +56,13 @@ export function expandQueryTokens(
   const originalTokens = textTokens(rawQuery);
   const normalizedQuery = rawQuery.toLowerCase();
 
+  if (isContextOptOutQuery(normalizedQuery)) {
+    return {
+      tokenGroups: [],
+      matchedAliasIds: []
+    };
+  }
+
   for (const alias of [...QUERY_ALIASES, ...projectAliases]) {
     if (matchesQueryAlias(alias, normalizedQuery)) {
       matchedAliasIds.push(alias.id);
@@ -81,6 +88,10 @@ export function expandQueryTokens(
 function isBroadQueryOnly(query: string | undefined, projectAliases: QueryAlias[]): boolean {
   const rawQuery = query ?? "";
   const normalizedQuery = rawQuery.toLowerCase();
+
+  if (isContextOptOutQuery(normalizedQuery)) {
+    return false;
+  }
 
   if (
     [...QUERY_ALIASES, ...projectAliases].some((alias) => matchesQueryAlias(alias, normalizedQuery))
@@ -215,6 +226,14 @@ export function queryAliasSelectors(
   const tags: string[] = [];
   const symbols: string[] = [];
 
+  if (isContextOptOutQuery(normalizedQuery)) {
+    return {
+      domains: [],
+      tags: [],
+      symbols: []
+    };
+  }
+
   for (const alias of projectAliases) {
     if (!matchesQueryAlias(alias, normalizedQuery)) {
       continue;
@@ -251,6 +270,26 @@ function queryTokenWindows(tokens: string[]): string[][] {
   }
 
   return groups;
+}
+
+function isContextOptOutQuery(normalizedQuery: string): boolean {
+  const compact = normalizedQuery.replace(/\s+/g, "");
+
+  return (
+    compact.includes("context不要") ||
+    compact.includes("contextは不要") ||
+    compact.includes("コンテキスト不要") ||
+    compact.includes("コンテキストは不要") ||
+    compact.includes("文脈不要") ||
+    compact.includes("設計調査不要") ||
+    compact.includes("設計調査は不要") ||
+    compact.includes("調査不要") ||
+    compact.includes("調査は不要") ||
+    /\bno\s+(?:context|teamctx|design research|architecture research)\b/.test(normalizedQuery) ||
+    /\b(?:context|teamctx|design research|architecture research)\s+(?:not needed|unnecessary)\b/.test(
+      normalizedQuery
+    )
+  );
 }
 
 function uniqueSorted(values: string[]): string[] {
