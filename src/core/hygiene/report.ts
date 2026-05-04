@@ -856,10 +856,10 @@ function observationDraft(
 }
 
 function reviewCommands(ids: string[]): string[] {
-  return ids.flatMap((id) => [
-    `teamctx show ${commandArg(id)}`,
-    `teamctx explain ${commandArg(id)}`
-  ]);
+  return [
+    ...ids.flatMap((id) => [`teamctx show ${commandArg(id)}`, `teamctx explain ${commandArg(id)}`]),
+    `teamctx supersede-draft ${ids.map(commandArg).join(" ")} --json`
+  ];
 }
 
 function commandArg(value: string): string {

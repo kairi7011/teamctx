@@ -18,6 +18,7 @@ test("cliCommands registry exposes every documented command", () => {
     "rank",
     "list",
     "hygiene",
+    "supersede-draft",
     "audit",
     "record-candidate",
     "record-verified",

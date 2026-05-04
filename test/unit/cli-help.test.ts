@@ -230,6 +230,7 @@ test("formatHelp includes stable command usage", () => {
     help,
     /teamctx hygiene \[--older-than-days <n>\] \[--large-record-tokens <n>\].*\[--plan\]/
   );
+  assert.match(help, /teamctx supersede-draft <item-id> \[<item-id> \.\.\.\] \[--json\]/);
   assert.match(help, /teamctx record-verified <json-file> \[--json\]/);
   assert.match(help, /teamctx auth doctor/);
   assert.match(help, /teamctx tools \[--json\]/);

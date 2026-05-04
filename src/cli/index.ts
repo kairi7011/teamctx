@@ -49,6 +49,10 @@ import {
   type BoundHygieneReport
 } from "../core/hygiene/report.js";
 import {
+  getBoundSupersedeDraft,
+  type SupersedeDraftResult
+} from "../core/hygiene/supersede-draft.js";
+import {
   listBoundRecords,
   parseListKinds,
   parseListStates,
@@ -213,6 +217,7 @@ Usage:
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
   teamctx hygiene [--older-than-days <n>] [--large-record-tokens <n>] [--limit <n>] [--plan] [--json]
+  teamctx supersede-draft <item-id> [<item-id> ...] [--json]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file> [--json]
   teamctx record-verified <json-file> [--json]
@@ -240,6 +245,7 @@ Examples:
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
   teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan
+  teamctx supersede-draft rule-a rule-b --json
   teamctx audit --action created --limit 20
   teamctx first-record > observations.json
   teamctx record-verified observations.json
@@ -1141,6 +1147,62 @@ function firstRecord(): void {
   console.log(JSON.stringify(buildFirstRecordTemplate(), null, 2));
 }
 
+async function supersedeDraft(args: ParsedArgs): Promise<void> {
+  if (args.positional.length === 0) {
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing item id. Usage: teamctx supersede-draft <item-id> [<item-id> ...] [--json]"
+    );
+  }
+
+  const result = await getBoundSupersedeDraft({ itemIds: args.positional });
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(formatSupersedeDraft(result));
+}
+
+export function formatSupersedeDraft(result: SupersedeDraftResult): string {
+  const lines = [
+    "Supersede draft:",
+    `  mode: ${result.mode}`,
+    `  records: ${result.record_ids.join(", ")}`,
+    "  review:"
+  ];
+
+  for (const command of result.review_commands) {
+    lines.push(`    - ${command}`);
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("  warnings:");
+    for (const warning of result.warnings) {
+      lines.push(`    - ${warning}`);
+    }
+  }
+
+  lines.push("  candidate_write:");
+  for (const command of result.candidate_write_commands) {
+    lines.push(`    - ${command}`);
+  }
+
+  lines.push("  draft_observation:", indent(JSON.stringify(result.draft_observation, null, 2), 4));
+
+  return lines.join("\n");
+}
+
+function indent(value: string, spaces: number): string {
+  const prefix = " ".repeat(spaces);
+
+  return value
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
 async function explain(args: ParsedArgs): Promise<void> {
   const [itemId] = args.positional;
 
@@ -1575,6 +1637,7 @@ export const cliCommands: Record<string, CliCommandHandler> = {
   rank: (args) => rank(args),
   list: (args) => list(args),
   hygiene: (args) => hygiene(args),
+  "supersede-draft": (args) => supersedeDraft(args),
   audit: (args) => audit(args),
   "record-candidate": (args) => recordObservation(args, "candidate"),
   "record-verified": (args) => recordObservation(args, "verified"),

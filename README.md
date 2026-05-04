@@ -180,6 +180,7 @@ Check long-term context hygiene:
 teamctx hygiene --older-than-days 90
 teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan
 teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan --json
+teamctx supersede-draft rule-a rule-b --json
 ```
 
 `hygiene` reports active records that are expired, not yet valid, old,
@@ -188,8 +189,10 @@ context truncation. Add `--plan` to group those risks into a read-only
 maintenance plan with review commands, candidate write commands, and incomplete
 observation drafts in `--json` output. Drafts intentionally have empty evidence
 so `record-verified` rejects them until evidence review is complete. The plan
-does not auto-delete or auto-merge records; use `show`, `explain`,
-`record-verified`, and `invalidate` to review and correct them.
+does not auto-delete or auto-merge records. Use `supersede-draft` to generate a
+review-only replacement draft for one or more existing records, then fill
+evidence and run `record-verified` only after the replacement fully covers every
+listed `supersedes` id.
 
 Inspect one normalized record:
 

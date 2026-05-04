@@ -102,15 +102,19 @@ active text, crowded scopes, and oversized records. Add `--plan` when you want
 the risks grouped into a review-only maintenance loop:
 
 1. run the listed `show` / `explain` commands,
-2. decide whether to keep, narrow, supersede, split, or invalidate each group,
-3. run the candidate `record-verified` or `invalidate` commands only after
+2. use `teamctx supersede-draft <item-id> [<item-id> ...] --json` when the
+   reviewed records should be replaced by a new evidence-backed observation,
+3. decide whether to keep, narrow, supersede, split, or invalidate each group,
+4. run the candidate `record-verified` or `invalidate` commands only after
    evidence review,
-4. run `teamctx normalize --dry-run` before the final `teamctx normalize`.
+5. run `teamctx normalize --dry-run` before the final `teamctx normalize`.
 
 The plan is advisory and read-only. It never auto-deletes, auto-merges, or
 auto-expires records. JSON output includes incomplete observation drafts for
 reviewed replacement records; those drafts intentionally keep `evidence` empty
-so they must be completed before `record-verified` will accept them.
+so they must be completed before `record-verified` will accept them. The
+`supersede-draft` command follows the same safety rule and does not mutate the
+context store.
 
 ## Inspection and Correction
 
@@ -127,6 +131,14 @@ provenance, state, and audit history:
 
 ```bash
 teamctx explain <item-id>
+```
+
+Use `supersede-draft` when a reviewed record should remain as history but a new
+observation should replace it in active context:
+
+```bash
+teamctx supersede-draft <item-id> --json
+teamctx supersede-draft <item-id> <item-id> --json
 ```
 
 If a record is obsolete or unsafe to keep in default context, archive it with an
