@@ -10,6 +10,10 @@ import {
   serializeTextIndex
 } from "../indexes/record-index.js";
 import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
+import {
+  createEmptyQueryAliasConfig,
+  serializeQueryAliasConfig
+} from "../../schemas/query-alias.js";
 
 export const NORMALIZED_RECORD_FILES = [
   "facts.jsonl",
@@ -60,6 +64,7 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   mkdirSync(join(root, "normalized"), { recursive: true });
   mkdirSync(join(root, "audit"), { recursive: true });
   mkdirSync(join(root, "indexes"), { recursive: true });
+  mkdirSync(join(root, "aliases"), { recursive: true });
 
   writeStoreFile({
     path: join(root, "project.yaml"),
@@ -113,6 +118,13 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   writeStoreFile({
     path: join(root, "indexes", "episode-index.json"),
     content: serializeEpisodeIndex(createEmptyEpisodeIndex()),
+    overwrite,
+    createdFiles,
+    existingFiles
+  });
+  writeStoreFile({
+    path: join(root, "aliases", "query-aliases.json"),
+    content: serializeQueryAliasConfig(createEmptyQueryAliasConfig()),
     overwrite,
     createdFiles,
     existingFiles

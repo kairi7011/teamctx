@@ -10,7 +10,9 @@ test("formatBootstrapPlan renders the initial context bootstrap packet", () => {
       store: "github.com/team/context/contexts/service",
       local_store: false,
       recommended_observation_count: "8-15",
+      recommended_alias_count: "3-8",
       output_file: "teamctx-bootstrap-observations.json",
+      alias_file: "aliases/query-aliases.json",
       source_files: [
         {
           path: "README.md",
@@ -50,7 +52,9 @@ test("formatBootstrapPlan renders the initial context bootstrap packet", () => {
       "  local_store: false",
       "  source_files: 1",
       "  recommended_observations: 8-15",
+      "  recommended_aliases: 3-8",
       "  output_file: teamctx-bootstrap-observations.json",
+      "  alias_file: aliases/query-aliases.json",
       "  created_files: 1",
       "  existing_files: 1",
       "Source files to inspect:",

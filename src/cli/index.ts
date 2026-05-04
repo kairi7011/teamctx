@@ -434,7 +434,9 @@ export function formatBootstrapPlan(
     `  local_store: ${plan.local_store}`,
     `  source_files: ${plan.source_files.length}`,
     `  recommended_observations: ${plan.recommended_observation_count}`,
-    `  output_file: ${plan.output_file}`
+    `  recommended_aliases: ${plan.recommended_alias_count}`,
+    `  output_file: ${plan.output_file}`,
+    `  alias_file: ${plan.alias_file}`
   ];
 
   if (initResult !== undefined) {

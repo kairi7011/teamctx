@@ -70,7 +70,7 @@ export function expandQueryTokens(
     };
   }
 
-  const groups = aliasGroups.length > 0 ? aliasGroups : [originalTokens];
+  const groups = aliasGroups.length > 0 ? aliasGroups : queryTokenWindows(originalTokens);
 
   return {
     tokenGroups: uniqueTokenGroups(groups.map((group) => uniqueSorted(group))),
@@ -197,10 +197,10 @@ function uniqueTokenGroups(groups: string[][]): string[][] {
 
 function matchesQueryAlias(alias: QueryAlias, normalizedQuery: string): boolean {
   const anyPatternMatches =
-    alias.patterns?.some((pattern) => normalizedQuery.includes(pattern)) ?? false;
+    alias.patterns?.some((pattern) => normalizedQuery.includes(pattern.toLowerCase())) ?? false;
   const allPatternGroupsMatch =
     alias.allPatternGroups?.every((group) =>
-      group.some((pattern) => normalizedQuery.includes(pattern))
+      group.some((pattern) => normalizedQuery.includes(pattern.toLowerCase()))
     ) ?? false;
 
   return anyPatternMatches || allPatternGroupsMatch;
@@ -234,6 +234,23 @@ export function queryAliasSelectors(
 
 function isBroadTokenOnly(tokens: string[]): boolean {
   return tokens.length === 1 && BROAD_QUERY_TOKENS.has(tokens[0] ?? "");
+}
+
+function queryTokenWindows(tokens: string[]): string[][] {
+  if (tokens.length <= 2) {
+    return tokens.length === 0 ? [] : [tokens];
+  }
+
+  const groups: string[][] = [tokens];
+  const maxWindow = Math.min(4, tokens.length);
+
+  for (let size = maxWindow; size >= 2; size -= 1) {
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+      groups.push(tokens.slice(index, index + size));
+    }
+  }
+
+  return groups;
 }
 
 function uniqueSorted(values: string[]): string[] {

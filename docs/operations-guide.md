@@ -36,8 +36,13 @@ teamctx bootstrap github.com/my-org/ai-context --path contexts/my-service
 Bootstrap initializes the store if needed, detects likely source files for the
 first context pass, and prints an agent prompt for creating
 `teamctx-bootstrap-observations.json`. It does not auto-save broad summaries as
-verified knowledge. Review the generated observations, then record and normalize
-them:
+verified knowledge.
+
+The first batch should include both a compact session-start baseline and scoped
+task records. If source docs and user prompts use different terms or languages,
+review `aliases/query-aliases.json` and add narrow project aliases before the
+first evaluation run. Review the generated observations, then record and
+normalize them:
 
 ```bash
 teamctx record-verified teamctx-bootstrap-observations.json

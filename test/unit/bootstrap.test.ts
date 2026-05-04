@@ -60,7 +60,9 @@ test("buildBootstrapPlan includes reviewable commands and agent prompt", () => {
   });
 
   assert.equal(plan.output_file, "teamctx-bootstrap-observations.json");
+  assert.equal(plan.alias_file, "aliases/query-aliases.json");
   assert.equal(plan.recommended_observation_count, "8-15");
+  assert.equal(plan.recommended_alias_count, "3-8");
   assert.deepEqual(plan.commands, [
     "teamctx record-verified teamctx-bootstrap-observations.json",
     "teamctx normalize --dry-run",
@@ -70,4 +72,6 @@ test("buildBootstrapPlan includes reviewable commands and agent prompt", () => {
   assert.match(plan.agent_prompt, /Read these source files first:/);
   assert.match(plan.agent_prompt, /README.md: project README/);
   assert.match(plan.agent_prompt, /Do not dump documentation/);
+  assert.match(plan.agent_prompt, /first-turn baseline/);
+  assert.match(plan.agent_prompt, /project query aliases/);
 });

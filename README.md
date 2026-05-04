@@ -48,7 +48,10 @@ teamctx bootstrap
 `bootstrap` initializes the store if needed, detects likely project source files
 such as README, agent instructions, docs, package metadata, and CI config, then
 prints an agent prompt for creating the first reviewed observation batch. It does
-not automatically save broad summaries as verified knowledge.
+not automatically save broad summaries as verified knowledge. The prompt asks
+for a small session-start baseline plus scoped task knowledge, and points the
+agent at `aliases/query-aliases.json` when team prompts use different terms or
+languages than the source docs.
 
 ## Context Store
 
@@ -265,7 +268,9 @@ Older `content_chars` settings are still accepted and converted to approximate t
 
 Project query aliases can be kept in `aliases/query-aliases.json` inside the
 context store. They expand known team wording into deterministic text-index
-tokens without adding embeddings or a database:
+tokens without adding embeddings or a database. New stores include an empty
+alias file, and `bootstrap` prompts agents to add aliases for common vague or
+multilingual task wording:
 
 ```json
 {

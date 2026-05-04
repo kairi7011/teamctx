@@ -46,7 +46,7 @@ test("initStoreLayout creates the MVP context store files", (context) => {
   });
 
   assert.equal(result.existingFiles.length, 0);
-  assert.equal(result.createdFiles.length, 14);
+  assert.equal(result.createdFiles.length, 15);
   assert.ok(existsSync(join(result.root, "raw", "events")));
 
   for (const file of NORMALIZED_RECORD_FILES) {
@@ -113,6 +113,10 @@ test("initStoreLayout creates the MVP context store files", (context) => {
       ""
     ].join("\n")
   );
+  assert.equal(
+    readFileSync(join(result.root, "aliases", "query-aliases.json"), "utf8"),
+    ["{", '  "schema_version": 1,', '  "aliases": []', "}", ""].join("\n")
+  );
 });
 
 test("initStoreLayout does not overwrite existing files by default", (context) => {
@@ -150,10 +154,10 @@ test("initContextStoreLayout initializes an adapter-backed store idempotently", 
     projectId: "github.com/team/service"
   });
 
-  assert.equal(first.createdFiles.length, 14);
+  assert.equal(first.createdFiles.length, 15);
   assert.equal(first.existingFiles.length, 0);
   assert.equal(second.createdFiles.length, 0);
-  assert.equal(second.existingFiles.length, 14);
+  assert.equal(second.existingFiles.length, 15);
   assert.ok(existsSync(join(root, "project.yaml")));
   assert.ok(existsSync(join(root, "indexes", "path-index.json")));
 });
@@ -168,7 +172,7 @@ test("initBoundStoreAsync initializes remote context store adapters", async (con
 
   assert.equal(result.localStore, false);
   assert.equal(result.store, "github.com/team/context/contexts/service");
-  assert.equal(result.createdFiles.length, 14);
+  assert.equal(result.createdFiles.length, 15);
   assert.equal(result.existingFiles.length, 0);
   assert.ok(existsSync(join(remoteRoot, "normalized", "facts.jsonl")));
 });

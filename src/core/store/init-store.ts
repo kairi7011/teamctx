@@ -20,6 +20,10 @@ import {
 } from "../indexes/record-index.js";
 import { createEmptyEpisodeIndex, serializeEpisodeIndex } from "../indexes/episode-index.js";
 import { createDefaultProjectConfig, serializeProjectConfig } from "../../schemas/project.js";
+import {
+  createEmptyQueryAliasConfig,
+  serializeQueryAliasConfig
+} from "../../schemas/query-alias.js";
 import type { Binding } from "../../schemas/types.js";
 
 export type InitStoreLayoutResult = {
@@ -153,6 +157,10 @@ function storeLayoutFiles(projectId: string): Array<{ path: string; content: str
     {
       path: "indexes/episode-index.json",
       content: serializeEpisodeIndex(createEmptyEpisodeIndex())
+    },
+    {
+      path: "aliases/query-aliases.json",
+      content: serializeQueryAliasConfig(createEmptyQueryAliasConfig())
     }
   ];
 }

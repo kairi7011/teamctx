@@ -28,6 +28,17 @@ export type QueryAliasConfig = {
 
 const BROAD_SINGLE_PATTERNS = new Set(["github", "git", "cli", "context"]);
 
+export function createEmptyQueryAliasConfig(): QueryAliasConfig {
+  return {
+    schema_version: 1,
+    aliases: []
+  };
+}
+
+export function serializeQueryAliasConfig(config: QueryAliasConfig): string {
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
 export function parseQueryAliasConfig(content: string): QueryAliasConfig {
   let parsed: unknown;
 

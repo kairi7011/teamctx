@@ -17,7 +17,9 @@ export type BootstrapPlan = {
   local_store: boolean;
   source_files: BootstrapSource[];
   recommended_observation_count: string;
+  recommended_alias_count: string;
   output_file: string;
+  alias_file: string;
   commands: string[];
   agent_prompt: string;
 };
@@ -128,6 +130,7 @@ export function buildBootstrapPlan(options: {
   outputFile?: string;
 }): BootstrapPlan {
   const outputFile = options.outputFile ?? "teamctx-bootstrap-observations.json";
+  const aliasFile = "aliases/query-aliases.json";
   const commands = [
     `teamctx record-verified ${outputFile}`,
     "teamctx normalize --dry-run",
@@ -142,12 +145,15 @@ export function buildBootstrapPlan(options: {
     local_store: options.localStore,
     source_files: options.sourceFiles,
     recommended_observation_count: "8-15",
+    recommended_alias_count: "3-8",
     output_file: outputFile,
+    alias_file: aliasFile,
     commands,
     agent_prompt: buildBootstrapAgentPrompt({
       repo: options.repo,
       sourceFiles: options.sourceFiles,
       outputFile,
+      aliasFile,
       commands
     })
   };
@@ -157,6 +163,7 @@ function buildBootstrapAgentPrompt(options: {
   repo: string;
   sourceFiles: BootstrapSource[];
   outputFile: string;
+  aliasFile: string;
   commands: string[];
 }): string {
   const sources =
@@ -176,11 +183,22 @@ function buildBootstrapAgentPrompt(options: {
     `${options.outputFile}. Focus on durable knowledge that future agents need:`,
     "rules, pitfalls, decisions, workflows, facts, and glossary terms.",
     "",
+    "Create a small first-turn baseline plus scoped task knowledge:",
+    "- 3-5 repo-wide facts/rules/glossary entries that are useful at session",
+    "  start even before the task is fully specified.",
+    "- Scoped entries for module-specific workflows, pitfalls, and decisions.",
+    "",
     "Do not dump documentation. Each observation should be one reusable project",
-    "constraint or workflow, include file-backed evidence, and use narrow scope",
-    "paths/domains/tags so session-start retrieval stays bounded.",
+    "constraint or workflow, include file-backed evidence, and use the narrowest",
+    "safe scope. Keep baseline entries short so session-start retrieval stays",
+    "bounded.",
     "Use the record-verified JSON shape: kind, text, source_type, scope,",
     "evidence, and supersedes when needed.",
+    "",
+    `Also review ${options.aliasFile}. If likely user prompts use different`,
+    "terms or languages than the source docs, add 3-8 project query aliases.",
+    "Aliases should map common vague task language to the record tokens, symbols,",
+    "or tags that should retrieve the right context. Avoid broad one-word aliases.",
     "",
     "Then run:",
     ...options.commands.map((command) => `- ${command}`)
