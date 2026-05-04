@@ -78,7 +78,7 @@ teamctx capture
 teamctx normalize --dry-run
 teamctx normalize
 teamctx status
-teamctx hygiene --older-than-days 90
+teamctx hygiene --older-than-days 90 --plan
 ```
 
 `capture` inspects the recent working tree and commits, then prints an agent
@@ -98,9 +98,17 @@ is idempotent for the same raw events and skips unchanged remote writes.
 
 Use `hygiene` for long-lived stores. It flags active records whose validity
 window has expired, records that have not been verified recently, duplicate
-active text, crowded scopes, and oversized records. The report is advisory:
-review the evidence, then record a superseding observation or invalidate the
-old record explicitly.
+active text, crowded scopes, and oversized records. Add `--plan` when you want
+the risks grouped into a review-only maintenance loop:
+
+1. run the listed `show` / `explain` commands,
+2. decide whether to keep, narrow, supersede, split, or invalidate each group,
+3. run the candidate `record-verified` or `invalidate` commands only after
+   evidence review,
+4. run `teamctx normalize --dry-run` before the final `teamctx normalize`.
+
+The plan is advisory and read-only. It never auto-deletes, auto-merges, or
+auto-expires records.
 
 ## Inspection and Correction
 

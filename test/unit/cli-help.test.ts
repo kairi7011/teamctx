@@ -119,6 +119,12 @@ test("parseArgs treats known boolean flags as value-less before positional args"
     positional: ["before.json", "after.json"],
     flags: { json: true }
   });
+
+  assert.deepEqual(parseArgs(["hygiene", "--plan", "--json"]), {
+    command: "hygiene",
+    positional: [],
+    flags: { plan: true, json: true }
+  });
 });
 
 test("parseArgs rejects missing values for value flags", () => {
@@ -220,7 +226,10 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /teamctx context \[json-file\] \[--target-files <files>\]/);
   assert.match(help, /teamctx context-diff <left-json> <right-json>/);
   assert.match(help, /teamctx query-explain \[json-file\]/);
-  assert.match(help, /teamctx hygiene \[--older-than-days <n>\] \[--large-record-tokens <n>\]/);
+  assert.match(
+    help,
+    /teamctx hygiene \[--older-than-days <n>\] \[--large-record-tokens <n>\].*\[--plan\]/
+  );
   assert.match(help, /teamctx record-verified <json-file> \[--json\]/);
   assert.match(help, /teamctx auth doctor/);
   assert.match(help, /teamctx tools \[--json\]/);

@@ -178,13 +178,16 @@ Check long-term context hygiene:
 
 ```bash
 teamctx hygiene --older-than-days 90
-teamctx hygiene --older-than-days 90 --large-record-tokens 250 --json
+teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan
+teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan --json
 ```
 
 `hygiene` reports active records that are expired, not yet valid, old,
 unverified, duplicated, crowded under the same scope, or too large before
-context truncation. It does not auto-delete records; use `show`, `explain`, and
-`invalidate` to review and correct them.
+context truncation. Add `--plan` to group those risks into a read-only
+maintenance plan with review commands and candidate write commands. It does not
+auto-delete or auto-merge records; use `show`, `explain`, `record-verified`,
+and `invalidate` to review and correct them.
 
 Inspect one normalized record:
 

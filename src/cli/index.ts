@@ -96,7 +96,7 @@ export type ParsedArgs = {
   flags: Record<string, CliFlagValue>;
 };
 
-const BOOLEAN_FLAGS = new Set(["dry-run", "force-refresh", "help", "json", "lease"]);
+const BOOLEAN_FLAGS = new Set(["dry-run", "force-refresh", "help", "json", "lease", "plan"]);
 const REPEATABLE_VALUE_FLAGS = new Set([
   "action",
   "actions",
@@ -212,7 +212,7 @@ Usage:
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
-  teamctx hygiene [--older-than-days <n>] [--large-record-tokens <n>] [--limit <n>] [--json]
+  teamctx hygiene [--older-than-days <n>] [--large-record-tokens <n>] [--limit <n>] [--plan] [--json]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file> [--json]
   teamctx record-verified <json-file> [--json]
@@ -239,7 +239,7 @@ Examples:
   teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
-  teamctx hygiene --older-than-days 90 --large-record-tokens 250
+  teamctx hygiene --older-than-days 90 --large-record-tokens 250 --plan
   teamctx audit --action created --limit 20
   teamctx first-record > observations.json
   teamctx record-verified observations.json
@@ -793,6 +793,9 @@ async function hygiene(args: ParsedArgs): Promise<void> {
     parseLimitFlag(args.flags["large-record-tokens"], "--large-record-tokens")
   );
   assignDefined(input, "limit", parseLimitFlag(args.flags.limit));
+  if (args.flags.plan === true) {
+    input.includePlan = true;
+  }
 
   const result = await getBoundHygieneReport(input);
 
@@ -829,6 +832,7 @@ export function formatHygieneReport(result: BoundHygieneReport): string {
   ];
 
   appendHygieneRiskList(lines, result);
+  appendHygieneMaintenancePlan(lines, result);
 
   if (result.recovery_suggestions.length > 0) {
     lines.push("  suggestions:");
@@ -838,6 +842,46 @@ export function formatHygieneReport(result: BoundHygieneReport): string {
   }
 
   return lines.join("\n");
+}
+
+function appendHygieneMaintenancePlan(lines: string[], result: BoundHygieneReport): void {
+  if (!result.enabled || result.maintenance_plan === undefined) {
+    return;
+  }
+
+  const plan = result.maintenance_plan;
+  lines.push(`  maintenance_plan: ${plan.mode}`);
+
+  if (plan.items.length === 0) {
+    lines.push("    items: none");
+  } else {
+    lines.push("    items:");
+
+    for (const item of plan.items) {
+      lines.push(`      - [${item.severity}] ${item.action}: ${item.record_ids.join(", ")}`);
+      lines.push(`        title: ${item.title}`);
+      lines.push(`        why: ${item.rationale}`);
+      lines.push("        review:");
+      for (const command of item.review_commands) {
+        lines.push(`          - ${command}`);
+      }
+      lines.push("        candidate_write:");
+      for (const command of item.candidate_write_commands) {
+        lines.push(`          - ${command}`);
+      }
+      if (item.notes.length > 0) {
+        lines.push("        notes:");
+        for (const note of item.notes) {
+          lines.push(`          - ${note}`);
+        }
+      }
+    }
+  }
+
+  lines.push("    safety:");
+  for (const note of plan.safety_notes) {
+    lines.push(`      - ${note}`);
+  }
 }
 
 function appendHygieneRiskList(lines: string[], result: BoundHygieneReport): void {

@@ -49,6 +49,42 @@ export type HygieneRiskItem = {
   suggested_action: string;
 };
 
+export type HygienePlanCategory =
+  | "validity_window"
+  | "age_review"
+  | "evidence_review"
+  | "duplicate_review"
+  | "scope_review"
+  | "size_review";
+
+export type HygienePlanAction =
+  | "invalidate_expired"
+  | "correct_future_validity"
+  | "refresh_or_invalidate"
+  | "verify_evidence"
+  | "merge_or_supersede"
+  | "narrow_or_consolidate"
+  | "split_record";
+
+export type HygieneMaintenancePlanItem = {
+  category: HygienePlanCategory;
+  action: HygienePlanAction;
+  severity: HygieneSeverity;
+  record_ids: string[];
+  title: string;
+  rationale: string;
+  review_commands: string[];
+  candidate_write_commands: string[];
+  notes: string[];
+};
+
+export type HygieneMaintenancePlan = {
+  mode: "review_only";
+  item_count: number;
+  items: HygieneMaintenancePlanItem[];
+  safety_notes: string[];
+};
+
 export type ContextHygieneReport = {
   checked_at: string;
   older_than_days: number;
@@ -67,6 +103,7 @@ export type ContextHygieneReport = {
   };
   risk_items: HygieneRiskItem[];
   recovery_suggestions: string[];
+  maintenance_plan?: HygieneMaintenancePlan;
 };
 
 export type HygieneReportOptions = {
@@ -74,6 +111,7 @@ export type HygieneReportOptions = {
   olderThanDays?: number;
   largeRecordTokens?: number;
   limit?: number;
+  includePlan?: boolean;
   now?: () => Date;
 };
 
@@ -136,6 +174,7 @@ export async function summarizeContextStoreAdapterHygiene(options: {
   olderThanDays?: number;
   largeRecordTokens?: number;
   limit?: number;
+  includePlan?: boolean;
   now?: () => Date;
 }): Promise<ContextHygieneReport> {
   return summarizeRecordsHygiene(await readAdapterRecords(options.store), options);
@@ -237,7 +276,7 @@ export function summarizeRecordsHygiene(
 
   const limitedRiskItems = riskItems.slice(0, limit);
 
-  return {
+  const report: ContextHygieneReport = {
     checked_at: checkedAt.toISOString(),
     older_than_days: olderThanDays,
     large_record_tokens: largeRecordTokens,
@@ -256,6 +295,12 @@ export function summarizeRecordsHygiene(
     risk_items: limitedRiskItems,
     recovery_suggestions: recoverySuggestions(riskItems, limitedRiskItems.length, riskItems.length)
   };
+
+  if (options.includePlan === true) {
+    report.maintenance_plan = buildMaintenancePlan(limitedRiskItems);
+  }
+
+  return report;
 }
 
 function hygieneOptions(options: BoundHygieneOptions): HygieneSummaryOptions {
@@ -265,6 +310,7 @@ function hygieneOptions(options: BoundHygieneOptions): HygieneSummaryOptions {
       ? { largeRecordTokens: options.largeRecordTokens }
       : {}),
     ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.includePlan !== undefined ? { includePlan: options.includePlan } : {}),
     ...(options.now !== undefined ? { now: options.now } : {})
   };
 }
@@ -538,6 +584,187 @@ function recoverySuggestions(
   }
 
   return suggestions;
+}
+
+function buildMaintenancePlan(riskItems: HygieneRiskItem[]): HygieneMaintenancePlan {
+  const items: HygieneMaintenancePlanItem[] = [];
+  const seen = new Set<string>();
+
+  for (const risk of riskItems) {
+    const key = planKey(risk);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    items.push(planItemForRisk(risk));
+  }
+
+  return {
+    mode: "review_only",
+    item_count: items.length,
+    items,
+    safety_notes: [
+      "`teamctx hygiene --plan` is read-only and never mutates the context store.",
+      "Run the review commands first; only run candidate write commands after evidence confirms the action.",
+      "Prefer recording a superseding verified observation when the corrected context should remain discoverable."
+    ]
+  };
+}
+
+function planKey(risk: HygieneRiskItem): string {
+  if (risk.risk === "duplicate_active_text" || risk.risk === "crowded_active_scope") {
+    const ids = risk.related_ids.length > 0 ? risk.related_ids : [risk.id];
+
+    return `${risk.risk}:${ids.join("|")}`;
+  }
+
+  return `${risk.risk}:${risk.id}`;
+}
+
+function planItemForRisk(risk: HygieneRiskItem): HygieneMaintenancePlanItem {
+  const ids =
+    risk.risk === "duplicate_active_text" || risk.risk === "crowded_active_scope"
+      ? risk.related_ids.length > 0
+        ? risk.related_ids
+        : [risk.id]
+      : [risk.id];
+  const base = {
+    severity: risk.severity,
+    record_ids: ids,
+    review_commands: reviewCommands(ids)
+  };
+
+  switch (risk.risk) {
+    case "expired_active":
+      return {
+        ...base,
+        category: "validity_window",
+        action: "invalidate_expired",
+        title: "Invalidate or supersede expired active record",
+        rationale: risk.detail,
+        candidate_write_commands: [
+          `teamctx invalidate ${commandArg(risk.id)} --reason "validity window expired"`,
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "If the rule is still true, record a fresh verified observation instead of invalidating it."
+        ]
+      };
+    case "not_yet_valid_active":
+      return {
+        ...base,
+        category: "validity_window",
+        action: "correct_future_validity",
+        title: "Correct future-valid active record",
+        rationale: risk.detail,
+        candidate_write_commands: [
+          "teamctx record-verified corrected-observation.json",
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "Use the corrected observation to fix the validity window or explicitly supersede the premature record."
+        ]
+      };
+    case "old_active":
+      return {
+        ...base,
+        category: "age_review",
+        action: "refresh_or_invalidate",
+        title: "Refresh or retire old active record",
+        rationale: risk.detail,
+        candidate_write_commands: [
+          "teamctx record-verified refreshed-observation.json",
+          `teamctx invalidate ${commandArg(risk.id)} --reason "obsolete after hygiene review"`,
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "Age alone is not proof of falsehood; keep the record if the evidence still matches current behavior."
+        ]
+      };
+    case "unverified_active":
+      return {
+        ...base,
+        category: "evidence_review",
+        action: "verify_evidence",
+        title: "Add evidence for unverified active record",
+        rationale: risk.detail,
+        candidate_write_commands: [
+          "teamctx record-verified verified-observation.json",
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: ["Leave low-impact records alone if they are not recurring decision context."]
+      };
+    case "duplicate_active_text":
+      return {
+        ...base,
+        category: "duplicate_review",
+        action: "merge_or_supersede",
+        title: "Merge or supersede duplicate active records",
+        rationale: `The same normalized text appears across ${ids.length} active records.`,
+        candidate_write_commands: [
+          "teamctx record-verified merged-observation.json",
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "The merged observation should list the replaced record ids in `supersedes`.",
+          "Keep separate records when similar text has meaningfully different scope or evidence."
+        ]
+      };
+    case "crowded_active_scope":
+      return {
+        ...base,
+        category: "scope_review",
+        action: "narrow_or_consolidate",
+        title: "Narrow or consolidate crowded scope records",
+        rationale: `The same scope contains ${ids.length} active ${risk.kind} records.`,
+        candidate_write_commands: [
+          "teamctx record-verified narrowed-or-consolidated-observations.json",
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "Prefer narrower domains, tags, symbols, or one canonical workflow/rule when the scope is too broad."
+        ]
+      };
+    case "large_active_record":
+      return {
+        ...base,
+        category: "size_review",
+        action: "split_record",
+        title: "Split oversized active record",
+        rationale: risk.detail,
+        candidate_write_commands: [
+          "teamctx record-verified split-observations.json",
+          "teamctx normalize --dry-run",
+          "teamctx normalize"
+        ],
+        notes: [
+          "Move detailed prose into canonical docs and keep normalized records focused on durable decisions."
+        ]
+      };
+  }
+}
+
+function reviewCommands(ids: string[]): string[] {
+  return ids.flatMap((id) => [
+    `teamctx show ${commandArg(id)}`,
+    `teamctx explain ${commandArg(id)}`
+  ]);
+}
+
+function commandArg(value: string): string {
+  if (/^[A-Za-z0-9._:@/+~-]+$/.test(value)) {
+    return value;
+  }
+
+  return JSON.stringify(value);
 }
 
 function readLocalRecords(storeRoot: string): NormalizedRecord[] {

@@ -80,6 +80,64 @@ test("summarizeRecordsHygiene flags long-term active context rot risks", () => {
   );
 });
 
+test("summarizeRecordsHygiene builds a review-only maintenance plan", () => {
+  const records: NormalizedRecord[] = [
+    record("expired", {
+      valid_until: "2026-03-01T00:00:00.000Z",
+      last_verified_at: "2026-02-01T00:00:00.000Z"
+    }),
+    record("duplicate-a", {
+      text: "Use the shared cache helper for tenant state."
+    }),
+    record("duplicate-b", {
+      text: "Use the shared cache helper for tenant state."
+    }),
+    ...Array.from({ length: 4 }, (_, index) =>
+      record(`crowded-${index}`, {
+        kind: "rule",
+        text: `Crowded scoped rule ${index}.`,
+        scope: commonScope()
+      })
+    )
+  ];
+
+  const report = summarizeRecordsHygiene(records, {
+    now: () => new Date("2026-05-04T00:00:00.000Z"),
+    olderThanDays: 90,
+    limit: 50,
+    includePlan: true
+  });
+
+  assert.equal(report.maintenance_plan?.mode, "review_only");
+  assert.ok(
+    report.maintenance_plan?.safety_notes.some((note) => note.includes("read-only")),
+    "plan should make the no-mutation boundary explicit"
+  );
+  assert.ok(
+    report.maintenance_plan?.items.some(
+      (item) =>
+        item.action === "invalidate_expired" &&
+        item.record_ids.includes("expired") &&
+        item.candidate_write_commands.includes(
+          'teamctx invalidate expired --reason "validity window expired"'
+        )
+    )
+  );
+  assert.ok(
+    report.maintenance_plan?.items.some(
+      (item) =>
+        item.action === "merge_or_supersede" &&
+        item.record_ids.join(",") === "duplicate-a,duplicate-b" &&
+        item.notes.some((note) => note.includes("supersedes"))
+    )
+  );
+  assert.ok(
+    report.maintenance_plan?.items.some(
+      (item) => item.action === "narrow_or_consolidate" && item.record_ids.length === 4
+    )
+  );
+});
+
 test("summarizeContextStoreHygiene reads normalized records from store shards", (context) => {
   const directory = mkdtempSync(join(tmpdir(), "teamctx-hygiene-"));
   context.after(() => rmSync(directory, { recursive: true, force: true }));
