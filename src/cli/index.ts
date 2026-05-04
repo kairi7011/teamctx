@@ -212,7 +212,7 @@ Usage:
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
-  teamctx hygiene [--older-than-days <n>] [--limit <n>] [--json]
+  teamctx hygiene [--older-than-days <n>] [--large-record-tokens <n>] [--limit <n>] [--json]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file> [--json]
   teamctx record-verified <json-file> [--json]
@@ -239,7 +239,7 @@ Examples:
   teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
-  teamctx hygiene --older-than-days 90
+  teamctx hygiene --older-than-days 90 --large-record-tokens 250
   teamctx audit --action created --limit 20
   teamctx first-record > observations.json
   teamctx record-verified observations.json

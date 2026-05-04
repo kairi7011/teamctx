@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  getBoundHygieneReport,
   summarizeContextStoreHygiene,
-  summarizeRecordsHygiene
+  summarizeRecordsHygiene,
+  type BoundHygieneServices
 } from "../../src/core/hygiene/report.js";
 import type { NormalizedRecord } from "../../src/schemas/normalized-record.js";
+import type { Binding } from "../../src/schemas/types.js";
 import { fixtureNormalizedRecord } from "../fixtures/normalized-record.js";
 
 test("summarizeRecordsHygiene flags long-term active context rot risks", () => {
@@ -102,6 +105,35 @@ test("summarizeContextStoreHygiene reads normalized records from store shards", 
   assert.equal(report.risk_items[0]?.id, "old-fact");
 });
 
+test("getBoundHygieneReport only maps git discovery failures to disabled reports", async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), "teamctx-hygiene-bound-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const storeRoot = join(directory, ".teamctx");
+  const normalizedRoot = join(storeRoot, "normalized");
+  mkdirSync(normalizedRoot, { recursive: true });
+  writeFileSync(join(normalizedRoot, "facts.jsonl"), "{not-json}\n", "utf8");
+
+  await assert.rejects(
+    () =>
+      getBoundHygieneReport({
+        services: servicesFor(directory)
+      }),
+    /Expected property name|Unexpected token/
+  );
+
+  const disabled = await getBoundHygieneReport({
+    services: {
+      ...servicesFor(directory),
+      getRepoRoot: () => {
+        throw new Error("not a git repo");
+      }
+    }
+  });
+
+  assert.equal(disabled.enabled, false);
+  assert.match(disabled.reason, /No git repository/);
+});
+
 function record(id: string, overrides: Partial<NormalizedRecord> = {}): NormalizedRecord {
   return fixtureNormalizedRecord({
     id,
@@ -115,6 +147,27 @@ function record(id: string, overrides: Partial<NormalizedRecord> = {}): Normaliz
     last_verified_at: "2026-04-22T11:00:00.000Z",
     ...overrides
   });
+}
+
+function servicesFor(root: string): BoundHygieneServices {
+  const binding: Binding = {
+    repo: "github.com/team/service",
+    root,
+    contextStore: {
+      provider: "github",
+      repo: "github.com/team/service",
+      path: ".teamctx"
+    },
+    createdAt: "2026-04-22T10:00:00.000Z"
+  };
+
+  return {
+    getRepoRoot: () => root,
+    getOriginRemote: () => "git@github.com:team/service.git",
+    getCurrentBranch: () => "main",
+    getHeadCommit: () => "abc123",
+    findBinding: () => binding
+  };
 }
 
 function commonScope(): NormalizedRecord["scope"] {

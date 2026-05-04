@@ -145,71 +145,76 @@ export async function getBoundHygieneReport(
   options: BoundHygieneOptions = {}
 ): Promise<BoundHygieneReport> {
   const services = options.services ?? defaultServices;
+  let root: string;
+  let repo: string;
+  let branch: string;
+  let headCommit: string;
 
   try {
-    const root = services.getRepoRoot(options.cwd);
-    const repo = normalizeGitHubRepo(services.getOriginRemote(root));
-    const branch = services.getCurrentBranch(root);
-    const headCommit = services.getHeadCommit(root);
-    const binding = services.findBinding(repo);
-
-    if (!binding) {
-      return {
-        enabled: false,
-        reason: "No teamctx binding found for this git root.",
-        repo,
-        root,
-        branch,
-        head_commit: headCommit
-      };
-    }
-
-    const base = {
-      repo,
-      root,
-      branch,
-      head_commit: headCommit,
-      context_store: `${binding.contextStore.repo}/${binding.contextStore.path}`
-    };
-
-    if (binding.contextStore.repo === repo) {
-      return {
-        enabled: true,
-        ...base,
-        store_head: null,
-        local_store: true,
-        ...summarizeContextStoreHygiene({
-          storeRoot: resolveStoreRoot(root, binding.contextStore.path),
-          ...hygieneOptions(options)
-        })
-      };
-    }
-
-    const store = createContextStoreForBinding({
-      repo,
-      repoRoot: root,
-      binding,
-      ...(services.createContextStore !== undefined
-        ? { createContextStore: services.createContextStore }
-        : {})
-    });
-
-    return {
-      enabled: true,
-      ...base,
-      store_head: await store.getRevision(),
-      local_store: false,
-      ...(await summarizeContextStoreAdapterHygiene({
-        store,
-        ...hygieneOptions(options)
-      }))
-    };
+    root = services.getRepoRoot(options.cwd);
+    repo = normalizeGitHubRepo(services.getOriginRemote(root));
+    branch = services.getCurrentBranch(root);
+    headCommit = services.getHeadCommit(root);
   } catch {
     return {
       enabled: false,
       reason: "No git repository with an origin remote found for this workspace."
     };
   }
+
+  const binding = services.findBinding(repo);
+
+  if (!binding) {
+    return {
+      enabled: false,
+      repo,
+      root,
+      branch,
+      head_commit: headCommit,
+      reason: "No teamctx binding found for this git root."
+    };
+  }
+
+  const base = {
+    repo,
+    root,
+    branch,
+    head_commit: headCommit,
+    context_store: `${binding.contextStore.repo}/${binding.contextStore.path}`
+  };
+
+  if (binding.contextStore.repo === repo) {
+    return {
+      enabled: true,
+      ...base,
+      store_head: null,
+      local_store: true,
+      ...summarizeContextStoreHygiene({
+        storeRoot: resolveStoreRoot(root, binding.contextStore.path),
+        ...hygieneOptions(options)
+      })
+    };
+  }
+
+  const store = createContextStoreForBinding({
+    repo,
+    repoRoot: root,
+    binding,
+    ...(services.createContextStore !== undefined
+      ? { createContextStore: services.createContextStore }
+      : {})
+  });
+
+  return {
+    enabled: true,
+    ...base,
+    store_head: await store.getRevision(),
+    local_store: false,
+    ...(await summarizeContextStoreAdapterHygiene({
+      store,
+      ...hygieneOptions(options)
+    }))
+  };
 }
 
 export function summarizeRecordsHygiene(
