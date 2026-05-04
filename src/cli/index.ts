@@ -44,6 +44,11 @@ import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local
 import { describeBindingCapabilities } from "../core/capabilities.js";
 import { explainBoundEpisodeAsync } from "../core/episodes/explain.js";
 import {
+  getBoundHygieneReport,
+  type BoundHygieneOptions,
+  type BoundHygieneReport
+} from "../core/hygiene/report.js";
+import {
   listBoundRecords,
   parseListKinds,
   parseListStates,
@@ -207,6 +212,7 @@ Usage:
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
+  teamctx hygiene [--older-than-days <n>] [--limit <n>] [--json]
   teamctx audit [--action <action>] [--limit <n>] [--offset <n>]
   teamctx record-candidate <json-file> [--json]
   teamctx record-verified <json-file> [--json]
@@ -233,6 +239,7 @@ Examples:
   teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
+  teamctx hygiene --older-than-days 90
   teamctx audit --action created --limit 20
   teamctx first-record > observations.json
   teamctx record-verified observations.json
@@ -770,6 +777,90 @@ async function list(args: ParsedArgs): Promise<void> {
   assignDefined(input, "offset", parseOffsetFlag(args.flags.offset));
 
   console.log(JSON.stringify(await listBoundRecords(input), null, 2));
+}
+
+async function hygiene(args: ParsedArgs): Promise<void> {
+  const input: BoundHygieneOptions = {};
+
+  assignDefined(
+    input,
+    "olderThanDays",
+    parseLimitFlag(args.flags["older-than-days"], "--older-than-days")
+  );
+  assignDefined(
+    input,
+    "largeRecordTokens",
+    parseLimitFlag(args.flags["large-record-tokens"], "--large-record-tokens")
+  );
+  assignDefined(input, "limit", parseLimitFlag(args.flags.limit));
+
+  const result = await getBoundHygieneReport(input);
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(formatHygieneReport(result));
+}
+
+export function formatHygieneReport(result: BoundHygieneReport): string {
+  if (!result.enabled) {
+    const lines = ["Context hygiene unavailable:", `  reason: ${result.reason}`];
+
+    if (result.repo !== undefined) {
+      lines.push(`  repo: ${result.repo}`);
+    }
+
+    return lines.join("\n");
+  }
+
+  const { counts } = result;
+  const lines = [
+    "Context hygiene:",
+    `  repo: ${result.repo}`,
+    `  branch: ${result.branch}`,
+    `  head: ${result.head_commit}`,
+    `  store: ${result.context_store}`,
+    `  checked_at: ${result.checked_at}`,
+    `  thresholds: old_active>=${result.older_than_days}d large_record>=${result.large_record_tokens} tokens`,
+    `  records: total=${counts.total_records} active=${counts.active_records} inactive=${counts.inactive_records}`,
+    `  risks: expired=${counts.expired_active_records} future=${counts.not_yet_valid_active_records} old=${counts.old_active_records} unverified=${counts.unverified_active_records} duplicate=${counts.duplicate_active_text_records} crowded=${counts.crowded_active_scope_records} large=${counts.large_active_records}`
+  ];
+
+  appendHygieneRiskList(lines, result);
+
+  if (result.recovery_suggestions.length > 0) {
+    lines.push("  suggestions:");
+    for (const suggestion of result.recovery_suggestions) {
+      lines.push(`    - ${suggestion}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function appendHygieneRiskList(lines: string[], result: BoundHygieneReport): void {
+  if (!result.enabled || result.risk_items.length === 0) {
+    lines.push("  risk_items: none");
+    return;
+  }
+
+  lines.push("  risk_items:");
+
+  for (const item of result.risk_items) {
+    const metrics = [
+      item.age_days !== undefined ? `age=${item.age_days}d` : undefined,
+      item.token_count !== undefined ? `tokens=${item.token_count}` : undefined
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join(" ");
+    const suffix = metrics.length > 0 ? ` ${metrics}` : "";
+
+    lines.push(
+      `    - [${item.severity}] ${item.risk} ${item.id} (${item.kind})${suffix}: ${item.detail}`
+    );
+  }
 }
 
 async function audit(args: ParsedArgs): Promise<void> {
@@ -1434,6 +1525,7 @@ export const cliCommands: Record<string, CliCommandHandler> = {
   "query-explain": (args) => queryExplain(args),
   rank: (args) => rank(args),
   list: (args) => list(args),
+  hygiene: (args) => hygiene(args),
   audit: (args) => audit(args),
   "record-candidate": (args) => recordObservation(args, "candidate"),
   "record-verified": (args) => recordObservation(args, "verified"),

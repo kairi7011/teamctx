@@ -220,6 +220,7 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /teamctx context \[json-file\] \[--target-files <files>\]/);
   assert.match(help, /teamctx context-diff <left-json> <right-json>/);
   assert.match(help, /teamctx query-explain \[json-file\]/);
+  assert.match(help, /teamctx hygiene \[--older-than-days <n>\]/);
   assert.match(help, /teamctx record-verified <json-file> \[--json\]/);
   assert.match(help, /teamctx auth doctor/);
   assert.match(help, /teamctx tools \[--json\]/);

@@ -78,6 +78,7 @@ teamctx capture
 teamctx normalize --dry-run
 teamctx normalize
 teamctx status
+teamctx hygiene --older-than-days 90
 ```
 
 `capture` inspects the recent working tree and commits, then prints an agent
@@ -94,6 +95,12 @@ teamctx normalize --lease
 
 If status reports stale or missing indexes, rerun `teamctx normalize`. Normalize
 is idempotent for the same raw events and skips unchanged remote writes.
+
+Use `hygiene` for long-lived stores. It flags active records whose validity
+window has expired, records that have not been verified recently, duplicate
+active text, crowded scopes, and oversized records. The report is advisory:
+review the evidence, then record a superseding observation or invalidate the
+old record explicitly.
 
 ## Inspection and Correction
 
@@ -157,7 +164,8 @@ teamctx tools --json
 
 Review context regularly:
 
-- weekly: inspect `status`, active rules, stale items, and recent audit entries
+- weekly: inspect `status`, `hygiene`, active rules, stale items, and recent
+  audit entries
 - after releases: invalidate outdated workflows or decisions
 - after incidents: record the pitfall and the corrected workflow
 - after large refactors: normalize and check for stale evidence paths

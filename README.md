@@ -174,6 +174,18 @@ teamctx list --state active --domains cli --limit 20
 teamctx list --kind workflow --tags preview-cli --query "context preview"
 ```
 
+Check long-term context hygiene:
+
+```bash
+teamctx hygiene --older-than-days 90
+teamctx hygiene --older-than-days 90 --json
+```
+
+`hygiene` reports active records that are expired, not yet valid, old,
+unverified, duplicated, crowded under the same scope, or too large before
+context truncation. It does not auto-delete records; use `show`, `explain`, and
+`invalidate` to review and correct them.
+
 Inspect one normalized record:
 
 ```bash
