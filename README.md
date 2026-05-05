@@ -216,6 +216,17 @@ Trace ranking and context placement:
 teamctx rank --target-files src/index.ts --domains cli --query "record verified"
 ```
 
+Run a retrieval fixture and score gold ids or tags:
+
+```bash
+teamctx eval-retrieval dogfood/fixtures/litellm-external-tasks.json --json
+```
+
+Fixtures are JSON arrays with `case`, `level`, `query`, and either `gold_ids` or
+`gold_tags`. Negative controls can set `"negative": true` with an empty gold
+list. The command reports gold hits, full-hit prompts, false positives, and
+approximate scoped content tokens.
+
 List audit changes:
 
 ```bash

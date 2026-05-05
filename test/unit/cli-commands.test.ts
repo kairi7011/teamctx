@@ -14,6 +14,7 @@ test("cliCommands registry exposes every documented command", () => {
     "compact",
     "context",
     "context-diff",
+    "eval-retrieval",
     "query-explain",
     "rank",
     "list",

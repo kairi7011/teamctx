@@ -225,6 +225,7 @@ test("formatHelp includes stable command usage", () => {
   assert.match(help, /teamctx compact \[--dry-run\] \[--json\]/);
   assert.match(help, /teamctx context \[json-file\] \[--target-files <files>\]/);
   assert.match(help, /teamctx context-diff <left-json> <right-json>/);
+  assert.match(help, /teamctx eval-retrieval <fixture-json> \[--json\]/);
   assert.match(help, /teamctx query-explain \[json-file\]/);
   assert.match(
     help,

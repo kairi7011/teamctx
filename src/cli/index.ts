@@ -43,6 +43,7 @@ import { parseContextStore } from "../core/binding/context-store.js";
 import { findBinding, getConfigPath, upsertBinding } from "../core/binding/local-bindings.js";
 import { describeBindingCapabilities } from "../core/capabilities.js";
 import { explainBoundEpisodeAsync } from "../core/episodes/explain.js";
+import { evaluateRetrievalFixture, type RetrievalEvalResult } from "../core/eval/retrieval.js";
 import {
   getBoundHygieneReport,
   type BoundHygieneOptions,
@@ -213,6 +214,7 @@ Usage:
   teamctx compact [--dry-run] [--json]
   teamctx context [json-file] [--target-files <files>] [--changed-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>] [--call-reason <reason>] [--previous-context-payload-hash <hash>] [--force-refresh]
   teamctx context-diff <left-json> <right-json> [--json]
+  teamctx eval-retrieval <fixture-json> [--json]
   teamctx query-explain [json-file]
   teamctx rank [--target-files <files>] [--domains <domains>] [--symbols <symbols>] [--tags <tags>] [--query <query>]
   teamctx list [--kind <kind>] [--state <state>] [--limit <n>] [--offset <n>]
@@ -241,6 +243,7 @@ Examples:
   teamctx bind . --path .teamctx
   teamctx context --call-reason session_start --target-files src/index.ts --domains cli
   teamctx context-diff before.json after.json
+  teamctx eval-retrieval dogfood/fixtures/litellm-external-tasks.json --json
   teamctx query-explain --target-files src/index.ts --domains cli
   teamctx rank --target-files src/index.ts --domains cli
   teamctx list --state active --domains cli --limit 20
@@ -627,6 +630,57 @@ async function contextDiff(args: ParsedArgs): Promise<void> {
   }
 
   console.log(formatContextDiff(diff));
+}
+
+async function evalRetrieval(args: ParsedArgs): Promise<void> {
+  const [fixturePath] = args.positional;
+
+  if (!fixturePath) {
+    throw new CliError(
+      CLI_EXIT.USAGE,
+      "Missing fixture json file. Usage: teamctx eval-retrieval <fixture-json> [--json]"
+    );
+  }
+
+  const fixture = JSON.parse(readFileSync(resolve(fixturePath), "utf8")) as unknown;
+  const callReason =
+    typeof args.flags["call-reason"] === "string"
+      ? validateGetContextInput({ call_reason: args.flags["call-reason"] }).call_reason
+      : "session_start";
+  const result = await evaluateRetrievalFixture(fixture, (input) => getContextToolAsync(input), {
+    callReason
+  });
+
+  if (args.flags.json === true) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(formatRetrievalEvalResult(result));
+}
+
+export function formatRetrievalEvalResult(result: RetrievalEvalResult): string {
+  const lines = [
+    "Retrieval eval:",
+    `  prompts: ${result.summary.total_prompts}`,
+    `  gold_hits: ${result.summary.gold_hits}/${result.summary.gold_total}`,
+    `  full_hit_prompts: ${result.summary.prompt_full_hit}/${result.summary.non_negative}`,
+    `  any_hit_prompts: ${result.summary.prompt_any_hit}/${result.summary.non_negative}`,
+    `  false_positive_prompts: ${result.summary.false_positive_prompts}/${result.summary.total_prompts}`,
+    `  negative_prompts: ${result.summary.negative}`,
+    `  max_tokens: ${result.summary.max_tokens}`
+  ];
+
+  lines.push("  levels:");
+  for (const [level, summary] of Object.entries(result.summary.levels).sort(
+    ([left], [right]) => Number(left) - Number(right)
+  )) {
+    lines.push(
+      `    - ${level}: gold=${summary.gold_hits}/${summary.gold_total} full=${summary.full_hit} any=${summary.any_hit} fp=${summary.false_positive_prompts} max_tokens=${summary.max_tokens}`
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export function formatContextDiff(diff: ContextDiff): string {
@@ -1635,6 +1689,7 @@ export const cliCommands: Record<string, CliCommandHandler> = {
   compact: (args) => compact(args),
   context: (args) => context(args),
   "context-diff": (args) => contextDiff(args),
+  "eval-retrieval": (args) => evalRetrieval(args),
   "query-explain": (args) => queryExplain(args),
   rank: (args) => rank(args),
   list: (args) => list(args),
