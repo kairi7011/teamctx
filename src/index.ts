@@ -46,5 +46,6 @@ export * from "./schemas/evidence.js";
 export * from "./schemas/normalized-record.js";
 export * from "./schemas/observation.js";
 export * from "./schemas/project.js";
+export * from "./schemas/project-policy.js";
 export * from "./schemas/types.js";
 export * from "./schemas/validation.js";

@@ -14,6 +14,11 @@ import {
   createEmptyQueryAliasConfig,
   serializeQueryAliasConfig
 } from "../../schemas/query-alias.js";
+import {
+  createDefaultProjectPolicy,
+  PROJECT_POLICY_FILE,
+  serializeProjectPolicy
+} from "../../schemas/project-policy.js";
 
 export const NORMALIZED_RECORD_FILES = [
   "facts.jsonl",
@@ -65,6 +70,7 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   mkdirSync(join(root, "audit"), { recursive: true });
   mkdirSync(join(root, "indexes"), { recursive: true });
   mkdirSync(join(root, "aliases"), { recursive: true });
+  mkdirSync(join(root, "policy"), { recursive: true });
 
   writeStoreFile({
     path: join(root, "project.yaml"),
@@ -125,6 +131,13 @@ export function initStoreLayout(options: StoreLayoutInitOptions): StoreLayoutIni
   writeStoreFile({
     path: join(root, "aliases", "query-aliases.json"),
     content: serializeQueryAliasConfig(createEmptyQueryAliasConfig()),
+    overwrite,
+    createdFiles,
+    existingFiles
+  });
+  writeStoreFile({
+    path: join(root, PROJECT_POLICY_FILE),
+    content: serializeProjectPolicy(createDefaultProjectPolicy()),
     overwrite,
     createdFiles,
     existingFiles

@@ -8,6 +8,11 @@ import { summarizeContextStore } from "../../src/core/status/summary.js";
 import { statusTool } from "../../src/mcp/tools/status.js";
 import type { AuditLogEntry } from "../../src/schemas/audit.js";
 import type { NormalizedRecord, RecordState } from "../../src/schemas/normalized-record.js";
+import {
+  createDefaultProjectPolicy,
+  PROJECT_POLICY_FILE,
+  serializeProjectPolicy
+} from "../../src/schemas/project-policy.js";
 import type { Binding } from "../../src/schemas/types.js";
 
 function tempDirectory(): { directory: string; cleanup: () => void } {
@@ -62,6 +67,7 @@ test("summarizeContextStore returns local status buckets and last normalize resu
   writeIndexGeneratedAt(storeRoot, "symbol-index.json", "2026-04-22T11:02:00.000Z");
   writeIndexGeneratedAt(storeRoot, "text-index.json", "2026-04-22T11:02:00.000Z");
   writeIndexGeneratedAt(storeRoot, "episode-index.json", "2026-04-22T11:02:00.000Z");
+  writeProjectPolicy(storeRoot);
 
   const summary = summarizeContextStore({ storeRoot });
 
@@ -90,6 +96,7 @@ test("summarizeContextStore returns local status buckets and last normalize resu
   );
   assert.equal(summary.contested_items[0]?.evidence[0]?.kind, "code");
   assert.deepEqual(summary.normalize_lease, { state: "none" });
+  assert.equal(summary.policy.state, "valid");
   assert.deepEqual(summary.index_warnings, []);
   assert.deepEqual(summary.recovery_suggestions, []);
 });
@@ -104,6 +111,7 @@ test("summarizeContextStore reports stale index recovery warnings", (context) =>
   writeIndexGeneratedAt(storeRoot, "path-index.json", "2026-04-22T10:00:00.000Z");
   writeIndexGeneratedAt(storeRoot, "symbol-index.json", "2026-04-22T11:02:00.000Z");
   writeIndexGeneratedAt(storeRoot, "text-index.json", "2026-04-22T11:02:00.000Z");
+  writeProjectPolicy(storeRoot);
 
   const summary = summarizeContextStore({ storeRoot });
 
@@ -122,6 +130,7 @@ test("summarizeContextStore reports expired normalize lease recovery", (context)
   const storeRoot = join(directory, ".teamctx");
 
   writeNormalizeLease(storeRoot, "2026-04-22T11:05:00.000Z");
+  writeProjectPolicy(storeRoot);
 
   const summary = summarizeContextStore({
     storeRoot,
@@ -138,6 +147,7 @@ test("summarizeContextStore reports active normalize lease without recovery", (c
   const storeRoot = join(directory, ".teamctx");
 
   writeNormalizeLease(storeRoot, "2026-04-22T11:15:00.000Z");
+  writeProjectPolicy(storeRoot);
 
   const summary = summarizeContextStore({
     storeRoot,
@@ -169,6 +179,20 @@ test("getBoundStatus and statusTool include local store summaries", (context) =>
   const toolStatus = statusTool({}, services) as { enabled: boolean; summary?: unknown };
   assert.equal(toolStatus.enabled, true);
   assert.ok(toolStatus.summary);
+});
+
+test("summarizeContextStore reports missing project policy recovery", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+
+  const summary = summarizeContextStore({ storeRoot });
+
+  assert.equal(summary.policy.state, "missing");
+  assert.match(summary.policy.warnings[0] ?? "", /Missing policy\/project-policy\.json/);
+  assert.deepEqual(summary.recovery_suggestions, [
+    "Run `teamctx init-store` to add the default project policy file."
+  ]);
 });
 
 function writeRecord(storeRoot: string, normalizedRecord: NormalizedRecord): void {
@@ -242,6 +266,16 @@ function writeNormalizeLease(storeRoot: string, expiresAt: string): void {
       null,
       2
     )}\n`,
+    "utf8"
+  );
+}
+
+function writeProjectPolicy(storeRoot: string): void {
+  const directory = join(storeRoot, "policy");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(storeRoot, PROJECT_POLICY_FILE),
+    serializeProjectPolicy(createDefaultProjectPolicy()),
     "utf8"
   );
 }

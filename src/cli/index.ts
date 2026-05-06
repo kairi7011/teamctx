@@ -63,6 +63,7 @@ import { normalizeBoundStoreAsync } from "../core/normalize/normalize.js";
 import { compactBoundStoreAsync } from "../core/retention/compact.js";
 import { formatShowRecord } from "../core/show/record.js";
 import { getBoundStatusAsync } from "../core/status/status.js";
+import type { ProjectPolicyStatus } from "../core/status/summary.js";
 import { initBoundStoreAsync } from "../core/store/init-store.js";
 import { getContextToolAsync } from "../mcp/tools/get-context.js";
 import {
@@ -1375,6 +1376,15 @@ export function formatStatusReport(
       `  normalize_lease: ${summary.normalize_lease.state} owner=${lease.owner.hostname}:${lease.owner.pid} expires=${lease.expires_at}`
     );
   }
+  lines.push(`  policy: ${formatPolicyStatus(summary.policy)}`);
+
+  if (summary.policy.warnings.length > 0) {
+    lines.push("  policy_warnings:");
+
+    for (const warning of summary.policy.warnings) {
+      lines.push(`    - ${warning}`);
+    }
+  }
   appendStatusList(
     lines,
     "recent_promoted",
@@ -1426,6 +1436,22 @@ export function formatStatusReport(
   }
 
   return lines.join("\n");
+}
+
+function formatPolicyStatus(policy: ProjectPolicyStatus): string {
+  if (policy.state === "missing") {
+    return `missing path=${policy.path}`;
+  }
+
+  if (policy.state === "invalid") {
+    return `invalid path=${policy.path} error=${policy.error}`;
+  }
+
+  return [
+    policy.governance_level,
+    `candidate_automation=${policy.candidate_automation_enabled ? "on" : "off"}`,
+    `background_jobs=${policy.background_jobs_enabled ? "on" : "off"}`
+  ].join(" ");
 }
 
 async function status(args: ParsedArgs): Promise<void> {
@@ -1667,6 +1693,7 @@ export function formatCapabilitiesReport(
     `bound: ${description.bound}`,
     `store_kind: ${description.store_kind}`,
     `normalize_supported: ${description.normalize_supported}`,
+    `policy_config: ${description.policy_config}`,
     `background_jobs: ${description.background_jobs}`,
     "store:"
   ];

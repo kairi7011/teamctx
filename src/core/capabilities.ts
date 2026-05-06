@@ -14,6 +14,7 @@ export type BindingCapabilities = {
   store_kind: "local" | "github" | "unbound";
   store: StoreCapabilities;
   normalize_supported: boolean;
+  policy_config: boolean;
   background_jobs: boolean;
 };
 
@@ -29,6 +30,7 @@ const NO_BINDING: BindingCapabilities = {
     semantic_features: false
   },
   normalize_supported: false,
+  policy_config: false,
   background_jobs: false
 };
 
@@ -63,6 +65,7 @@ export function describeBindingCapabilities(
           semantic_features: false
         },
     normalize_supported: true,
+    policy_config: true,
     background_jobs: false
   };
 }

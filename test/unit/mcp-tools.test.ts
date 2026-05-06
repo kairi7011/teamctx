@@ -228,8 +228,15 @@ test("statusTool returns the enabled binding summary", () => {
       normalize_lease: {
         state: "none"
       },
+      policy: {
+        state: "missing",
+        path: "policy/project-policy.json",
+        warnings: [
+          "Missing policy/project-policy.json; governed capture and background jobs remain disabled."
+        ]
+      },
       index_warnings: [],
-      recovery_suggestions: []
+      recovery_suggestions: ["Run `teamctx init-store` to add the default project policy file."]
     }
   });
 });

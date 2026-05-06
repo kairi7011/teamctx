@@ -38,6 +38,12 @@ first context pass, and prints an agent prompt for creating
 `teamctx-bootstrap-observations.json`. It does not auto-save broad summaries as
 verified knowledge.
 
+Initialization also creates `policy/project-policy.json`. Review this file when
+you want to change governance level, candidate automation bounds, high-impact
+review rules, or future background-job settings. `teamctx status` reports
+whether the policy is valid, missing, or invalid; missing policy can be restored
+with `teamctx init-store`.
+
 The first batch should include both a compact session-start baseline and scoped
 task records. If source docs and user prompts use different terms or languages,
 review `aliases/query-aliases.json` and add narrow project aliases before the

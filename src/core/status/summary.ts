@@ -18,6 +18,13 @@ import {
   type RecordState,
   type Scope
 } from "../../schemas/normalized-record.js";
+import {
+  parseProjectPolicy,
+  PROJECT_POLICY_FILE,
+  type BackgroundJobType,
+  type GovernanceLevel,
+  type ProjectPolicy
+} from "../../schemas/project-policy.js";
 import { isRecord } from "../../schemas/validation.js";
 
 export type StatusSummaryOptions = {
@@ -61,6 +68,32 @@ export type DroppedItemSummary = {
   reason?: string;
 };
 
+export type ProjectPolicyStatus =
+  | {
+      state: "valid";
+      path: string;
+      governance_level: GovernanceLevel;
+      candidate_automation_enabled: boolean;
+      candidate_automation_allowed_kinds: KnowledgeKind[];
+      candidate_automation_max_items_per_session: number;
+      high_impact_kinds: KnowledgeKind[];
+      high_impact_require_reviewer: boolean;
+      background_jobs_enabled: boolean;
+      background_job_types: BackgroundJobType[];
+      warnings: string[];
+    }
+  | {
+      state: "missing";
+      path: string;
+      warnings: string[];
+    }
+  | {
+      state: "invalid";
+      path: string;
+      error: string;
+      warnings: string[];
+    };
+
 export type StatusSummary = {
   last_normalize_result: NormalizeStoreResult | null;
   counts: {
@@ -79,6 +112,7 @@ export type StatusSummary = {
   dropped_items: DroppedItemSummary[];
   stale_items: StatusItemSummary[];
   normalize_lease: NormalizeLeaseStatus;
+  policy: ProjectPolicyStatus;
   index_warnings: string[];
   recovery_suggestions: string[];
 };
@@ -96,6 +130,7 @@ export function summarizeContextStore(options: StatusSummaryOptions): StatusSumm
     lastNormalizeResult: readLastNormalizeResult(options.storeRoot),
     indexWarnings: readIndexWarnings(options.storeRoot),
     normalizeLease: readLocalNormalizeLeaseStatus(options.storeRoot, options.now),
+    policy: readLocalProjectPolicyStatus(options.storeRoot),
     recentLimit
   });
 }
@@ -118,6 +153,7 @@ export async function summarizeContextStoreAdapter(options: {
       store: options.store,
       ...(options.now !== undefined ? { now: options.now } : {})
     }),
+    policy: await readProjectPolicyStatusFromAdapter(options.store),
     recentLimit
   });
 }
@@ -133,6 +169,16 @@ function readLocalNormalizeLeaseStatus(
   }
 
   return readNormalizeLeaseStatusFromContent(readFileSync(path, "utf8"), now ?? (() => new Date()));
+}
+
+function readLocalProjectPolicyStatus(storeRoot: string): ProjectPolicyStatus {
+  const path = join(storeRoot, PROJECT_POLICY_FILE);
+
+  if (!existsSync(path)) {
+    return missingProjectPolicyStatus();
+  }
+
+  return projectPolicyStatusFromContent(readFileSync(path, "utf8"), PROJECT_POLICY_FILE);
 }
 
 function readNormalizedRecords(storeRoot: string): NormalizedRecord[] {
@@ -217,6 +263,75 @@ async function readIndexWarningsFromAdapter(store: ContextStoreAdapter): Promise
   return warnings;
 }
 
+async function readProjectPolicyStatusFromAdapter(
+  store: ContextStoreAdapter
+): Promise<ProjectPolicyStatus> {
+  const file = await store.readText(PROJECT_POLICY_FILE);
+
+  if (!file) {
+    return missingProjectPolicyStatus();
+  }
+
+  return projectPolicyStatusFromContent(file.content, PROJECT_POLICY_FILE);
+}
+
+function projectPolicyStatusFromContent(content: string, path: string): ProjectPolicyStatus {
+  try {
+    const policy = parseProjectPolicy(content);
+
+    return {
+      state: "valid",
+      path,
+      governance_level: policy.governance_level,
+      candidate_automation_enabled: policy.candidate_automation.enabled,
+      candidate_automation_allowed_kinds: policy.candidate_automation.allowed_kinds,
+      candidate_automation_max_items_per_session: policy.candidate_automation.max_items_per_session,
+      high_impact_kinds: policy.high_impact.kinds,
+      high_impact_require_reviewer: policy.high_impact.require_reviewer,
+      background_jobs_enabled: policy.background_jobs.enabled,
+      background_job_types: policy.background_jobs.allowed_types,
+      warnings: projectPolicyWarnings(policy)
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return {
+      state: "invalid",
+      path,
+      error: message,
+      warnings: [
+        `Invalid ${PROJECT_POLICY_FILE}; governed capture and background jobs remain disabled.`
+      ]
+    };
+  }
+}
+
+function missingProjectPolicyStatus(): ProjectPolicyStatus {
+  return {
+    state: "missing",
+    path: PROJECT_POLICY_FILE,
+    warnings: [
+      `Missing ${PROJECT_POLICY_FILE}; governed capture and background jobs remain disabled.`
+    ]
+  };
+}
+
+function projectPolicyWarnings(policy: ProjectPolicy): string[] {
+  const warnings: string[] = [];
+
+  if (policy.background_jobs.enabled) {
+    warnings.push("Background jobs are configured but no teamctx job runner is implemented yet.");
+  }
+
+  if (policy.candidate_automation.enabled && policy.governance_level === "strict_review") {
+    warnings.push(
+      "Candidate automation is enabled under strict review; writes should remain proposals."
+    );
+  }
+
+  return warnings;
+}
+
 function readIndexGeneratedAt(
   storeRoot: string,
   path: string
@@ -291,6 +406,7 @@ function buildStatusSummary(options: {
   lastNormalizeResult: NormalizeStoreResult | null;
   indexWarnings: string[];
   normalizeLease: NormalizeLeaseStatus;
+  policy: ProjectPolicyStatus;
   recentLimit: number;
 }): StatusSummary {
   const recordsById = new Map(options.records.map((record) => [record.id, record]));
@@ -327,14 +443,20 @@ function buildStatusSummary(options: {
       .map(itemSummary)
       .slice(0, options.recentLimit),
     normalize_lease: options.normalizeLease,
+    policy: options.policy,
     index_warnings: options.indexWarnings,
-    recovery_suggestions: recoverySuggestions(options.indexWarnings, options.normalizeLease)
+    recovery_suggestions: recoverySuggestions(
+      options.indexWarnings,
+      options.normalizeLease,
+      options.policy
+    )
   };
 }
 
 function recoverySuggestions(
   indexWarnings: string[],
-  normalizeLease: NormalizeLeaseStatus
+  normalizeLease: NormalizeLeaseStatus,
+  policy: ProjectPolicyStatus
 ): string[] {
   const suggestions =
     indexWarnings.length > 0
@@ -345,6 +467,12 @@ function recoverySuggestions(
     suggestions.push(
       "A normalize lease is expired; rerun `teamctx normalize --lease` to take it over, or remove `locks/normalize.json` after confirming no writer is running."
     );
+  }
+
+  if (policy.state === "missing") {
+    suggestions.push("Run `teamctx init-store` to add the default project policy file.");
+  } else if (policy.state === "invalid") {
+    suggestions.push(`Fix ${policy.path} before enabling governed capture or background jobs.`);
   }
 
   return suggestions;

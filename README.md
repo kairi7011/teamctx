@@ -81,6 +81,11 @@ correction, and compaction workflows.
 See [Security Guide](docs/security.md) for store visibility, GitHub token
 permissions, write policy, and sensitive-content handling.
 
+New stores include `policy/project-policy.json`. Keep it in the context store so
+governance, candidate automation, high-impact review rules, and background-job
+settings are versioned with the context history. Current releases read and
+report this policy; automatic verified memory writes remain disabled.
+
 ## GitHub Auth
 
 Remote GitHub stores use the first token available in this order:
@@ -168,6 +173,7 @@ Check the current binding:
 ```bash
 teamctx status
 teamctx status --json
+teamctx capabilities
 ```
 
 List normalized records:

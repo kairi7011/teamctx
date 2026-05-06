@@ -25,6 +25,19 @@ function emptySummary(overrides: Partial<StatusSummary> = {}): StatusSummary {
     dropped_items: [],
     stale_items: [],
     normalize_lease: { state: "none" },
+    policy: {
+      state: "valid",
+      path: "policy/project-policy.json",
+      governance_level: "suggested_review",
+      candidate_automation_enabled: false,
+      candidate_automation_allowed_kinds: ["fact", "pitfall", "workflow"],
+      candidate_automation_max_items_per_session: 5,
+      high_impact_kinds: ["rule", "workflow", "decision"],
+      high_impact_require_reviewer: true,
+      background_jobs_enabled: false,
+      background_job_types: ["normalize", "compact", "index_refresh"],
+      warnings: []
+    },
     index_warnings: [],
     recovery_suggestions: [],
     ...overrides
@@ -95,6 +108,10 @@ test("formatStatusReport reports the unavailable summary reason", () => {
 test("formatStatusReport renders never as last_normalize when unset", () => {
   const formatted = formatStatusReport(enabledStatus({ summary: emptySummary() }));
   assertContainsLine(formatted, "  last_normalize: never");
+  assertContainsLine(
+    formatted,
+    "  policy: suggested_review candidate_automation=off background_jobs=off"
+  );
   assertContainsLine(formatted, "  records: active=0 contested=0 stale=0 archived=0");
 });
 

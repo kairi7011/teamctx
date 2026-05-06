@@ -21,6 +21,7 @@ test("formatCapabilitiesReport renders stable capability lines", () => {
     bound: true,
     store_kind: "github",
     normalize_supported: true,
+    policy_config: true,
     background_jobs: false,
     store: {
       remote_writes: true,
@@ -36,6 +37,7 @@ test("formatCapabilitiesReport renders stable capability lines", () => {
     "bound: true",
     "store_kind: github",
     "normalize_supported: true",
+    "policy_config: true",
     "background_jobs: false",
     "store:",
     "  remote_writes: true",

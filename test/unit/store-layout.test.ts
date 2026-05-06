@@ -16,6 +16,11 @@ import {
   resolveStoreRoot
 } from "../../src/core/store/layout.js";
 import { createDefaultProjectConfig } from "../../src/schemas/project.js";
+import {
+  createDefaultProjectPolicy,
+  PROJECT_POLICY_FILE,
+  serializeProjectPolicy
+} from "../../src/schemas/project-policy.js";
 import type { Binding } from "../../src/schemas/types.js";
 
 function createTempDirectory(): { directory: string; cleanup: () => void } {
@@ -46,7 +51,7 @@ test("initStoreLayout creates the MVP context store files", (context) => {
   });
 
   assert.equal(result.existingFiles.length, 0);
-  assert.equal(result.createdFiles.length, 15);
+  assert.equal(result.createdFiles.length, 16);
   assert.ok(existsSync(join(result.root, "raw", "events")));
 
   for (const file of NORMALIZED_RECORD_FILES) {
@@ -117,6 +122,10 @@ test("initStoreLayout creates the MVP context store files", (context) => {
     readFileSync(join(result.root, "aliases", "query-aliases.json"), "utf8"),
     ["{", '  "schema_version": 1,', '  "aliases": []', "}", ""].join("\n")
   );
+  assert.equal(
+    readFileSync(join(result.root, PROJECT_POLICY_FILE), "utf8"),
+    serializeProjectPolicy(createDefaultProjectPolicy())
+  );
 });
 
 test("initStoreLayout does not overwrite existing files by default", (context) => {
@@ -154,12 +163,13 @@ test("initContextStoreLayout initializes an adapter-backed store idempotently", 
     projectId: "github.com/team/service"
   });
 
-  assert.equal(first.createdFiles.length, 15);
+  assert.equal(first.createdFiles.length, 16);
   assert.equal(first.existingFiles.length, 0);
   assert.equal(second.createdFiles.length, 0);
-  assert.equal(second.existingFiles.length, 15);
+  assert.equal(second.existingFiles.length, 16);
   assert.ok(existsSync(join(root, "project.yaml")));
   assert.ok(existsSync(join(root, "indexes", "path-index.json")));
+  assert.ok(existsSync(join(root, PROJECT_POLICY_FILE)));
 });
 
 test("initBoundStoreAsync initializes remote context store adapters", async (context) => {
@@ -172,7 +182,7 @@ test("initBoundStoreAsync initializes remote context store adapters", async (con
 
   assert.equal(result.localStore, false);
   assert.equal(result.store, "github.com/team/context/contexts/service");
-  assert.equal(result.createdFiles.length, 15);
+  assert.equal(result.createdFiles.length, 16);
   assert.equal(result.existingFiles.length, 0);
   assert.ok(existsSync(join(remoteRoot, "normalized", "facts.jsonl")));
 });

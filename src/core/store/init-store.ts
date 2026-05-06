@@ -24,6 +24,11 @@ import {
   createEmptyQueryAliasConfig,
   serializeQueryAliasConfig
 } from "../../schemas/query-alias.js";
+import {
+  createDefaultProjectPolicy,
+  PROJECT_POLICY_FILE,
+  serializeProjectPolicy
+} from "../../schemas/project-policy.js";
 import type { Binding } from "../../schemas/types.js";
 
 export type InitStoreLayoutResult = {
@@ -161,6 +166,10 @@ function storeLayoutFiles(projectId: string): Array<{ path: string; content: str
     {
       path: "aliases/query-aliases.json",
       content: serializeQueryAliasConfig(createEmptyQueryAliasConfig())
+    },
+    {
+      path: PROJECT_POLICY_FILE,
+      content: serializeProjectPolicy(createDefaultProjectPolicy())
     }
   ];
 }

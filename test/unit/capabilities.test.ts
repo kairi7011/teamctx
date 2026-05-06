@@ -9,6 +9,7 @@ test("describeBindingCapabilities reports unbound when binding is missing", () =
   assert.equal(caps.bound, false);
   assert.equal(caps.store_kind, "unbound");
   assert.equal(caps.normalize_supported, false);
+  assert.equal(caps.policy_config, false);
   assert.equal(caps.background_jobs, false);
   for (const value of Object.values(caps.store)) {
     assert.equal(value, false);
@@ -35,6 +36,7 @@ test("describeBindingCapabilities reports local store when bound to same repo", 
   assert.equal(caps.store.optimistic_concurrency, false);
   assert.equal(caps.store.append_only_jsonl, true);
   assert.equal(caps.normalize_supported, true);
+  assert.equal(caps.policy_config, true);
   assert.equal(caps.background_jobs, false);
 });
 
@@ -60,4 +62,5 @@ test("describeBindingCapabilities reports github store when bound to different r
   assert.equal(caps.store.append_only_jsonl, true);
   assert.equal(caps.store.batch_writes, false);
   assert.equal(caps.store.semantic_features, false);
+  assert.equal(caps.policy_config, true);
 });
