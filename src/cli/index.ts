@@ -439,7 +439,8 @@ export function formatBootstrapPlan(
     `  recommended_observations: ${plan.recommended_observation_count}`,
     `  recommended_aliases: ${plan.recommended_alias_count}`,
     `  output_file: ${plan.output_file}`,
-    `  alias_file: ${plan.alias_file}`
+    `  alias_file: ${plan.alias_file}`,
+    `  eval_fixture_file: ${plan.eval_fixture_file}`
   ];
 
   if (initResult !== undefined) {

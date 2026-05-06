@@ -154,6 +154,12 @@ function buildCaptureAgentPrompt(options: {
     "session-start retrieval stays bounded. If there is no durable knowledge,",
     "do not create a record batch.",
     "",
+    "For each captured record, include verification commands/files/notes when",
+    "the latest work revealed a focused test command, a regression test file,",
+    "or a manual check that future agents should reuse. Keep these hints narrow;",
+    "they should improve specificity without turning teamctx into broad repo",
+    "summarization.",
+    "",
     "Then run:",
     ...options.commands.map((command) => `- ${command}`)
   ].join("\n");

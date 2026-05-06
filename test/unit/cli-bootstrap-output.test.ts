@@ -13,6 +13,7 @@ test("formatBootstrapPlan renders the initial context bootstrap packet", () => {
       recommended_alias_count: "3-8",
       output_file: "teamctx-bootstrap-observations.json",
       alias_file: "aliases/query-aliases.json",
+      eval_fixture_file: "teamctx-bootstrap-retrieval-fixture.json",
       source_files: [
         {
           path: "README.md",
@@ -25,7 +26,8 @@ test("formatBootstrapPlan renders the initial context bootstrap packet", () => {
       commands: [
         "teamctx record-verified teamctx-bootstrap-observations.json",
         "teamctx normalize --dry-run",
-        "teamctx normalize"
+        "teamctx normalize",
+        "teamctx eval-retrieval teamctx-bootstrap-retrieval-fixture.json"
       ],
       agent_prompt: [
         "Create initial teamctx context for this repository.",
@@ -55,6 +57,7 @@ test("formatBootstrapPlan renders the initial context bootstrap packet", () => {
       "  recommended_aliases: 3-8",
       "  output_file: teamctx-bootstrap-observations.json",
       "  alias_file: aliases/query-aliases.json",
+      "  eval_fixture_file: teamctx-bootstrap-retrieval-fixture.json",
       "  created_files: 1",
       "  existing_files: 1",
       "Source files to inspect:",

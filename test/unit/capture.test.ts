@@ -66,6 +66,7 @@ test("buildCapturePlan emits a session-end capture prompt", () => {
   assert.match(plan.agent_prompt, /Capture durable teamctx knowledge/);
   assert.match(plan.agent_prompt, /src\/index\.ts/);
   assert.match(plan.agent_prompt, /Skip temporary progress notes/);
+  assert.match(plan.agent_prompt, /verification commands\/files\/notes/);
 });
 
 function fakeGit(outputs: Record<string, string>): CaptureDiscoveryServices {

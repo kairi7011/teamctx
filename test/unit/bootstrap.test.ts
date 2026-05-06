@@ -63,10 +63,12 @@ test("buildBootstrapPlan includes reviewable commands and agent prompt", () => {
   assert.equal(plan.alias_file, "aliases/query-aliases.json");
   assert.equal(plan.recommended_observation_count, "8-15");
   assert.equal(plan.recommended_alias_count, "3-8");
+  assert.equal(plan.eval_fixture_file, "teamctx-bootstrap-retrieval-fixture.json");
   assert.deepEqual(plan.commands, [
     "teamctx record-verified teamctx-bootstrap-observations.json",
     "teamctx normalize --dry-run",
     "teamctx normalize",
+    "teamctx eval-retrieval teamctx-bootstrap-retrieval-fixture.json",
     'teamctx context --call-reason session_start --query "initial project context"'
   ]);
   assert.match(plan.agent_prompt, /Read these source files first:/);
@@ -74,4 +76,6 @@ test("buildBootstrapPlan includes reviewable commands and agent prompt", () => {
   assert.match(plan.agent_prompt, /Do not dump documentation/);
   assert.match(plan.agent_prompt, /first-turn baseline/);
   assert.match(plan.agent_prompt, /project query aliases/);
+  assert.match(plan.agent_prompt, /verification\s+commands\/files\/notes/);
+  assert.match(plan.agent_prompt, /bootstrap quality gate/);
 });

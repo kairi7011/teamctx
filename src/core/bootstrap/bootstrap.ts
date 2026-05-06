@@ -20,6 +20,7 @@ export type BootstrapPlan = {
   recommended_alias_count: string;
   output_file: string;
   alias_file: string;
+  eval_fixture_file: string;
   commands: string[];
   agent_prompt: string;
 };
@@ -131,10 +132,12 @@ export function buildBootstrapPlan(options: {
 }): BootstrapPlan {
   const outputFile = options.outputFile ?? "teamctx-bootstrap-observations.json";
   const aliasFile = "aliases/query-aliases.json";
+  const evalFixtureFile = "teamctx-bootstrap-retrieval-fixture.json";
   const commands = [
     `teamctx record-verified ${outputFile}`,
     "teamctx normalize --dry-run",
     "teamctx normalize",
+    `teamctx eval-retrieval ${evalFixtureFile}`,
     'teamctx context --call-reason session_start --query "initial project context"'
   ];
 
@@ -148,12 +151,14 @@ export function buildBootstrapPlan(options: {
     recommended_alias_count: "3-8",
     output_file: outputFile,
     alias_file: aliasFile,
+    eval_fixture_file: evalFixtureFile,
     commands,
     agent_prompt: buildBootstrapAgentPrompt({
       repo: options.repo,
       sourceFiles: options.sourceFiles,
       outputFile,
       aliasFile,
+      evalFixtureFile,
       commands
     })
   };
@@ -164,6 +169,7 @@ function buildBootstrapAgentPrompt(options: {
   sourceFiles: BootstrapSource[];
   outputFile: string;
   aliasFile: string;
+  evalFixtureFile: string;
   commands: string[];
 }): string {
   const sources =
@@ -193,12 +199,24 @@ function buildBootstrapAgentPrompt(options: {
     "safe scope. Keep baseline entries short so session-start retrieval stays",
     "bounded.",
     "Use the record-verified JSON shape: kind, text, source_type, scope,",
-    "evidence, and supersedes when needed.",
+    "evidence, verification, and supersedes when needed. Add verification",
+    "commands/files/notes when a future agent should run a focused check or",
+    "inspect a concrete test file after using the context.",
     "",
     `Also review ${options.aliasFile}. If likely user prompts use different`,
     "terms or languages than the source docs, add 3-8 project query aliases.",
     "Aliases should map common vague task language to the record tokens, symbols,",
     "or tags that should retrieve the right context. Avoid broad one-word aliases.",
+    "",
+    `Write ${options.evalFixtureFile} with level 1/2/3 prompts for the most`,
+    "important records plus negative prompts for trivial unrelated tasks. Use",
+    "gold_ids or gold_tags. Treat this as the bootstrap quality gate: every",
+    "non-negative prompt should retrieve its intended context, negative prompts",
+    "should retrieve nothing, and scoped content should stay small enough for a",
+    "session-start packet.",
+    "",
+    "If the gate fails, tighten scopes, tags, aliases, or observation text and",
+    "rerun it before considering bootstrap complete.",
     "",
     "Then run:",
     ...options.commands.map((command) => `- ${command}`)
