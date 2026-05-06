@@ -275,6 +275,10 @@ function queryTokenWindows(tokens: string[]): string[][] {
 function isContextOptOutQuery(normalizedQuery: string): boolean {
   const compact = normalizedQuery.replace(/\s+/g, "");
 
+  if (isContextComparisonQuery(normalizedQuery)) {
+    return false;
+  }
+
   return (
     compact.includes("context不要") ||
     compact.includes("contextは不要") ||
@@ -285,11 +289,19 @@ function isContextOptOutQuery(normalizedQuery: string): boolean {
     compact.includes("設計調査は不要") ||
     compact.includes("調査不要") ||
     compact.includes("調査は不要") ||
-    /\bno\s+(?:context|teamctx|design research|architecture research)\b/.test(normalizedQuery) ||
+    /\bno[\s-]+(?:context|teamctx|design research|architecture research)\b/.test(normalizedQuery) ||
     /\b(?:context|teamctx|design research|architecture research)\s+(?:not needed|unnecessary)\b/.test(
       normalizedQuery
     )
   );
+}
+
+function isContextComparisonQuery(normalizedQuery: string): boolean {
+  const hasNoContextArm = /\ba_no[_\s-]+context\b/.test(normalizedQuery);
+  const hasTeamctxArm = /\bb_teamctx[_\s-]+context\b/.test(normalizedQuery);
+  const hasExplicitHandoffArm = /\bc_explicit[_\s-]+handoff\b/.test(normalizedQuery);
+
+  return hasNoContextArm && hasTeamctxArm && hasExplicitHandoffArm;
 }
 
 function uniqueSorted(values: string[]): string[] {

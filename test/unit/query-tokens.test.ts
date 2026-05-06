@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { expandQueryTokens } from "../../src/core/indexes/query-tokens.js";
+import { expandQueryTokens, queryAliasSelectors } from "../../src/core/indexes/query-tokens.js";
 
 test("expandQueryTokens builds overlap windows for detailed prose queries", () => {
   const expansion = expandQueryTokens(
@@ -50,5 +50,68 @@ test("expandQueryTokens honors explicit context opt-out phrases", () => {
   assert.deepEqual(expansion, {
     tokenGroups: [],
     matchedAliasIds: []
+  });
+});
+
+test("expandQueryTokens does not treat evaluation arm labels as opt-out", () => {
+  const alias = {
+    id: "project:output-quality-runpack",
+    allPatternGroups: [
+      ["output quality"],
+      [
+        "runpack",
+        "no context",
+        "explicit handoff",
+        "scoring",
+        "a_no_context",
+        "b_teamctx_context",
+        "c_explicit_handoff"
+      ]
+    ],
+    tokenGroups: [["runpack"]]
+  };
+  const armLabelQuery =
+    "output quality A_no_context / B_teamctx_context / C_explicit_handoff scoring";
+
+  assert.deepEqual(expandQueryTokens(armLabelQuery, [alias]), {
+    tokenGroups: [["runpack"]],
+    matchedAliasIds: ["project:output-quality-runpack"]
+  });
+  assert.deepEqual(
+    queryAliasSelectors(armLabelQuery, [
+      {
+        ...alias,
+        domains: ["validation"],
+        tags: ["output-quality-runpack"],
+        symbols: ["create-output-quality-run"]
+      }
+    ]),
+    {
+      domains: ["validation"],
+      tags: ["output-quality-runpack"],
+      symbols: ["create-output-quality-run"]
+    }
+  );
+});
+
+test("expandQueryTokens keeps scoring queries opted out when context is explicitly unwanted", () => {
+  const query = "no context, just fix the teamctx explicit handoff scoring bug";
+  const alias = {
+    id: "project:scoring",
+    patterns: ["scoring"],
+    tokenGroups: [["scoring"]],
+    domains: ["validation"],
+    tags: ["quality-proof"],
+    symbols: ["scoreRun"]
+  };
+
+  assert.deepEqual(expandQueryTokens(query, [alias]), {
+    tokenGroups: [],
+    matchedAliasIds: []
+  });
+  assert.deepEqual(queryAliasSelectors(query, [alias]), {
+    domains: [],
+    tags: [],
+    symbols: []
   });
 });
