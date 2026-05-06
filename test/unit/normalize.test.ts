@@ -243,6 +243,63 @@ test("normalizeStore exact-dedupes matching records", (context) => {
   assert.deepEqual(readEpisodeSourceEventIds(storeRoot), ["event-1", "event-2"]);
 });
 
+test("normalizeStore merges evidence and verification from duplicate records", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(storeRoot, observation());
+  writeRaw(
+    storeRoot,
+    observation({
+      event_id: "event-2",
+      evidence: [
+        {
+          kind: "code",
+          repo: "github.com/team/service",
+          commit: "abc123",
+          file: "src/auth/middleware.ts",
+          lines: [10, 34] as [number, number]
+        },
+        {
+          kind: "test",
+          repo: "github.com/team/service",
+          commit: "abc123",
+          file: "test/auth.test.ts"
+        }
+      ],
+      verification: {
+        commands: ["npm test -- auth"],
+        files: ["test/auth.test.ts"],
+        notes: ["Check request ordering."]
+      }
+    })
+  );
+
+  const result = normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl")) as NormalizedRecord[];
+  const record = records[0];
+
+  assert.equal(result.recordsWritten, 1);
+  assert.equal(records.length, 1);
+  assert.deepEqual(record?.verification, {
+    commands: ["npm test -- auth"],
+    files: ["test/auth.test.ts"],
+    notes: ["Check request ordering."]
+  });
+  assert.deepEqual(
+    record?.evidence.map((evidence) => [evidence.kind, evidence.file]),
+    [
+      ["code", "src/auth/middleware.ts"],
+      ["test", "test/auth.test.ts"]
+    ]
+  );
+});
+
 test("normalizeStore near-dedupes punctuation-only text variants", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);

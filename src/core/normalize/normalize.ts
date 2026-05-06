@@ -320,6 +320,11 @@ function normalizeRun(options: {
             })
           );
         }
+      } else {
+        recordsByKey.set(
+          key,
+          mergeDuplicateRecord(recordsByKey.get(key) as NormalizedRecord, record)
+        );
       }
     } else {
       droppedEvents += 1;
@@ -360,6 +365,68 @@ function normalizeRun(options: {
   );
 
   return { result, records, auditEntries, episodeObservations };
+}
+
+function mergeDuplicateRecord(
+  existing: NormalizedRecord,
+  incoming: NormalizedRecord
+): NormalizedRecord {
+  const evidence = mergeEvidence(existing.evidence, incoming.evidence);
+  const verification = mergeVerification(existing.verification, incoming.verification);
+
+  return {
+    ...existing,
+    evidence,
+    ...(verification !== undefined ? { verification } : {})
+  };
+}
+
+function mergeEvidence(
+  existing: NormalizedRecord["evidence"],
+  incoming: NormalizedRecord["evidence"]
+): NormalizedRecord["evidence"] {
+  const seen = new Set<string>();
+  const merged: NormalizedRecord["evidence"] = [];
+
+  for (const evidence of [...existing, ...incoming]) {
+    const key = JSON.stringify(evidence);
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(evidence);
+    }
+  }
+
+  return merged;
+}
+
+function mergeVerification(
+  existing: NormalizedRecord["verification"],
+  incoming: NormalizedRecord["verification"]
+): NormalizedRecord["verification"] | undefined {
+  const commands = mergeStrings(existing?.commands ?? [], incoming?.commands ?? []);
+  const files = mergeStrings(existing?.files ?? [], incoming?.files ?? []);
+  const notes = mergeStrings(existing?.notes ?? [], incoming?.notes ?? []);
+
+  if (commands.length === 0 && files.length === 0 && notes.length === 0) {
+    return undefined;
+  }
+
+  return { commands, files, notes };
+}
+
+function mergeStrings(existing: string[], incoming: string[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const value of [...existing, ...incoming]) {
+    const trimmed = value.trim();
+    if (trimmed.length > 0 && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      merged.push(trimmed);
+    }
+  }
+
+  return merged;
 }
 
 function makeRunId(repo: string, runAt: Date, rawEvents: RawEventFile[]): string {
