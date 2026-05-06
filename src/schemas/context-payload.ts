@@ -23,6 +23,21 @@ export type CanonicalDocRef = {
   url?: string;
 };
 
+export type ContextVerificationHints = {
+  commands?: string[];
+  files?: string[];
+  docs?: Array<{
+    repo: string;
+    path: string;
+    commit: string;
+    lines?: LineRange;
+    doc_role?: DocRole;
+    url?: string;
+  }>;
+  related_episodes?: string[];
+  notes?: string[];
+};
+
 export type GetContextInput = {
   cwd?: string;
   target_files?: string[];
@@ -99,6 +114,7 @@ export type EnabledContextPayload = {
       confidence_level: string;
       confidence_score?: number;
       last_verified_at?: string;
+      verification_hints?: ContextVerificationHints;
     }>;
     must_follow_rules: string[];
     recent_decisions: string[];

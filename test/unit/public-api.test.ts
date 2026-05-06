@@ -151,6 +151,7 @@ const EXPECTED_PUBLIC_API = [
   "validateScope",
   "validateSymbolIndex",
   "validateTextIndex",
+  "validateVerificationHints",
   "writeRawObservationToBinding",
   "writeRawObservationToContextStore"
 ];

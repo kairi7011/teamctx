@@ -74,6 +74,32 @@ test("validateRawObservation permits candidate observations without evidence", (
   );
 });
 
+test("validateRawObservation accepts optional verification hints", () => {
+  const observation = validateRawObservation({
+    schema_version: 1,
+    event_id: "event-1",
+    session_id: "session-1",
+    observed_at: "2026-04-21T10:00:00.000Z",
+    recorded_by: "codex",
+    trust: "verified",
+    kind: "pitfall",
+    text: "Auth middleware must run before tenant resolution.",
+    source_type: "inferred_from_code",
+    evidence: [codeEvidence],
+    verification: {
+      commands: [" npm test -- auth ", "npm test -- auth"],
+      files: ["test/auth.test.ts"],
+      notes: ["Check request ordering."]
+    }
+  });
+
+  assert.deepEqual(observation.verification, {
+    commands: ["npm test -- auth"],
+    files: ["test/auth.test.ts"],
+    notes: ["Check request ordering."]
+  });
+});
+
 test("validateRawObservation requires non-manual evidence for verified observations", () => {
   assert.throws(
     () =>
@@ -124,6 +150,11 @@ test("validateNormalizedRecord accepts an active record with evidence and proven
     confidence_score: 0.65,
     last_verified_at: "2026-04-21T10:00:00.000Z",
     valid_from: "2026-04-21T10:00:00.000Z",
+    verification: {
+      commands: ["npm test -- auth"],
+      files: ["test/auth.test.ts"],
+      notes: ["Check request ordering."]
+    },
     supersedes: [],
     conflicts_with: []
   };

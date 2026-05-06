@@ -28,6 +28,7 @@ export function formatShowRecord(result: ExplainItemResult): string {
     ...formatList("tags", record.scope.tags),
     ...formatList("supersedes", record.supersedes),
     ...formatList("conflicts_with", record.conflicts_with),
+    ...formatVerification(record),
     ...formatEvidence(record.evidence),
     ...formatAudit(result.audit_entries)
   ];
@@ -61,6 +62,20 @@ function formatEvidence(evidence: Evidence[]): string[] {
   }
 
   return ["  evidence:", ...evidence.map((item) => `    - ${formatEvidenceItem(item)}`)];
+}
+
+function formatVerification(record: NormalizedRecord): string[] {
+  if (record.verification === undefined) {
+    return [];
+  }
+
+  const lines = [
+    ...formatList("verification_commands", record.verification.commands),
+    ...formatList("verification_files", record.verification.files),
+    ...formatList("verification_notes", record.verification.notes)
+  ];
+
+  return lines.length > 0 ? ["  verification:", ...lines.map((line) => `  ${line}`)] : [];
 }
 
 function formatEvidenceItem(evidence: Evidence): string {

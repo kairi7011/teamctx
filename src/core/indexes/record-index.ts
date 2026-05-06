@@ -470,6 +470,9 @@ function recordTextTokens(record: NormalizedRecord): string[] {
     [
       record.text,
       record.kind,
+      ...(record.verification?.commands ?? []),
+      ...(record.verification?.files ?? []),
+      ...(record.verification?.notes ?? []),
       ...record.scope.domains,
       ...record.scope.symbols,
       ...record.scope.tags

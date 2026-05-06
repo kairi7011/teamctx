@@ -449,6 +449,9 @@ function normalizeRawEvent(
     text: rawEvent.observation.text,
     scope: rawEvent.observation.scope ?? emptyScope(),
     evidence: rawEvent.observation.evidence,
+    ...(rawEvent.observation.verification !== undefined
+      ? { verification: rawEvent.observation.verification }
+      : {}),
     provenance: {
       recorded_by: rawEvent.observation.recorded_by,
       session_id: rawEvent.observation.session_id,

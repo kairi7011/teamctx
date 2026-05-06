@@ -113,6 +113,7 @@ export function normalizeRecordObservationToolInput(
       text: rawInput.text,
       source_type: rawInput.source_type,
       evidence: rawInput.evidence ?? [],
+      verification: rawInput.verification,
       scope: rawInput.scope,
       supersedes: rawInput.supersedes
     }),

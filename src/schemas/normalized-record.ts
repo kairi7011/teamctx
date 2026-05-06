@@ -39,6 +39,12 @@ export type Provenance = {
   observed_at: string;
 };
 
+export type VerificationHints = {
+  commands: string[];
+  files: string[];
+  notes: string[];
+};
+
 export type NormalizedRecord = {
   id: string;
   schema_version: 1;
@@ -48,6 +54,7 @@ export type NormalizedRecord = {
   text: string;
   scope: Scope;
   evidence: Evidence[];
+  verification?: VerificationHints;
   provenance: Provenance;
   confidence_level: ConfidenceLevel;
   confidence_score?: number;
@@ -114,8 +121,23 @@ export function validateNormalizedRecord(value: unknown): NormalizedRecord {
   if (value.invalidated_by !== undefined) {
     record.invalidated_by = requiredString(value.invalidated_by, "invalidated_by");
   }
+  if (value.verification !== undefined) {
+    record.verification = validateVerificationHints(value.verification);
+  }
 
   return record;
+}
+
+export function validateVerificationHints(value: unknown): VerificationHints {
+  if (!isRecord(value)) {
+    throw new Error("verification hints must be an object");
+  }
+
+  return {
+    commands: optionalNonEmptyStringArray(value.commands, "verification commands") ?? [],
+    files: optionalNonEmptyStringArray(value.files, "verification files") ?? [],
+    notes: optionalNonEmptyStringArray(value.notes, "verification notes") ?? []
+  };
 }
 
 export function validateScope(value: unknown): Scope {
@@ -170,4 +192,33 @@ function requiredString(value: unknown, name: string): string {
   }
 
   return value;
+}
+
+function optionalNonEmptyStringArray(value: unknown, name: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${name} must be a string array`);
+  }
+
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of value) {
+    if (!isNonEmptyString(item)) {
+      throw new Error(`${name} must contain only non-empty strings`);
+    }
+
+    const trimmed = item.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`${name} must contain only non-empty strings`);
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      output.push(trimmed);
+    }
+  }
+
+  return output;
 }

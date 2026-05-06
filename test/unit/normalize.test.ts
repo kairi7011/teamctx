@@ -152,6 +152,36 @@ test("normalizeStore dryRun reports planned writes without touching the store", 
   assert.equal(existsSyncOrFalse(join(storeRoot, "indexes", "last-normalize.json")), false);
 });
 
+test("normalizeStore promotes verification hints into normalized records", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  writeRaw(
+    storeRoot,
+    observation({
+      verification: {
+        commands: ["npm test -- auth"],
+        files: ["test/auth.test.ts"],
+        notes: ["Check request ordering."]
+      }
+    })
+  );
+
+  normalizeStore({
+    repo: "github.com/team/service",
+    storeRoot,
+    now: fixedNow
+  });
+
+  const records = readJsonl(join(storeRoot, "normalized", "pitfalls.jsonl"));
+
+  assert.deepEqual(records[0]?.verification, {
+    commands: ["npm test -- auth"],
+    files: ["test/auth.test.ts"],
+    notes: ["Check request ordering."]
+  });
+});
+
 function existsSyncOrFalse(path: string): boolean {
   try {
     readFileSync(path, "utf8");

@@ -1,4 +1,4 @@
-import type { GetContextInput } from "../../schemas/context-payload.js";
+import type { ContextVerificationHints, GetContextInput } from "../../schemas/context-payload.js";
 import type { KnowledgeKind, NormalizedRecord } from "../../schemas/normalized-record.js";
 import { matchesPath } from "../indexes/record-index.js";
 import { queryTokenGroups, textTokens, type QueryAlias } from "../indexes/query-tokens.js";
@@ -40,6 +40,7 @@ export type ScopedContextItem = {
   confidence_level: NormalizedRecord["confidence_level"];
   confidence_score?: number;
   last_verified_at?: string;
+  verification_hints?: ContextVerificationHints;
 };
 
 export const DEFAULT_CONTEXT_BUDGETS: ContextBudgets = {
@@ -99,7 +100,8 @@ export function budgetRecords(
 
 export function scopedContextItem(
   ranked: RankedRecord,
-  maxContentTokens: number
+  maxContentTokens: number,
+  verificationHints?: ContextVerificationHints
 ): ScopedContextItem {
   const item: ScopedContextItem = {
     id: ranked.record.id,
@@ -117,6 +119,9 @@ export function scopedContextItem(
   }
   if (ranked.record.last_verified_at !== undefined) {
     item.last_verified_at = ranked.record.last_verified_at;
+  }
+  if (verificationHints !== undefined) {
+    item.verification_hints = verificationHints;
   }
 
   return item;

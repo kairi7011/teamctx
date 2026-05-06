@@ -34,6 +34,7 @@ import {
   hasLookupSelectors,
   hasStrongLookupSelectors,
   hasTextLookupSelector,
+  matchesPath,
   matchesScopeInput,
   selectIndexedRecordIds,
   type RecordIndexSet
@@ -46,9 +47,11 @@ import {
 } from "../../schemas/normalized-record.js";
 import type {
   CanonicalDocRef,
+  ContextVerificationHints,
   EnabledContextPayload,
   GetContextInput
 } from "../../schemas/context-payload.js";
+import type { EpisodeReference } from "../../schemas/episode.js";
 import type { QueryAlias } from "../indexes/query-tokens.js";
 import { queryWarnings } from "../indexes/query-tokens.js";
 import { explainBaselineContext } from "./baseline-context.js";
@@ -173,12 +176,17 @@ function composeContextFromRecords(
     { budget: workflowBudget, placement: "applicable_workflows" },
     { budget: glossaryBudget, placement: "glossary_terms" }
   ]);
+  const relevantEpisodes = selectRelevantEpisodes(episodeIndex, input, budgets.episodes);
 
   return {
     normalized_context: {
       global: globalContext(globalBudget.selected, budgets.contentTokens),
       scoped: scopedBudget.selected.map((ranked) =>
-        scopedContextItem(ranked, budgets.contentTokens)
+        scopedContextItem(
+          ranked,
+          budgets.contentTokens,
+          verificationHintsForRecord(ranked.record, relevantEpisodes)
+        )
       ),
       must_follow_rules: rankedTexts(ruleBudget.selected, budgets.contentTokens),
       recent_decisions: rankedTexts(decisionBudget.selected, budgets.contentTokens),
@@ -186,7 +194,7 @@ function composeContextFromRecords(
       applicable_workflows: rankedTexts(workflowBudget.selected, budgets.contentTokens),
       glossary_terms: rankedTexts(glossaryBudget.selected, budgets.contentTokens)
     },
-    relevant_episodes: selectRelevantEpisodes(episodeIndex, input, budgets.episodes),
+    relevant_episodes: relevantEpisodes,
     canonical_doc_refs: canonicalDocRefs(scopedBudget.selected.map((ranked) => ranked.record)),
     diagnostics: {
       contested_items:
@@ -980,6 +988,114 @@ function canonicalDocRefs(records: NormalizedRecord[]): CanonicalDocRef[] {
       left.commit.localeCompare(right.commit) ||
       left.item_id.localeCompare(right.item_id)
   );
+}
+
+function verificationHintsForRecord(
+  record: NormalizedRecord,
+  relevantEpisodes: EpisodeReference[]
+): ContextVerificationHints | undefined {
+  const commands = uniquePreserve(record.verification?.commands ?? []);
+  const files = uniquePreserve([
+    ...(record.verification?.files ?? []),
+    ...record.evidence
+      .filter((evidence) => evidence.kind === "test" && evidence.file !== undefined)
+      .map((evidence) => evidence.file as string)
+  ]);
+  const notes = uniquePreserve(record.verification?.notes ?? []);
+  const docs = uniqueDocs(
+    record.evidence.flatMap((evidence) => {
+      if (
+        evidence.kind !== "docs" ||
+        evidence.repo === undefined ||
+        evidence.file === undefined ||
+        evidence.commit === undefined
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          repo: evidence.repo,
+          path: evidence.file,
+          commit: evidence.commit,
+          ...(evidence.lines !== undefined ? { lines: evidence.lines } : {}),
+          ...(evidence.doc_role !== undefined ? { doc_role: evidence.doc_role } : {}),
+          ...(evidence.url !== undefined ? { url: evidence.url } : {})
+        }
+      ];
+    })
+  );
+  const relatedEpisodes = uniquePreserve(
+    relevantEpisodes
+      .filter(
+        (episode) => episode.trust === "verified" && scopesOverlap(record.scope, episode.scope)
+      )
+      .map((episode) => episode.episode_id)
+  ).slice(0, 3);
+
+  const hints: ContextVerificationHints = {};
+  if (commands.length > 0) hints.commands = commands;
+  if (files.length > 0) hints.files = files;
+  if (docs.length > 0) hints.docs = docs;
+  if (relatedEpisodes.length > 0) hints.related_episodes = relatedEpisodes;
+  if (notes.length > 0) hints.notes = notes;
+
+  return Object.keys(hints).length > 0 ? hints : undefined;
+}
+
+function uniquePreserve(values: string[]): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed.length > 0 && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      output.push(trimmed);
+    }
+  }
+
+  return output;
+}
+
+function uniqueDocs(
+  docs: NonNullable<ContextVerificationHints["docs"]>
+): NonNullable<ContextVerificationHints["docs"]> {
+  const seen = new Set<string>();
+  const output: NonNullable<ContextVerificationHints["docs"]> = [];
+
+  for (const doc of docs) {
+    const key = JSON.stringify(doc);
+    if (!seen.has(key)) {
+      seen.add(key);
+      output.push(doc);
+    }
+  }
+
+  return output;
+}
+
+function scopesOverlap(left: NormalizedRecord["scope"], right: NormalizedRecord["scope"]): boolean {
+  return (
+    left.paths.some((leftPath) =>
+      right.paths.some(
+        (rightPath) => matchesPath(leftPath, rightPath) || matchesPath(rightPath, leftPath)
+      )
+    ) ||
+    overlaps(left.domains, right.domains) ||
+    overlaps(left.symbols, right.symbols) ||
+    overlaps(left.tags, right.tags)
+  );
+}
+
+function overlaps(left: string[], right: string[]): boolean {
+  if (left.length === 0 || right.length === 0) {
+    return false;
+  }
+
+  const rightValues = new Set(right.map((value) => value.trim().toLowerCase()));
+
+  return left.some((value) => rightValues.has(value.trim().toLowerCase()));
 }
 
 function derivedFetchUrl(repo: string, commit: string, path: string): string | undefined {

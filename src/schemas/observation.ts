@@ -2,8 +2,10 @@ import { validateEvidenceList, type Evidence } from "./evidence.js";
 import {
   isKnowledgeKind,
   validateScope,
+  validateVerificationHints,
   type KnowledgeKind,
-  type Scope
+  type Scope,
+  type VerificationHints
 } from "./normalized-record.js";
 import { isNonEmptyString, isRecord, optionalStringArray } from "./validation.js";
 
@@ -31,6 +33,7 @@ export type RawObservation = {
   text: string;
   source_type: ObservationSourceType;
   evidence: Evidence[];
+  verification?: VerificationHints;
   scope?: Scope;
   supersedes: string[];
 };
@@ -78,6 +81,9 @@ export function validateRawObservation(value: unknown): RawObservation {
 
   if (value.scope !== undefined) {
     observation.scope = validateScope(value.scope);
+  }
+  if (value.verification !== undefined) {
+    observation.verification = validateVerificationHints(value.verification);
   }
 
   return observation;

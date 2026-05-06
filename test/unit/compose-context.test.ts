@@ -106,6 +106,64 @@ test("composeContextFromStore returns active scoped context and diagnostics", (c
   ]);
 });
 
+test("composeContextFromStore returns verification hints for scoped records", (context) => {
+  const { directory, cleanup } = tempDirectory();
+  context.after(cleanup);
+  const storeRoot = join(directory, ".teamctx");
+  const verifiedRecord = {
+    ...record("pitfall-auth-order", "pitfall", "active"),
+    evidence: [
+      {
+        kind: "code" as const,
+        repo: "github.com/team/service",
+        commit: "abc123",
+        file: "src/auth/middleware.ts"
+      },
+      {
+        kind: "test" as const,
+        repo: "github.com/team/service",
+        commit: "abc123",
+        file: "test/auth/middleware.test.ts"
+      },
+      {
+        kind: "docs" as const,
+        repo: "github.com/team/service",
+        commit: "abc123",
+        file: "AGENTS.md",
+        lines: [10, 12] as [number, number],
+        doc_role: "runbook" as const
+      }
+    ],
+    verification: {
+      commands: ["npm test -- auth"],
+      files: ["src/auth/middleware.ts"],
+      notes: ["Check request ordering before tenant resolution."]
+    }
+  } satisfies NormalizedRecord;
+
+  writeRecord(storeRoot, "pitfalls.jsonl", verifiedRecord);
+  writeEpisodeIndex(storeRoot, [observation()], "2026-04-22T11:00:00.000Z");
+
+  const composed = composeContextFromStore(storeRoot, {
+    target_files: ["src/auth/middleware.ts"]
+  });
+  const hints = composed.normalized_context.scoped[0]?.verification_hints;
+
+  assert.deepEqual(hints?.commands, ["npm test -- auth"]);
+  assert.deepEqual(hints?.files, ["src/auth/middleware.ts", "test/auth/middleware.test.ts"]);
+  assert.deepEqual(hints?.docs, [
+    {
+      repo: "github.com/team/service",
+      path: "AGENTS.md",
+      commit: "abc123",
+      lines: [10, 12],
+      doc_role: "runbook"
+    }
+  ]);
+  assert.equal(hints?.related_episodes?.length, 1);
+  assert.deepEqual(hints?.notes, ["Check request ordering before tenant resolution."]);
+});
+
 test("composeContextFromStore uses generated indexes for scoped selection", (context) => {
   const { directory, cleanup } = tempDirectory();
   context.after(cleanup);
